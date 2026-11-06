@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import ClassroomManager from './ClassroomManager'
 
 type HealthState = 'checking' | 'online' | 'offline'
@@ -58,6 +58,22 @@ type StudentImportCommitResult = {
   classes: { class_level: string; section: string; student_count: number }[]
 }
 
+type SchoolAdministrator = { id: string; role: 'principal' | 'vice_principal'; full_name: string; title: string; display_order: number }
+type SchoolProfile = {
+  school_name: string
+  province: string
+  district: string
+  address: string
+  phone: string
+  email: string
+  is_configured: boolean
+  administrators: SchoolAdministrator[]
+}
+
+const blankSchoolProfile: SchoolProfile = {
+  school_name: '', province: '', district: '', address: '', phone: '', email: '', is_configured: false, administrators: [],
+}
+
 const importFields = [
   { key: 'school_number', label: 'Okul numarası', required: true },
   { key: 'first_name', label: 'Ad', required: true },
@@ -88,6 +104,11 @@ export default function App() {
   const [importLoading, setImportLoading] = useState(false)
   const [classroomPanelOpen, setClassroomPanelOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('overview')
+  const [schoolProfile, setSchoolProfile] = useState<SchoolProfile>(blankSchoolProfile)
+  const [schoolLoading, setSchoolLoading] = useState(true)
+  const [schoolSaving, setSchoolSaving] = useState(false)
+  const [schoolError, setSchoolError] = useState('')
+  const [schoolMessage, setSchoolMessage] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -118,6 +139,18 @@ export default function App() {
         setYearError('Eğitim-öğretim yılı bilgisi yüklenemedi.')
       })
       .finally(() => setYearsLoading(false))
+
+    fetch('/api/school-profile', { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Okul profili alınamadı.')
+        const data = await response.json() as { profile: SchoolProfile }
+        setSchoolProfile(data.profile)
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === 'AbortError') return
+        setSchoolError(error instanceof Error ? error.message : 'Okul profili alınamadı.')
+      })
+      .finally(() => setSchoolLoading(false))
 
     return () => controller.abort()
   }, [])
@@ -239,6 +272,69 @@ export default function App() {
     }
   }
 
+  async function saveSchoolProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSchoolSaving(true)
+    setSchoolError('')
+    setSchoolMessage('')
+    try {
+      const response = await fetch('/api/school-profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(schoolProfile),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Okul bilgileri kaydedilemedi.')
+      setSchoolProfile(data.profile as SchoolProfile)
+      setSchoolMessage('Okul bilgileri bu bilgisayara kaydedildi.')
+    } catch (error) {
+      setSchoolError(error instanceof Error ? error.message : 'Okul bilgileri kaydedilemedi.')
+    } finally {
+      setSchoolSaving(false)
+    }
+  }
+
+  async function retrySchoolProfile() {
+    setSchoolLoading(true)
+    setSchoolError('')
+    try {
+      const response = await fetch('/api/school-profile')
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Okul profili alınamadı.')
+      setSchoolProfile(data.profile as SchoolProfile)
+    } catch (error) {
+      setSchoolError(error instanceof Error ? error.message : 'Okul profili alınamadı.')
+    } finally {
+      setSchoolLoading(false)
+    }
+  }
+
+  function updateSchoolField(field: keyof Omit<SchoolProfile, 'is_configured' | 'administrators'>, value: string) {
+    setSchoolProfile((profile) => ({ ...profile, [field]: value }))
+    setSchoolMessage('')
+  }
+
+  function addSchoolAdministrator(role: SchoolAdministrator['role']) {
+    setSchoolProfile((profile) => ({
+      ...profile,
+      administrators: [...profile.administrators, { id: `new-${Date.now()}`, role, full_name: '', title: '', display_order: profile.administrators.length }],
+    }))
+    setSchoolMessage('')
+  }
+
+  function updateSchoolAdministrator(index: number, field: 'role' | 'full_name' | 'title', value: string) {
+    setSchoolProfile((profile) => ({
+      ...profile,
+      administrators: profile.administrators.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item),
+    }))
+    setSchoolMessage('')
+  }
+
+  function removeSchoolAdministrator(index: number) {
+    setSchoolProfile((profile) => ({ ...profile, administrators: profile.administrators.filter((_, itemIndex) => itemIndex !== index) }))
+    setSchoolMessage('')
+  }
+
   const statusText = {
     checking: 'Bağlantı kontrol ediliyor',
     online: 'Yerel servis çalışıyor',
@@ -251,6 +347,8 @@ export default function App() {
       : activeSection === 'classrooms'
         ? 'Derslikler'
         : 'Genel Bakış'
+  const principal = schoolProfile.administrators.find((person) => person.role === 'principal')
+  const vicePrincipals = schoolProfile.administrators.filter((person) => person.role === 'vice_principal')
 
   return (
     <main className="app-shell">
@@ -260,9 +358,9 @@ export default function App() {
           <span>Kelebek <strong>Sınav Sistemi</strong></span>
         </a>
         <div className="sidebar-school">
-          <span className="school-avatar">O</span>
-          <span><strong>Örnek Anadolu Lisesi</strong><small>Tasarım verisi · kayıtlı değil</small></span>
-          <span className="profile-status" aria-label="Tamamlanmadı" />
+          <span className="school-avatar">{schoolProfile.is_configured ? schoolProfile.school_name.slice(0, 1).toLocaleUpperCase('tr-TR') : 'O'}</span>
+          <span><strong>{schoolProfile.is_configured ? schoolProfile.school_name : 'Okul profili'}</strong><small>{schoolProfile.is_configured ? 'Yerel profile kaydedildi' : 'Bilgiler bekleniyor'}</small></span>
+          <span className={`profile-status ${schoolProfile.is_configured ? 'configured' : ''}`} aria-label={schoolProfile.is_configured ? 'Kaydedildi' : 'Tamamlanmadı'} />
         </div>
         <div className="sidebar-caption">ÇALIŞMA ALANI</div>
         <nav className="main-navigation" aria-label="Ana gezinme">
@@ -332,18 +430,47 @@ export default function App() {
           </div>
         )}
 
-        {activeSection !== 'students' && activeSection !== 'classrooms' && <div className={`dashboard-grid ${activeSection === 'school' ? 'single-panel' : ''}`}>
+        {activeSection === 'overview' && <div className="dashboard-grid">
           <section className="school-profile-card" id="school-profile">
-            <div className="school-card-head"><span className="school-avatar large">O</span><span className="sample-badge">TASARIM ÖRNEĞİ</span></div>
-            <div className="school-card-copy"><div className="eyebrow">OKUL KİMLİĞİ</div><h2>Örnek Anadolu Lisesi</h2><p>Kadıköy · İstanbul <span className="sample-inline">örnek konum</span></p></div>
-            <div className="manager-preview"><div><span>Okul Müdürü</span><strong>Ayşe Yılmaz <i>örnek</i></strong></div><div><span>Müdür Yardımcıları</span><strong>Mert Demir · Selin Kaya <i>örnek</i></strong></div></div>
-            <div className="profile-note">Örnek içerik yalnızca tasarım içindir; okul profiliniz henüz kaydedilmedi.</div>
+            <div className="school-card-head"><span className="school-avatar large">{schoolProfile.is_configured ? schoolProfile.school_name.slice(0, 1).toLocaleUpperCase('tr-TR') : 'O'}</span><span className="sample-badge">{schoolProfile.is_configured ? 'YEREL KAYIT' : 'TASARIM ÖRNEĞİ'}</span></div>
+            <div className="school-card-copy"><div className="eyebrow">OKUL KİMLİĞİ</div><h2>{schoolProfile.is_configured ? schoolProfile.school_name : 'Örnek Anadolu Lisesi'}</h2><p>{schoolProfile.is_configured ? [schoolProfile.district, schoolProfile.province].filter(Boolean).join(' · ') || 'Konum bilgisi eklenmedi' : <>Kadıköy · İstanbul <span className="sample-inline">örnek konum</span></>}</p></div>
+            <div className="manager-preview"><div><span>Okul Müdürü</span><strong>{schoolProfile.is_configured ? principal?.full_name || 'Henüz eklenmedi' : <>Ayşe Yılmaz <i>örnek</i></>}</strong></div><div><span>Müdür Yardımcıları</span><strong>{schoolProfile.is_configured ? vicePrincipals.map((person) => person.full_name).join(' · ') || 'Henüz eklenmedi' : <>Mert Demir · Selin Kaya <i>örnek</i></>}</strong></div></div>
+            <div className="profile-note">{schoolProfile.is_configured ? 'Bu bilgiler bu bilgisayardaki yerel okul profiline kaydedildi.' : 'Örnek içerik yalnızca tasarım içindir; okul profiliniz henüz kaydedilmedi.'}</div>
+            {activeSection === 'overview' && <button className="profile-edit-link" type="button" onClick={() => setActiveSection('school')}>Okul bilgilerini düzenle <span aria-hidden="true">→</span></button>}
           </section>
-          {activeSection === 'overview' && <section className="setup-card">
-            <div className="section-heading"><div><span className="eyebrow">BAŞLANGIÇ SIRASI</span><h2>Kurulum adımları</h2></div><span className="step-count">1 / 3</span></div>
-            <ol className="setup-steps"><li className="current"><span>1</span><div><strong>Okul bilgileri</strong><small>Okul ve yönetici profili</small></div><b>Hazırlanıyor</b></li><li><span>2</span><div><strong>Öğrenci ve sınıflar</strong><small>e-Okul listesini içeri aktar</small></div><b>Bekliyor</b></li><li><span>3</span><div><strong>Derslik düzenleri</strong><small>Gerçek oturma planlarını tanımla</small></div><b>Bekliyor</b></li></ol>
-          </section>}
+          <section className="setup-card">
+            <div className="section-heading"><div><span className="eyebrow">BAŞLANGIÇ SIRASI</span><h2>Kurulum adımları</h2></div><span className="step-count">{schoolProfile.is_configured ? '2 / 3' : '1 / 3'}</span></div>
+            <ol className="setup-steps"><li className={schoolProfile.is_configured ? 'complete' : 'current'}><span>{schoolProfile.is_configured ? '✓' : '1'}</span><div><strong>Okul bilgileri</strong><small>Okul ve yönetici profili</small></div><b>{schoolProfile.is_configured ? 'Tamamlandı' : 'Başlangıç'}</b></li><li className={schoolProfile.is_configured ? 'current' : ''}><span>2</span><div><strong>Öğrenci ve sınıflar</strong><small>e-Okul listesini içeri aktar</small></div><b>{schoolProfile.is_configured ? 'Sıradaki adım' : 'Bekliyor'}</b></li><li><span>3</span><div><strong>Derslik düzenleri</strong><small>Gerçek oturma planlarını tanımla</small></div><b>Bekliyor</b></li></ol>
+          </section>
         </div>}
+
+        {activeSection === 'school' && <form className="school-form-card" onSubmit={saveSchoolProfile}>
+          <div className="form-card-heading"><span className="form-icon">✦</span><div><span className="eyebrow">OKUL PROFİLİ</span><h2>Genel bilgiler</h2><p>Bu bilgiler uygulamanın kendi bilgisayarınızda saklanır ve okul belgelerinde kullanılır.</p></div></div>
+          {schoolLoading ? <p className="school-loading">Okul profili yükleniyor…</p> : <>
+            <div className="school-fields-grid">
+              <label className="field-wide"><span>Okulun adı <b>*</b></span><input required maxLength={160} value={schoolProfile.school_name} onChange={(event) => updateSchoolField('school_name', event.target.value)} placeholder="Örn. Anadolu Lisesi" /></label>
+              <label><span>İl</span><input maxLength={100} value={schoolProfile.province} onChange={(event) => updateSchoolField('province', event.target.value)} placeholder="İl adı" /></label>
+              <label><span>İlçe</span><input maxLength={100} value={schoolProfile.district} onChange={(event) => updateSchoolField('district', event.target.value)} placeholder="İlçe adı" /></label>
+              <label className="field-wide"><span>Adres</span><textarea maxLength={500} rows={2} value={schoolProfile.address} onChange={(event) => updateSchoolField('address', event.target.value)} placeholder="Okulun açık adresi" /></label>
+              <label><span>Telefon</span><input type="tel" maxLength={40} value={schoolProfile.phone} onChange={(event) => updateSchoolField('phone', event.target.value)} placeholder="(0___) ___ __ __" /></label>
+              <label><span>E-posta</span><input type="email" maxLength={254} value={schoolProfile.email} onChange={(event) => updateSchoolField('email', event.target.value)} placeholder="okul@meb.k12.tr" /></label>
+            </div>
+            <div className="administrator-section">
+              <div className="section-heading"><div><span className="eyebrow">İMZA VE YÖNETİM</span><h3>Yönetici bilgileri</h3></div><div className="admin-add-actions"><button type="button" onClick={() => addSchoolAdministrator('principal')} disabled={schoolProfile.administrators.some((item) => item.role === 'principal')}>+ Müdür</button><button type="button" onClick={() => addSchoolAdministrator('vice_principal')}>+ Müdür yardımcısı</button></div></div>
+              <p>Resmî yazı ve raporlarda kullanılacak yönetici adlarını ekleyin.</p>
+              {schoolProfile.administrators.length === 0 && <div className="empty-admins">Henüz yönetici eklenmedi. Müdür veya müdür yardımcısı ekleyebilirsiniz.</div>}
+              <div className="administrator-list">{schoolProfile.administrators.map((person, index) => <div className="administrator-row" key={person.id || `${person.role}-${index}`}>
+                <label><span>Görev</span><select value={person.role} onChange={(event) => updateSchoolAdministrator(index, 'role', event.target.value)}><option value="principal">Okul müdürü</option><option value="vice_principal">Müdür yardımcısı</option></select></label>
+                <label><span>Adı soyadı</span><input required maxLength={160} value={person.full_name} onChange={(event) => updateSchoolAdministrator(index, 'full_name', event.target.value)} placeholder="Adı Soyadı" /></label>
+                <label><span>Belgede görünecek unvan (isteğe bağlı)</span><input maxLength={120} value={person.title} onChange={(event) => updateSchoolAdministrator(index, 'title', event.target.value)} placeholder="Örn. Müdür Yardımcısı" /></label>
+                <button className="remove-admin" type="button" aria-label={`${person.full_name || 'Yönetici'} kaydını kaldır`} onClick={() => removeSchoolAdministrator(index)}>Kaldır</button>
+              </div>)}</div>
+            </div>
+            {schoolError && <p className="school-form-error" role="alert">{schoolError} <button className="retry-school-profile" type="button" onClick={() => void retrySchoolProfile()}>Tekrar dene</button></p>}
+            {schoolMessage && <p className="school-form-success" role="status">{schoolMessage}</p>}
+            <div className="school-form-footer"><span><b>*</b> Zorunlu alan</span><button className="school-save-button" type="submit" disabled={schoolSaving || !schoolProfile.school_name.trim()}>{schoolSaving ? 'Kaydediliyor…' : 'Bilgileri kaydet'}</button></div>
+          </>}
+        </form>}
 
         {activeSection !== 'school' && activeSection !== 'classrooms' && <div className="section-heading module-heading"><div><span className="eyebrow">{activeSection === 'students' ? 'ÖĞRENCİ İŞLEMLERİ' : 'MODÜLLER'}</span><h2>{activeSection === 'students' ? 'Liste aktarımı' : 'Yönetim alanları'}</h2></div><span className="module-caption">{activeSection === 'students' ? 'Liste önizlemesi kaydetmeden önce kontrol edilir.' : 'Hazır bölümler kullanılabilir; diğerleri geliştirme aşamasında.'}</span></div>}
 
@@ -367,7 +494,7 @@ export default function App() {
             <span className="feature-number">02</span>
             <h2>Derslik düzeni</h2>
             <p>Fiziksel masa ve oturma yerlerini tanımlama.</p>
-            <button className="manager-open" type="button" onClick={() => setClassroomPanelOpen(true)}>
+            <button className="manager-open" type="button" onClick={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}>
               Derslikleri yönet
             </button>
           </article>}

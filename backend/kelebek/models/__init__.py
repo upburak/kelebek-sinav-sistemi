@@ -7,8 +7,9 @@ from kelebek.models.desk import Desk
 from kelebek.models.seat import Seat
 from kelebek.models.student import Student
 from kelebek.models.student_year_enrollment import StudentYearEnrollment
+from kelebek.models.school_profile import SchoolAdministrator, SchoolProfile
 
 __all__ = [
     "AcademicYear", "Classroom", "ClassroomLayout", "Desk", "Seat", "Student",
-    "StudentYearEnrollment",
+    "StudentYearEnrollment", "SchoolAdministrator", "SchoolProfile",
 ]
