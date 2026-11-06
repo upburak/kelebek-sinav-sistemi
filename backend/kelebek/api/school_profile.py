@@ -25,7 +25,12 @@ def _serialize(profile: SchoolProfile | None, administrators: list[SchoolAdminis
         field: getattr(profile, field, "") if profile else ""
         for field in PROFILE_FIELDS
     }
-    result["is_configured"] = bool(profile and profile.school_name.strip())
+    result["is_saved"] = profile is not None
+    result["is_configured"] = bool(
+        profile
+        and profile.school_name.strip()
+        and any(admin.role == "principal" and admin.full_name.strip() for admin in administrators)
+    )
     result["administrators"] = [
         {
             "id": admin.id,
@@ -78,6 +83,7 @@ def save_school_profile():
         return jsonify({"error": "Yönetici listesi geçersiz veya çok uzun."}), 400
 
     administrators: list[dict[str, str]] = []
+    normalized_names: set[str] = set()
     for item in raw_admins:
         role = item.get("role") if isinstance(item, dict) else None
         if not isinstance(role, str) or role not in ADMIN_ROLES:
@@ -89,6 +95,10 @@ def save_school_profile():
         name, title = name.strip(), title.strip()
         if not name or len(name) > 160 or len(title) > 120:
             return jsonify({"error": "Yönetici adı zorunludur; uzunluğu sınırlar içinde olmalıdır."}), 400
+        normalized_name = " ".join(name.split()).replace("I", "ı").replace("İ", "i").lower()
+        if normalized_name in normalized_names:
+            return jsonify({"error": f"{name} birden fazla görevde eklenmiş. Her yönetici yalnızca bir kez kaydedilebilir."}), 400
+        normalized_names.add(normalized_name)
         administrators.append({"role": role, "full_name": name, "title": title})
 
     if sum(admin["role"] == "principal" for admin in administrators) > 1:

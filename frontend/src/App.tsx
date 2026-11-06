@@ -2,6 +2,19 @@ import { useEffect, useState, type FormEvent } from 'react'
 import ClassroomManager from './ClassroomManager'
 
 type HealthState = 'checking' | 'online' | 'offline'
+type WorkspaceIconName = 'overview' | 'school' | 'students' | 'classroom' | 'exams' | 'reports'
+
+function WorkspaceIcon({ name, size = 17 }: { name: WorkspaceIconName; size?: number }) {
+  const paths: Record<WorkspaceIconName, string> = {
+    overview: 'M3 10.5 12 3l9 7.5M5.5 9v11h13V9M9 20v-6h6v6',
+    school: 'M3 21h18M5 21V5h14v16M9 9h2m2 0h2M9 13h2m2 0h2M9 17h2m2 0h2',
+    students: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m11 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+    classroom: 'M3 4h18v16H3zM3 10h18M9 10v10m6-10v10M6 7h.01M12 7h.01M18 7h.01',
+    exams: 'M8 3v4m8-4v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1m4 8h3m-3 4h6',
+    reports: 'M6 3h9l4 4v14H6zM14 3v5h5m-9 4h6m-6 4h6m-6 4h4',
+  }
+  return <svg className="workspace-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>
+}
 
 type AcademicYear = {
   id: string
@@ -67,11 +80,12 @@ type SchoolProfile = {
   phone: string
   email: string
   is_configured: boolean
+  is_saved: boolean
   administrators: SchoolAdministrator[]
 }
 
 const blankSchoolProfile: SchoolProfile = {
-  school_name: '', province: '', district: '', address: '', phone: '', email: '', is_configured: false, administrators: [],
+  school_name: '', province: '', district: '', address: '', phone: '', email: '', is_configured: false, is_saved: false, administrators: [],
 }
 
 const importFields = [
@@ -274,6 +288,10 @@ export default function App() {
 
   async function saveSchoolProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (duplicateAdministrator) {
+      setSchoolError(`${duplicateAdministrator} birden fazla görevde görünüyor. Aynı kişiyi yalnızca bir görevde ekleyin.`)
+      return
+    }
     setSchoolSaving(true)
     setSchoolError('')
     setSchoolMessage('')
@@ -317,7 +335,7 @@ export default function App() {
   function addSchoolAdministrator(role: SchoolAdministrator['role']) {
     setSchoolProfile((profile) => ({
       ...profile,
-      administrators: [...profile.administrators, { id: `new-${Date.now()}`, role, full_name: '', title: '', display_order: profile.administrators.length }],
+      administrators: [...profile.administrators, { id: `new-${Date.now()}`, role, full_name: '', title: role === 'principal' ? 'Okul Müdürü' : 'Müdür Yardımcısı', display_order: profile.administrators.length }],
     }))
     setSchoolMessage('')
   }
@@ -325,7 +343,15 @@ export default function App() {
   function updateSchoolAdministrator(index: number, field: 'role' | 'full_name' | 'title', value: string) {
     setSchoolProfile((profile) => ({
       ...profile,
-      administrators: profile.administrators.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item),
+      administrators: profile.administrators.map((item, itemIndex) => {
+        if (itemIndex !== index) return item
+        if (field === 'role') {
+          const oldDefault = item.role === 'principal' ? 'Okul Müdürü' : 'Müdür Yardımcısı'
+          const nextDefault = value === 'principal' ? 'Okul Müdürü' : 'Müdür Yardımcısı'
+          return { ...item, role: value as SchoolAdministrator['role'], title: !item.title || item.title === oldDefault ? nextDefault : item.title }
+        }
+        return { ...item, [field]: value }
+      }),
     }))
     setSchoolMessage('')
   }
@@ -349,6 +375,13 @@ export default function App() {
         : 'Genel Bakış'
   const principal = schoolProfile.administrators.find((person) => person.role === 'principal')
   const vicePrincipals = schoolProfile.administrators.filter((person) => person.role === 'vice_principal')
+  const duplicateAdministrator = schoolProfile.administrators.reduce<string | null>((duplicate, person, index, list) => {
+    if (duplicate) return duplicate
+    const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR')
+    const name = normalize(person.full_name)
+    if (!name) return null
+    return list.slice(0, index).some((other) => normalize(other.full_name) === name) ? person.full_name.trim() : null
+  }, null)
 
   return (
     <main className="app-shell">
@@ -358,18 +391,18 @@ export default function App() {
           <span>Kelebek <strong>Sınav Sistemi</strong></span>
         </a>
         <div className="sidebar-school">
-          <span className="school-avatar">{schoolProfile.is_configured ? schoolProfile.school_name.slice(0, 1).toLocaleUpperCase('tr-TR') : 'O'}</span>
-          <span><strong>{schoolProfile.is_configured ? schoolProfile.school_name : 'Okul profili'}</strong><small>{schoolProfile.is_configured ? 'Yerel profile kaydedildi' : 'Bilgiler bekleniyor'}</small></span>
-          <span className={`profile-status ${schoolProfile.is_configured ? 'configured' : ''}`} aria-label={schoolProfile.is_configured ? 'Kaydedildi' : 'Tamamlanmadı'} />
+          <span className="school-avatar">{schoolProfile.school_name ? schoolProfile.school_name.slice(0, 1).toLocaleUpperCase('tr-TR') : 'O'}</span>
+          <span><strong>{schoolProfile.school_name || 'Okul profili'}</strong><small>{schoolProfile.is_configured ? 'Kurulum tamamlandı' : schoolProfile.is_saved ? 'Eksik bilgiler var' : 'Bilgiler bekleniyor'}</small></span>
+          <span className={`profile-status ${schoolProfile.is_configured ? 'configured' : ''}`} aria-label={schoolProfile.is_configured ? 'Kurulum tamamlandı' : 'Bilgiler bekleniyor'} />
         </div>
         <div className="sidebar-caption">ÇALIŞMA ALANI</div>
         <nav className="main-navigation" aria-label="Ana gezinme">
-          <button className={activeSection === 'overview' ? 'active' : ''} type="button" onClick={() => { setActiveSection('overview'); setClassroomPanelOpen(false) }}><span className="nav-icon">⌂</span> Genel Bakış</button>
-          <button className={activeSection === 'school' ? 'active' : ''} type="button" onClick={() => { setActiveSection('school'); setClassroomPanelOpen(false) }}><span className="nav-icon">▦</span> Okul ve yöneticiler</button>
-          <button className={activeSection === 'students' ? 'active' : ''} type="button" onClick={() => { setActiveSection('students'); setClassroomPanelOpen(false) }}><span className="nav-icon">♙</span> Öğrenci kayıtları</button>
-          <button className={activeSection === 'classrooms' ? 'active' : ''} type="button" onClick={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}><span className="nav-icon">▤</span> Derslikler</button>
-          <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><span className="nav-icon">◷</span> Sınav organizasyonları <small>Yakında</small></button>
-          <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><span className="nav-icon">▧</span> Raporlar <small>Yakında</small></button>
+          <button className={activeSection === 'overview' ? 'active' : ''} type="button" onClick={() => { setActiveSection('overview'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="overview" /> Genel Bakış</button>
+          <button className={activeSection === 'school' ? 'active' : ''} type="button" onClick={() => { setActiveSection('school'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="school" /> Okul ve yöneticiler</button>
+          <button className={activeSection === 'students' ? 'active' : ''} type="button" onClick={() => { setActiveSection('students'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="students" /> Öğrenci kayıtları</button>
+          <button className={activeSection === 'classrooms' ? 'active' : ''} type="button" onClick={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}><WorkspaceIcon name="classroom" /> Derslikler</button>
+          <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><WorkspaceIcon name="exams" /> Sınav organizasyonları <small>Yakında</small></button>
+          <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><WorkspaceIcon name="reports" /> Raporlar <small>Yakında</small></button>
         </nav>
         <div className="sidebar-footer"><span className={`status-dot ${health}`} /><span>{statusText}</span><small>Veriler bu bilgisayarda</small></div>
       </aside>
@@ -432,20 +465,20 @@ export default function App() {
 
         {activeSection === 'overview' && <div className="dashboard-grid">
           <section className="school-profile-card" id="school-profile">
-            <div className="school-card-head"><span className="school-avatar large">{schoolProfile.is_configured ? schoolProfile.school_name.slice(0, 1).toLocaleUpperCase('tr-TR') : 'O'}</span><span className="sample-badge">{schoolProfile.is_configured ? 'YEREL KAYIT' : 'TASARIM ÖRNEĞİ'}</span></div>
-            <div className="school-card-copy"><div className="eyebrow">OKUL KİMLİĞİ</div><h2>{schoolProfile.is_configured ? schoolProfile.school_name : 'Örnek Anadolu Lisesi'}</h2><p>{schoolProfile.is_configured ? [schoolProfile.district, schoolProfile.province].filter(Boolean).join(' · ') || 'Konum bilgisi eklenmedi' : <>Kadıköy · İstanbul <span className="sample-inline">örnek konum</span></>}</p></div>
-            <div className="manager-preview"><div><span>Okul Müdürü</span><strong>{schoolProfile.is_configured ? principal?.full_name || 'Henüz eklenmedi' : <>Ayşe Yılmaz <i>örnek</i></>}</strong></div><div><span>Müdür Yardımcıları</span><strong>{schoolProfile.is_configured ? vicePrincipals.map((person) => person.full_name).join(' · ') || 'Henüz eklenmedi' : <>Mert Demir · Selin Kaya <i>örnek</i></>}</strong></div></div>
-            <div className="profile-note">{schoolProfile.is_configured ? 'Bu bilgiler bu bilgisayardaki yerel okul profiline kaydedildi.' : 'Örnek içerik yalnızca tasarım içindir; okul profiliniz henüz kaydedilmedi.'}</div>
-            {activeSection === 'overview' && <button className="profile-edit-link" type="button" onClick={() => setActiveSection('school')}>Okul bilgilerini düzenle <span aria-hidden="true">→</span></button>}
+            <div className="school-card-head"><span className="school-avatar large">{schoolProfile.school_name ? schoolProfile.school_name.slice(0, 1).toLocaleUpperCase('tr-TR') : <WorkspaceIcon name="school" size={20} />}</span><span className={`profile-badge ${schoolProfile.is_saved ? 'saved-badge' : ''}`}>{schoolProfile.is_saved ? 'YEREL KAYIT' : 'KURULUM GEREKLİ'}</span></div>
+            <div className="school-card-copy"><div className="eyebrow">OKUL KİMLİĞİ</div><h2>{schoolProfile.school_name || 'Okul adı girilmedi'}</h2><p>{[schoolProfile.district, schoolProfile.province].filter(Boolean).join(' · ') || 'İl ve ilçe bilgileri eklenmedi'}</p></div>
+            <div className="manager-preview"><div><span>Okul Müdürü</span><strong>{principal?.full_name || 'Henüz girilmedi'}</strong></div><div><span>Müdür Yardımcıları</span><strong>{vicePrincipals.map((person) => person.full_name).join(' · ') || 'Henüz girilmedi'}</strong></div></div>
+            <div className="profile-note">{schoolProfile.is_configured ? 'Okul adı ve müdür bilgisi bu bilgisayara kaydedildi.' : schoolProfile.is_saved ? 'Okul profili kayıtlı; kurulumu tamamlamak için müdür bilgisini ekleyin.' : 'Kuruluma okul bilgileriyle başlayın; gerçek dışı örnek bilgi gösterilmez.'}</div>
+            <button className="profile-edit-link" type="button" onClick={() => setActiveSection('school')}>{schoolProfile.is_saved ? 'Okul bilgilerini düzenle' : 'Okul kurulumunu başlat'} <span aria-hidden="true">→</span></button>
           </section>
           <section className="setup-card">
-            <div className="section-heading"><div><span className="eyebrow">BAŞLANGIÇ SIRASI</span><h2>Kurulum adımları</h2></div><span className="step-count">{schoolProfile.is_configured ? '2 / 3' : '1 / 3'}</span></div>
-            <ol className="setup-steps"><li className={schoolProfile.is_configured ? 'complete' : 'current'}><span>{schoolProfile.is_configured ? '✓' : '1'}</span><div><strong>Okul bilgileri</strong><small>Okul ve yönetici profili</small></div><b>{schoolProfile.is_configured ? 'Tamamlandı' : 'Başlangıç'}</b></li><li className={schoolProfile.is_configured ? 'current' : ''}><span>2</span><div><strong>Öğrenci ve sınıflar</strong><small>e-Okul listesini içeri aktar</small></div><b>{schoolProfile.is_configured ? 'Sıradaki adım' : 'Bekliyor'}</b></li><li><span>3</span><div><strong>Derslik düzenleri</strong><small>Gerçek oturma planlarını tanımla</small></div><b>Bekliyor</b></li></ol>
+            <div className="section-heading"><div><span className="eyebrow">BAŞLANGIÇ SIRASI</span><h2>Kurulum adımları</h2></div><span className="step-count">{schoolProfile.is_configured ? '1 / 3 hazır' : '0 / 3 hazır'}</span></div>
+            <ol className="setup-steps"><li className={schoolProfile.is_configured ? 'complete' : 'current'}><span>{schoolProfile.is_configured ? '✓' : '1'}</span><div><strong>Okul bilgileri</strong><small>Okul adı ve müdür bilgisi</small></div><b>{schoolProfile.is_configured ? 'Tamamlandı' : 'Başla'}</b></li><li className={schoolProfile.is_configured ? 'current' : ''}><span>2</span><div><strong>Öğrenci ve sınıflar</strong><small>e-Okul listesini içeri aktar</small></div><b>Bekliyor</b></li><li><span>3</span><div><strong>Derslik düzenleri</strong><small>Gerçek oturma planlarını tanımla</small></div><b>Bekliyor</b></li></ol>
           </section>
         </div>}
 
         {activeSection === 'school' && <form className="school-form-card" onSubmit={saveSchoolProfile}>
-          <div className="form-card-heading"><span className="form-icon">✦</span><div><span className="eyebrow">OKUL PROFİLİ</span><h2>Genel bilgiler</h2><p>Bu bilgiler uygulamanın kendi bilgisayarınızda saklanır ve okul belgelerinde kullanılır.</p></div></div>
+          <div className="form-card-heading"><span className="form-icon"><WorkspaceIcon name="school" size={19} /></span><div><span className="eyebrow">OKUL PROFİLİ</span><h2>Genel bilgiler</h2><p>Bu bilgiler uygulamanın kendi bilgisayarınızda saklanır ve okul belgelerinde kullanılır.</p></div></div>
           {schoolLoading ? <p className="school-loading">Okul profili yükleniyor…</p> : <>
             <div className="school-fields-grid">
               <label className="field-wide"><span>Okulun adı <b>*</b></span><input required maxLength={160} value={schoolProfile.school_name} onChange={(event) => updateSchoolField('school_name', event.target.value)} placeholder="Örn. Anadolu Lisesi" /></label>
@@ -456,19 +489,20 @@ export default function App() {
               <label><span>E-posta</span><input type="email" maxLength={254} value={schoolProfile.email} onChange={(event) => updateSchoolField('email', event.target.value)} placeholder="okul@meb.k12.tr" /></label>
             </div>
             <div className="administrator-section">
-              <div className="section-heading"><div><span className="eyebrow">İMZA VE YÖNETİM</span><h3>Yönetici bilgileri</h3></div><div className="admin-add-actions"><button type="button" onClick={() => addSchoolAdministrator('principal')} disabled={schoolProfile.administrators.some((item) => item.role === 'principal')}>+ Müdür</button><button type="button" onClick={() => addSchoolAdministrator('vice_principal')}>+ Müdür yardımcısı</button></div></div>
-              <p>Resmî yazı ve raporlarda kullanılacak yönetici adlarını ekleyin.</p>
+              <div className="section-heading"><div><span className="eyebrow">İMZA VE YÖNETİM</span><h3>Yönetici bilgileri</h3></div><div className="admin-add-actions"><button type="button" onClick={() => addSchoolAdministrator('principal')} disabled={schoolProfile.administrators.some((item) => item.role === 'principal')}>+ Okul müdürü</button><button type="button" onClick={() => addSchoolAdministrator('vice_principal')} disabled={schoolProfile.administrators.length >= 21}>+ Müdür yardımcısı</button></div></div>
+              <p>Bir okul müdürü ve birden fazla müdür yardımcısı ekleyebilirsiniz. Belge unvanı görevden varsayılan gelir; gerekirse düzenleyebilirsiniz.</p>
               {schoolProfile.administrators.length === 0 && <div className="empty-admins">Henüz yönetici eklenmedi. Müdür veya müdür yardımcısı ekleyebilirsiniz.</div>}
               <div className="administrator-list">{schoolProfile.administrators.map((person, index) => <div className="administrator-row" key={person.id || `${person.role}-${index}`}>
-                <label><span>Görev</span><select value={person.role} onChange={(event) => updateSchoolAdministrator(index, 'role', event.target.value)}><option value="principal">Okul müdürü</option><option value="vice_principal">Müdür yardımcısı</option></select></label>
+                <label><span>Görev</span><select value={person.role} onChange={(event) => updateSchoolAdministrator(index, 'role', event.target.value)}><option value="principal">Okul müdürü · tek kayıt</option><option value="vice_principal">Müdür yardımcısı · çoklu</option></select></label>
                 <label><span>Adı soyadı</span><input required maxLength={160} value={person.full_name} onChange={(event) => updateSchoolAdministrator(index, 'full_name', event.target.value)} placeholder="Adı Soyadı" /></label>
-                <label><span>Belgede görünecek unvan (isteğe bağlı)</span><input maxLength={120} value={person.title} onChange={(event) => updateSchoolAdministrator(index, 'title', event.target.value)} placeholder="Örn. Müdür Yardımcısı" /></label>
+                <label><span>Belge imza unvanı</span><input maxLength={120} value={person.title} onChange={(event) => updateSchoolAdministrator(index, 'title', event.target.value)} placeholder={person.role === 'principal' ? 'Okul Müdürü' : 'Müdür Yardımcısı'} /></label>
                 <button className="remove-admin" type="button" aria-label={`${person.full_name || 'Yönetici'} kaydını kaldır`} onClick={() => removeSchoolAdministrator(index)}>Kaldır</button>
               </div>)}</div>
             </div>
+            {duplicateAdministrator && <p className="school-form-error" role="status">“{duplicateAdministrator}” birden fazla görevde görünüyor. Aynı kişiyi yalnızca bir kez ekleyin.</p>}
             {schoolError && <p className="school-form-error" role="alert">{schoolError} <button className="retry-school-profile" type="button" onClick={() => void retrySchoolProfile()}>Tekrar dene</button></p>}
             {schoolMessage && <p className="school-form-success" role="status">{schoolMessage}</p>}
-            <div className="school-form-footer"><span><b>*</b> Zorunlu alan</span><button className="school-save-button" type="submit" disabled={schoolSaving || !schoolProfile.school_name.trim()}>{schoolSaving ? 'Kaydediliyor…' : 'Bilgileri kaydet'}</button></div>
+            <div className="school-form-footer"><span><b>*</b> Zorunlu alan</span><button className="school-save-button" type="submit" disabled={schoolSaving || !schoolProfile.school_name.trim() || Boolean(duplicateAdministrator)}>{schoolSaving ? 'Kaydediliyor…' : 'Bilgileri kaydet'}</button></div>
           </>}
         </form>}
 

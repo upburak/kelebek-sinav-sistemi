@@ -357,6 +357,80 @@ button { transition: background-color .16s ease, border-color .16s ease, color .
 .import-preview { padding: 18px; border-color: #e5e9ec; border-radius: 11px; box-shadow: 0 3px 12px #1e2a3908; }
 .page-footer { margin: 23px auto 0; color: #a0a8b0; font-size: 9px; text-align: left; }
 
+/* Shared type, color, spacing, and icon rules across application modules */
+:root {
+  --ks-primary: #315fc4;
+  --ks-primary-soft: #eaf0ff;
+  --ks-accent: #168b78;
+  --ks-accent-soft: #e9f5f2;
+  --ks-warm: #dfa93e;
+  --ks-text: #293648;
+  --ks-muted: #748190;
+  --ks-border: #e2e8ee;
+  --ks-panel: #fff;
+}
+.workspace-icon { display: inline-block; flex: 0 0 auto; color: currentColor; vertical-align: middle; }
+.main-navigation button { gap: 10px; color: #536171; }
+.main-navigation button.active { background: var(--ks-primary-soft); color: var(--ks-primary); }
+.main-navigation button:hover:not(:disabled) { background: #f2f5fc; color: var(--ks-primary); }
+.school-avatar.large { display: grid; place-items: center; }
+.profile-badge { padding: 5px 7px; border-radius: 5px; background: #fff5df; color: #916b21; font-size: 9px; font-weight: 750; letter-spacing: .045em; }
+.profile-badge.saved-badge { background: var(--ks-accent-soft); color: #237365; }
+.profile-status.configured { background: var(--ks-accent); }
+.setup-steps li.current > span { border-color: var(--ks-primary); background: var(--ks-primary); }
+.setup-steps li.complete > span { border-color: var(--ks-accent); background: var(--ks-accent); color: #fff; }
+.setup-steps li.current > b { color: var(--ks-primary); }
+.profile-edit-link { color: var(--ks-primary); font-size: 11px; }
+.form-icon { background: var(--ks-accent-soft); color: var(--ks-accent); }
+.administrator-row { grid-template-columns: minmax(180px, 1.1fr) minmax(160px, 1fr) minmax(200px, 1fr) auto; }
+.school-save-button { background: linear-gradient(110deg, var(--ks-accent), var(--ks-primary)); }
+.school-fields-grid input:focus, .school-fields-grid textarea:focus, .administrator-row input:focus, .administrator-row select:focus { border-color: #7292df; box-shadow: 0 0 0 3px #5383db20; }
+.classroom-manager { color: var(--ks-text); font-size: 12px; line-height: 1.5; }
+.classroom-manager .eyebrow { color: #788692; font-size: 10px; }
+.classroom-manager-heading h2 { color: var(--ks-text); font-size: 18px; }
+.classroom-manager-heading p { color: var(--ks-muted); font-size: 12px; line-height: 1.55; }
+.classroom-manager h3 { color: var(--ks-text); font-size: 15px; }
+.classroom-manager h4 { color: var(--ks-text); font-size: 14px; }
+.room-create-form > label, .layout-create-form > label:first-child { color: #536171; font-size: 12px; }
+.room-create-form input, .layout-create-form > input { padding: 10px 11px; border-color: var(--ks-border); color: var(--ks-text); font-size: 12px; }
+.room-create-form button, .layout-create-form button, .layout-generator > button { border-radius: 7px; background: var(--ks-accent); font-size: 11px; }
+.room-create-form button:hover:not(:disabled), .layout-create-form button:hover:not(:disabled), .layout-generator > button:hover:not(:disabled) { background: #107666; }
+.classroom-list-item { border-color: var(--ks-border); border-radius: 9px; color: var(--ks-text); font-size: 12px; }
+.classroom-list-item.selected { border-color: #8ca4e4; background: var(--ks-primary-soft); }
+.classroom-list-item small, .layout-list small { color: var(--ks-muted); font-size: 11px; }
+.layout-create-form .template-check, .layout-year-hint { color: var(--ks-muted); font-size: 11px; }
+.layout-list li { border-color: var(--ks-border); color: #465365; font-size: 12px; }
+.layout-open { border-color: #d8e1f4; color: var(--ks-primary); font-size: 11px; }
+.layout-editor { border-color: var(--ks-border); background: #f8fafc; }
+.layout-generator label { color: #536171; font-size: 12px; }
+.layout-generator label small { font-size: 11px; }
+.layout-generator input, .layout-generator select { padding: 9px 10px; font-size: 12px; }
+.layout-scheme { border-color: var(--ks-border); }
+.scheme-board { color: #5d6c7e; font-size: 10px; }
+.scheme-aisle { color: #9a6b1b; font-size: 9px; }
+.scheme-block { border-color: #c9d5eb; color: #465365; font-size: 11px; }
+.scheme-block > span, .scheme-desks small, .layout-scheme > small { color: var(--ks-muted); font-size: 10px; }
+.layout-scheme p { color: #596779; font-size: 11px; }
+.layout-plan { border: 1px solid var(--ks-border); background: #f3f6fa; }
+.layout-canvas { border-color: var(--ks-border); background-color: #fbfcfd; background-image: radial-gradient(#d5dde7 1px, transparent 1px); }
+.layout-canvas.editable { border-color: #87a2e4; }
+.layout-canvas .plan-block-label { color: #6b7d92; font-size: 9px; }
+.plan-row-label { color: #526176; font-size: 9px; }
+.plan-corridor-label { color: #946616; font-size: 8px; }
+.plan-legend { color: #66748a; font-size: 11px; }
+.plan-desk-position { border-color: #c8d3e1; border-radius: 7px; }
+.plan-desk-position > small { color: #617185; font-size: 9px; }
+.plan-seat { width: 21px; height: 21px; background: #e6edfd; color: var(--ks-primary); font-size: 9px; }
+.plan-seat.unavailable { background: #fae9e6; color: #b24b43; }
+.layout-edit-button { border-radius: 7px; background: var(--ks-accent); font-size: 11px; }
+.layout-edit-button:hover:not(:disabled) { background: #107666; }
+.panel-close, .layout-open, .remove-admin { transition: background-color .16s ease, border-color .16s ease, color .16s ease; }
+.classroom-manager button:focus-visible, .school-form-card button:focus-visible, .main-navigation button:focus-visible { outline: 3px solid #6688db70; outline-offset: 2px; }
+.validate-import { background: var(--ks-primary); }
+.commit-import { background: var(--ks-accent); }
+.file-picker, .manager-open { color: var(--ks-primary); }
+.sample-badge, .sample-inline, .manager-preview i { /* Removed from active views; kept for old saved render compatibility. */ }
+
 @media (max-width: 980px) {
   .app-shell { grid-template-columns: 218px minmax(0, 1fr); }
   .app-sidebar { padding-right: 11px; padding-left: 11px; }
