@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ClassroomManager from './ClassroomManager'
 
 type HealthState = 'checking' | 'online' | 'offline'
 
@@ -85,6 +86,7 @@ export default function App() {
   const [importCommitResult, setImportCommitResult] = useState<StudentImportCommitResult | null>(null)
   const [importError, setImportError] = useState('')
   const [importLoading, setImportLoading] = useState(false)
+  const [classroomPanelOpen, setClassroomPanelOpen] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -336,7 +338,9 @@ export default function App() {
             <span className="feature-number">02</span>
             <h2>Derslik düzeni</h2>
             <p>Fiziksel masa ve oturma yerlerini tanımlama.</p>
-            <span className="feature-state">Hazırlanıyor</span>
+            <button className="manager-open" type="button" onClick={() => setClassroomPanelOpen(true)}>
+              Derslikleri yönet
+            </button>
           </article>
           <article className="feature-card">
             <span className="feature-number">03</span>
@@ -345,6 +349,15 @@ export default function App() {
             <span className="feature-state">Hazırlanıyor</span>
           </article>
         </div>
+
+        {classroomPanelOpen && (
+          <ClassroomManager
+            academicYearId={activeYearId}
+            academicYearLabel={activeYear?.label ?? ''}
+            readOnly={activeYear?.is_archive ?? false}
+            onClose={() => setClassroomPanelOpen(false)}
+          />
+        )}
 
         {importPreview && (
           <section className="import-preview" aria-labelledby="import-preview-title">

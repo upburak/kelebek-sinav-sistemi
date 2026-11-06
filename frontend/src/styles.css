@@ -64,6 +64,32 @@ h1 { max-width: 710px; margin: 15px 0 13px; font-size: clamp(32px, 4.3vw, 52px);
 .feature-card h2 { margin: 19px 0 7px; font-size: 16px; letter-spacing: -.02em; }
 .feature-card p { min-height: 39px; margin: 0; color: #718096; font-size: 12px; line-height: 1.55; }
 .feature-state { display: inline-block; margin-top: 16px; color: #75839a; font-size: 11px; }
+.manager-open { margin-top: 16px; padding: 9px 11px; border: 1px solid #dce4f0; border-radius: 9px; background: #fff; color: #4265c4; font-size: 11px; font-weight: 650; cursor: pointer; }
+.classroom-manager { margin-top: 22px; padding: 22px; border: 1px solid #e3e9f0; border-radius: 15px; background: #fff; }
+.classroom-manager-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.classroom-manager-heading h2 { margin: 6px 0; font-size: 20px; }
+.classroom-manager-heading p { margin: 0; color: #718096; font-size: 12px; }
+.panel-close { padding: 8px 10px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #526176; font-size: 11px; cursor: pointer; }
+.room-create-form { display: grid; gap: 7px; max-width: 480px; margin-top: 20px; }
+.room-create-form > label, .layout-create-form > label:first-child { color: #526176; font-size: 11px; font-weight: 650; }
+.room-create-form > div { display: flex; gap: 8px; }
+.room-create-form input, .layout-create-form > input { min-width: 0; flex: 1; padding: 10px 11px; border: 1px solid #dfe6f0; border-radius: 8px; color: #26354a; font: inherit; font-size: 12px; }
+.room-create-form button, .layout-create-form button { padding: 9px 12px; border: 0; border-radius: 8px; background: #4b72df; color: #fff; font-size: 11px; font-weight: 650; cursor: pointer; }
+.room-create-form button:disabled, .layout-create-form button:disabled { background: #e5eaf2; color: #8a96a7; cursor: default; }
+.classroom-list { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
+.classroom-list-item { display: grid; gap: 4px; min-width: 145px; padding: 11px 13px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; color: #26354a; text-align: left; cursor: pointer; }
+.classroom-list-item.selected { border-color: #6f89df; background: #f5f7ff; }
+.classroom-list-item small, .layout-list small { color: #8290a2; font-size: 10px; }
+.empty-classrooms { margin-top: 18px; color: #8290a2; font-size: 12px; }
+.classroom-layout-panel { margin-top: 20px; padding-top: 17px; border-top: 1px solid #edf0f5; }
+.classroom-layout-panel h3 { margin: 0 0 14px; color: #26354a; font-size: 14px; }
+.layout-create-form { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; max-width: 760px; }
+.layout-create-form > input { flex: 1 1 180px; }
+.layout-create-form .template-check { display: inline-flex; align-items: center; gap: 6px; color: #66748a; font-size: 10px; }
+.layout-year-hint { color: #8290a2; font-size: 10px; }
+.layout-list { display: grid; gap: 8px; padding: 0; list-style: none; }
+.layout-list li { display: flex; justify-content: space-between; gap: 14px; padding: 11px 12px; border: 1px solid #edf0f5; border-radius: 9px; color: #425167; font-size: 11px; }
+.layout-list li > span { display: grid; gap: 4px; }
 .file-picker { display: inline-flex; margin-top: 16px; padding: 9px 11px; border: 1px solid #dce4f0; border-radius: 9px; color: #4265c4; font-size: 11px; font-weight: 650; cursor: pointer; }
 .file-picker input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .file-picker:focus-within { outline: 2px solid #7894ee; outline-offset: 2px; }
@@ -116,6 +142,9 @@ h1 { max-width: 710px; margin: 15px 0 13px; font-size: clamp(32px, 4.3vw, 52px);
   .feature-grid { grid-template-columns: 1fr; }
   .feature-card { min-height: 155px; }
   .feature-card p { min-height: 0; }
+  .classroom-manager { padding: 17px; }
+  .classroom-manager-heading { flex-direction: column; }
+  .layout-list li { flex-direction: column; }
   .mapping-grid { grid-template-columns: 1fr; }
   .import-preview-heading { align-items: flex-start; flex-direction: column; }
   .page-footer { line-height: 1.7; }
