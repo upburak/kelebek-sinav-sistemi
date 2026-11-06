@@ -399,14 +399,16 @@ def generate_classroom_layout(classroom_id: str, layout_id: str):
         aisle_spacing = 2.6
         for row_index in range(rows):
             x_cursor = 0.0
+            row_desk_counter = 0
             for block_index, desk_count in enumerate(block_sizes):
                 if block_index:
                     x_cursor += aisle_spacing
                 for _desk_index in range(desk_count):
                     desk_counter += 1
+                    row_desk_counter += 1
                     desk = Desk(
                         layout_id=layout_id,
-                        label=f"S{row_index + 1}-M{desk_counter}",
+                        label=f"S{row_index + 1}-M{row_desk_counter}",
                         block_label=f"B{block_index + 1}",
                         x=x_cursor,
                         y=row_index * row_spacing,

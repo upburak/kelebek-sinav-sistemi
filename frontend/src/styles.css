@@ -94,12 +94,29 @@ h1 { max-width: 710px; margin: 15px 0 13px; font-size: clamp(32px, 4.3vw, 52px);
 .layout-open { padding: 7px 9px; border: 1px solid #dce4f0; border-radius: 7px; background: #fff; color: #4265c4; font-size: 10px; cursor: pointer; }
 .layout-editor { margin-top: 17px; padding: 15px; border: 1px solid #e7ecf3; border-radius: 11px; background: #fafbfd; }
 .layout-editor h4 { margin: 0 0 12px; color: #34445b; font-size: 12px; }
-.layout-generator { display: flex; flex-wrap: wrap; align-items: end; gap: 11px; }
-.layout-generator > p, .layout-generator > small { flex-basis: 100%; margin: 0; color: #75839a; font-size: 10px; }
-.layout-generator label { display: grid; min-width: 125px; gap: 5px; color: #526176; font-size: 10px; }
+.layout-generator { display: grid; gap: 14px; }
+.generator-intro { display: grid; gap: 5px; color: #34445b; font-size: 12px; }
+.generator-intro p { margin: 0; color: #75839a; font-size: 11px; line-height: 1.6; }
+.generator-fields, .block-count-fields { display: grid; grid-template-columns: repeat(3, minmax(145px, 1fr)); gap: 11px; }
+.block-count-fields { grid-template-columns: repeat(4, minmax(130px, 1fr)); }
+.layout-generator label { display: grid; align-content: start; gap: 5px; color: #526176; font-size: 11px; }
+.layout-generator label span { font-weight: 650; }
+.layout-generator label small { color: #8591a2; font-size: 10px; }
 .layout-generator input, .layout-generator select { width: 100%; padding: 8px; border: 1px solid #dfe6f0; border-radius: 7px; background: #fff; color: #26354a; font: inherit; font-size: 11px; }
-.layout-generator > button { padding: 9px 11px; border: 0; border-radius: 8px; background: #4b72df; color: #fff; font-size: 10px; font-weight: 650; cursor: pointer; }
+.layout-generator > button { justify-self: start; padding: 10px 14px; border: 0; border-radius: 8px; background: #4b72df; color: #fff; font-size: 11px; font-weight: 650; cursor: pointer; }
 .layout-generator > button:disabled { background: #e5eaf2; color: #8a96a7; cursor: default; }
+.layout-scheme { display: grid; justify-items: center; gap: 9px; padding: 13px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; overflow-x: auto; }
+.scheme-board { padding: 5px 24px; border: 1px solid #cdd6e3; border-radius: 0 0 8px 8px; background: #fff; color: #738198; font-size: 9px; font-weight: 750; letter-spacing: .08em; }
+.scheme-row { display: flex; align-items: center; gap: 10px; min-width: max-content; }
+.scheme-group { display: flex; align-items: center; gap: 10px; }
+.scheme-aisle { writing-mode: vertical-rl; color: #9b6b28; font-size: 8px; font-weight: 750; letter-spacing: .05em; }
+.scheme-block { display: grid; justify-items: center; gap: 5px; min-width: 105px; padding: 9px; border: 1px solid #ccd8ed; border-radius: 8px; background: #fff; color: #526176; font-size: 10px; }
+.scheme-block > span { color: #8290a2; font-size: 9px; }
+.scheme-desks { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.scheme-desks i { width: 13px; height: 11px; border: 1px solid #8ba3d6; border-radius: 3px; background: #e7eefc; }
+.scheme-desks small { color: #75839a; font-size: 9px; }
+.layout-scheme p { margin: 0; color: #66748a; font-size: 10px; text-align: center; }
+.layout-scheme > small { color: #8995a5; font-size: 9px; text-align: center; }
 .layout-plan { overflow-x: auto; padding: 12px; border-radius: 9px; background: #f1f4f8; }
 .board-label { width: max-content; min-width: 140px; margin: 0 auto 15px; padding: 5px 18px; border: 1px solid #cdd6e3; border-radius: 0 0 9px 9px; background: #fff; color: #8190a3; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-align: center; }
 .plan-row { display: flex; align-items: end; justify-content: center; gap: 24px; min-width: max-content; margin: 0 auto 13px; }
@@ -119,6 +136,10 @@ h1 { max-width: 710px; margin: 15px 0 13px; font-size: clamp(32px, 4.3vw, 52px);
 .layout-canvas.editable { border-color: #a8b8e8; }
 .layout-canvas .board-label { position: absolute; top: 7px; margin: 0; }
 .layout-canvas .plan-block-label { position: absolute; top: 33px; color: #8794a5; font-size: 8px; font-weight: 700; }
+.plan-row-label, .plan-corridor-label { position: absolute; transform: translateY(-50%); white-space: nowrap; }
+.plan-row-label { left: 8px; color: #65748a; font-size: 8px; font-weight: 700; }
+.plan-corridor-label { color: #9b6b28; font-size: 7px; font-weight: 750; }
+.plan-legend { margin: 9px 0 0; color: #748196; font-size: 9px; line-height: 1.6; }
 .plan-desk-position { position: absolute; display: grid; justify-items: center; gap: 4px; padding: 5px; border: 1px solid #cfd8e5; border-radius: 7px; background: #fff; box-shadow: 0 2px 4px rgb(28 47 82 / 5%); }
 .layout-canvas.editable .plan-desk-position { cursor: grab; }
 .layout-canvas.editable .plan-desk-position:active { cursor: grabbing; }
@@ -185,6 +206,9 @@ h1 { max-width: 710px; margin: 15px 0 13px; font-size: clamp(32px, 4.3vw, 52px);
   .layout-list li { flex-direction: column; }
   .layout-actions { align-items: flex-start; flex-direction: column; }
   .layout-editor-heading { align-items: flex-start; flex-direction: column; }
+  .generator-fields { grid-template-columns: 1fr; }
+  .block-count-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .layout-scheme { justify-items: start; }
   .mapping-grid { grid-template-columns: 1fr; }
   .import-preview-heading { align-items: flex-start; flex-direction: column; }
   .page-footer { line-height: 1.7; }

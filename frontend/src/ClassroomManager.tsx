@@ -36,7 +36,8 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   const [classroomName, setClassroomName] = useState('')
   const [layoutName, setLayoutName] = useState('Ana düzen')
   const [rowCount, setRowCount] = useState('')
-  const [blockSizes, setBlockSizes] = useState('')
+  const [blockCount, setBlockCount] = useState('1')
+  const [blockSizes, setBlockSizes] = useState<string[]>([''])
   const [seatsPerDesk, setSeatsPerDesk] = useState('')
   const [editingLayout, setEditingLayout] = useState(false)
   const [draggingDeskId, setDraggingDeskId] = useState<string | null>(null)
@@ -52,8 +53,19 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   const maxDeskY = selectedLayout?.desks.length
     ? Math.max(...selectedLayout.desks.map((desk) => desk.y))
     : 0
-  const canvasWidth = Math.max(500, 100 + (maxDeskX + 2.5) * 45)
+  const canvasWidth = Math.max(520, 150 + (maxDeskX + 2.5) * 45)
   const canvasHeight = Math.max(160, 100 + (maxDeskY + 1.5) * 45)
+  const planRows = selectedLayout
+    ? [...new Set(selectedLayout.desks.map((desk) => desk.y))].sort((a, b) => a - b)
+    : []
+  const planBlocks = selectedLayout
+    ? [...new Set(selectedLayout.desks.map((desk) => desk.block_label ?? ''))]
+      .map((label) => ({
+        label,
+        desks: selectedLayout.desks.filter((desk) => (desk.block_label ?? '') === label),
+      }))
+      .sort((a, b) => (a.desks[0]?.x ?? 0) - (b.desks[0]?.x ?? 0))
+    : []
   const selectedLatestVersion = selectedLayout
     ? Math.max(
       ...layouts
@@ -62,6 +74,10 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     )
     : 0
   const selectedIsLatest = selectedLayout?.layout.version === selectedLatestVersion
+  const validBlockSizes = blockSizes.length === Number(blockCount)
+    && blockSizes.length > 0
+    && blockSizes.every((size) => /^\d+$/.test(size) && Number(size) > 0)
+  const generatedSeatCount = Number(rowCount) * blockSizes.reduce((total, size) => total + Number(size || 0), 0) * Number(seatsPerDesk)
 
   async function loadClassrooms() {
     const response = await fetch('/api/classrooms')
@@ -86,7 +102,8 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       setSelectedLayout(data as LayoutDetail)
       setEditingLayout(false)
       setRowCount('')
-      setBlockSizes('')
+      setBlockCount('1')
+      setBlockSizes([''])
       setSeatsPerDesk('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Düzen açılamadı.')
@@ -168,7 +185,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     setSaving(true)
     setError('')
     try {
-      const parsedBlocks = blockSizes.split(',').map((value) => Number(value.trim()))
+      const parsedBlocks = blockSizes.map((value) => Number(value))
       const response = await fetch(
         `/api/classrooms/${selectedClassroomId}/layouts/${selectedLayout.layout.id}/generate`,
         {
@@ -188,6 +205,14 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       setError(reason instanceof Error ? reason.message : 'Başlangıç düzeni oluşturulamadı.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  function changeBlockCount(value: string) {
+    setBlockCount(value)
+    const count = Number(value)
+    if (Number.isInteger(count) && count >= 1 && count <= 8) {
+      setBlockSizes((current) => Array.from({ length: count }, (_, index) => current[index] ?? ''))
     }
   }
 
@@ -271,7 +296,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     const deskId = event.dataTransfer.getData('text/plain') || draggingDeskId
     if (!deskId) return
     const bounds = event.currentTarget.getBoundingClientRect()
-    const x = Math.max(0, Math.round(((event.clientX - bounds.left - dragOffset.x - 20) / 45) * 10) / 10)
+    const x = Math.max(0, Math.round(((event.clientX - bounds.left - dragOffset.x - 70) / 45) * 10) / 10)
     const y = Math.max(0, Math.round(((event.clientY - bounds.top - dragOffset.y - 50) / 45) * 10) / 10)
     setDraggingDeskId(null)
     void moveDesk(deskId, x, y)
@@ -380,14 +405,70 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
               {!selectedIsLatest && <p className="privacy-note">Bu eski sürüm salt okunur; düzenleme için en son sürümü aç.</p>}
               {selectedLayout.desks.length === 0 ? (
                 <form className="layout-generator" onSubmit={generateLayout}>
-                  <p>Fiziksel sınıfa göre satırları ve blok başına masa sayılarını gir.</p>
-                  <label>Satır sayısı<input type="number" min="1" max="40" required value={rowCount} onChange={(event) => setRowCount(event.target.value)} disabled={readOnly || saving} /></label>
-                  <label>Her bloktaki masa sayısı<input inputMode="numeric" placeholder="Örneğin: 6, 6, 6" required value={blockSizes} onChange={(event) => setBlockSizes(event.target.value)} disabled={readOnly || saving} /></label>
-                  <label>Masa başına oturma yeri<select required value={seatsPerDesk} onChange={(event) => setSeatsPerDesk(event.target.value)} disabled={readOnly || saving}>
-                    <option value="">Seç</option><option value="1">Tekli</option><option value="2">İkili</option><option value="3">Üçlü</option>
-                  </select></label>
-                  <button type="submit" disabled={readOnly || saving}>{saving ? 'Oluşturuluyor…' : 'Başlangıç planını oluştur'}</button>
-                  <small>Örneğin 6, 6, 6 üç blok ve aralarında koridor boşluğu oluşturur.</small>
+                  <div className="generator-intro">
+                    <strong>Önce sınıfın plan ölçülerini gir</strong>
+                    <p><b>Satır</b>, tahtadan arkaya doğru kaç masa dizisi olduğunu söyler. <b>Blok</b>, koridorla ayrılan yan yana masa grubudur. Her blok için bir satırdaki masa sayısını gir.</p>
+                  </div>
+                  <div className="generator-fields">
+                    <label>
+                      <span>Satır sayısı</span><small>Önden arkaya</small>
+                      <input type="number" min="1" max="40" required value={rowCount} onChange={(event) => setRowCount(event.target.value)} disabled={readOnly || saving} />
+                    </label>
+                    <label>
+                      <span>Blok sayısı</span><small>Koridorla ayrılan gruplar</small>
+                      <input type="number" min="1" max="8" required value={blockCount} onChange={(event) => changeBlockCount(event.target.value)} disabled={readOnly || saving} />
+                    </label>
+                    <label>
+                      <span>Her masadaki oturma yeri</span><small>Masalar aynı tipteyse</small>
+                      <select required value={seatsPerDesk} onChange={(event) => setSeatsPerDesk(event.target.value)} disabled={readOnly || saving}>
+                        <option value="">Oturma biçimi seç</option>
+                        <option value="1">Tekli · 1 öğrenci</option>
+                        <option value="2">İkili · 2 öğrenci</option>
+                        <option value="3">Üçlü · 3 öğrenci</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="block-count-fields">
+                    {blockSizes.map((size, index) => (
+                      <label key={index}>
+                        <span>Blok {index + 1}</span><small>Bir satırdaki masa sayısı</small>
+                        <input
+                          type="number"
+                          min="1"
+                          max="80"
+                          required
+                          value={size}
+                          onChange={(event) => setBlockSizes((values) => values.map((item, itemIndex) => itemIndex === index ? event.target.value : item))}
+                          disabled={readOnly || saving}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  {Number(rowCount) > 0 && validBlockSizes && Number(seatsPerDesk) > 0 && (
+                    <div className="layout-scheme" aria-label="Plan ölçülerinin şeması">
+                      <span className="scheme-board">TAHTA / ÖN</span>
+                      <div className="scheme-row">
+                        {blockSizes.map((size, index) => (
+                          <div className="scheme-group" key={index}>
+                            {index > 0 && <span className="scheme-aisle">KORİDOR</span>}
+                            <div className="scheme-block">
+                              <strong>Blok {index + 1}</strong>
+                              <span>{size} masa / satır</span>
+                              <div className="scheme-desks">
+                                {Array.from({ length: Math.min(Number(size), 8) }, (_, deskIndex) => <i key={deskIndex} />)}
+                                {Number(size) > 8 && <small>+{Number(size) - 8}</small>}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p>{rowCount} satır × {blockSizes.reduce((total, size) => total + Number(size), 0)} masa / satır × {seatsPerDesk} öğrenci / masa = <b>{generatedSeatCount} oturma yeri</b></p>
+                      <small>Bu şema bir satırı gösterir; aynı sıra {rowCount} kez arkaya doğru devam eder.</small>
+                    </div>
+                  )}
+                  <button type="submit" disabled={readOnly || saving || !validBlockSizes || Number(rowCount) < 1 || !seatsPerDesk}>
+                    {saving ? 'Oluşturuluyor…' : 'Bu ölçülerle planı oluştur'}
+                  </button>
                 </form>
               ) : (
                 <div className="layout-plan" aria-label="Derslik oturma planı">
@@ -403,17 +484,26 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
                     onDrop={dropDesk}
                   >
                     <div className="board-label" style={{ left: canvasWidth / 2 - 70 }}>TAHTA</div>
-                    {[...new Set(selectedLayout.desks.map((desk) => desk.block_label ?? ''))].map((blockLabel) => {
-                      const firstDesk = selectedLayout.desks.find((desk) => (desk.block_label ?? '') === blockLabel)
-                      if (!firstDesk) return null
-                      return <span className="plan-block-label" style={{ left: 20 + firstDesk.x * 45 }} key={blockLabel}>{blockLabel}</span>
+                    {planRows.map((rowY, rowIndex) => (
+                      <span className="plan-row-label" style={{ top: 50 + rowY * 45 + 13 }} key={rowY}>Satır {rowIndex + 1}</span>
+                    ))}
+                    {planBlocks.map((block) => {
+                      const firstDesk = block.desks.reduce((first, desk) => desk.x < first.x ? desk : first)
+                      return <span className="plan-block-label" style={{ left: 70 + firstDesk.x * 45 }} key={block.label}>{block.label || 'Blok'}</span>
                     })}
+                    {planRows.flatMap((rowY, rowIndex) => planBlocks.slice(0, -1).flatMap((block, blockIndex) => {
+                      const nextBlock = planBlocks[blockIndex + 1]
+                      const lastDesk = block.desks.filter((desk) => desk.y === rowY).reduce((last, desk) => !last || desk.x > last.x ? desk : last, null as typeof block.desks[number] | null)
+                      const firstDesk = nextBlock.desks.filter((desk) => desk.y === rowY).reduce((first, desk) => !first || desk.x < first.x ? desk : first, null as typeof nextBlock.desks[number] | null)
+                      if (!lastDesk || !firstDesk || firstDesk.x - lastDesk.x < 1.1) return []
+                      return [<span className="plan-corridor-label" style={{ left: 70 + ((lastDesk.x + firstDesk.x) / 2) * 45, top: 50 + rowY * 45 + 14 }} key={`${rowIndex}-${blockIndex}`}>KORİDOR</span>]
+                    }))}
                     {selectedLayout.desks.map((desk) => (
                       <div
                         className={`plan-desk-position ${draggingDeskId === desk.id ? 'dragging' : ''}`}
                         key={desk.id}
                         draggable={editingLayout}
-                        style={{ left: 20 + desk.x * 45, top: 50 + desk.y * 45 }}
+                        style={{ left: 70 + desk.x * 45, top: 50 + desk.y * 45 }}
                         onDragStart={(event) => {
                           setDraggingDeskId(desk.id)
                           const bounds = event.currentTarget.getBoundingClientRect()
@@ -441,6 +531,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
                       </div>
                     ))}
                   </div>
+                  <p className="plan-legend"><b>Satır</b>: tahtadan arkaya doğru masa dizisi · <b>Blok</b>: koridorun bir tarafındaki masa grubu · <b>S1-M1</b>: Satır 1, Masa 1 · Koltuk numaraları sınıf genelinde verilir.</p>
                 </div>
               )}
             </div>
