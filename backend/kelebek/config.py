@@ -28,6 +28,11 @@ def get_data_dir() -> Path:
     return base / "kelebek-sinav-sistemi"
 
 
+def get_database_path() -> Path:
+    """SQLite veritabanının kullanıcı veri klasöründeki yolunu döndür."""
+    return get_data_dir() / "kelebek.sqlite3"
+
+
 def configure_logging(app_logger: logging.Logger) -> None:
     """Günlükleri öğrenci verilerinden ayrı kullanıcı veri dizinine yaz."""
     log_dir = get_data_dir() / "logs"

@@ -12,23 +12,35 @@
 
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 
-button, a { font: inherit; }
+button, a, select { font: inherit; }
 
 .page-shell { min-height: 100vh; padding: 0 6.5vw 28px; }
 
 .topbar {
-  height: 84px;
+  min-height: 84px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 22px;
   border-bottom: 1px solid #e2e8f0;
 }
 
-.brand { display: inline-flex; align-items: center; gap: 11px; color: #182337; text-decoration: none; font-size: 15px; }
+.brand { display: inline-flex; align-items: center; gap: 11px; color: #182337; text-decoration: none; font-size: 15px; white-space: nowrap; }
 .brand strong { font-weight: 700; }
-.brand-mark { display: grid; place-items: center; width: 34px; height: 34px; color: #fff; border-radius: 11px; background: #4b72df; font-family: Manrope, sans-serif; font-weight: 800; }
+.brand-mark { display: grid; place-items: center; width: 34px; height: 34px; color: #fff; border-radius: 11px; background: #4b72df; font-weight: 800; }
 
-.service-status { display: inline-flex; align-items: center; gap: 9px; padding: 9px 13px; border: 1px solid #e2e8f0; border-radius: 999px; background: #fff; color: #59677c; font-size: 12px; }
+.topbar-actions { display: flex; align-items: center; gap: 18px; }
+.year-control { display: grid; gap: 5px; }
+.year-control label { color: #7b8798; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.year-control-row { display: flex; align-items: center; gap: 7px; }
+.year-control select { min-width: 145px; padding: 8px 30px 8px 10px; border: 1px solid #dfe6f0; border-radius: 9px; color: #26354a; background: #fff; font-size: 12px; }
+.confirm-year { padding: 8px 12px; border: 0; border-radius: 9px; background: #4b72df; color: #fff; font-size: 11px; font-weight: 600; cursor: pointer; }
+.confirm-year:disabled { background: #e5eaf2; color: #8a96a7; cursor: default; }
+.year-feedback { font-size: 10px; }
+.year-feedback.error { color: #bd454a; }
+.year-feedback.success { color: #24815f; }
+
+.service-status { display: inline-flex; align-items: center; gap: 9px; padding: 9px 13px; border: 1px solid #e2e8f0; border-radius: 999px; background: #fff; color: #59677c; font-size: 12px; white-space: nowrap; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #e6ad42; }
 .service-status.online .status-dot { background: #32a879; }
 .service-status.offline .status-dot { background: #d95b60; }
@@ -44,23 +56,67 @@ h1 { max-width: 710px; margin: 15px 0 13px; font-size: clamp(32px, 4.3vw, 52px);
 .setup-notice strong { display: block; margin: 1px 0 4px; font-size: 13px; }
 .setup-notice p { margin: 0; color: #66748a; font-size: 12px; }
 
+.archive-banner { max-width: 680px; margin: 24px 0 -12px; padding: 12px 15px; border: 1px solid #f1dfb7; border-radius: 11px; background: #fff8e9; color: #856520; font-size: 12px; }
+
 .feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .feature-card { min-height: 190px; padding: 21px 22px; border: 1px solid #e3e9f0; border-radius: 16px; background: #fff; box-shadow: 0 5px 18px rgb(28 47 82 / 3%); }
 .feature-number { color: #8b9ab1; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
 .feature-card h2 { margin: 19px 0 7px; font-size: 16px; letter-spacing: -.02em; }
 .feature-card p { min-height: 39px; margin: 0; color: #718096; font-size: 12px; line-height: 1.55; }
 .feature-state { display: inline-block; margin-top: 16px; color: #75839a; font-size: 11px; }
+.file-picker { display: inline-flex; margin-top: 16px; padding: 9px 11px; border: 1px solid #dce4f0; border-radius: 9px; color: #4265c4; font-size: 11px; font-weight: 650; cursor: pointer; }
+.file-picker input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.file-picker:focus-within { outline: 2px solid #7894ee; outline-offset: 2px; }
+.import-error { margin: 9px 0 0; color: #bd454a; font-size: 11px; }
+.import-preview { margin-top: 22px; padding: 20px; border: 1px solid #e3e9f0; border-radius: 15px; background: #fff; }
+.import-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.import-preview-heading h2 { margin: 6px 0 0; font-size: 17px; overflow-wrap: anywhere; }
+.import-preview > p { color: #6f7c90; font-size: 11px; }
+.preview-badge { padding: 7px 10px; border-radius: 999px; background: #eff7f3; color: #27825e; font-size: 10px; white-space: nowrap; }
+.table-scroll { overflow-x: auto; margin-top: 13px; }
+.table-scroll table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; }
+.table-scroll th, .table-scroll td { max-width: 240px; padding: 9px 11px; border-bottom: 1px solid #edf0f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-scroll th { background: #f7f9fc; color: #526176; font-weight: 650; }
+.privacy-note { margin-bottom: 0; color: #8390a1 !important; font-size: 10px !important; }
+.mapping-panel { margin-top: 22px; padding-top: 18px; border-top: 1px solid #edf0f5; }
+.mapping-panel p { margin: 6px 0 13px; color: #6f7c90; font-size: 11px; }
+.mapping-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.mapping-grid label { display: grid; gap: 6px; color: #526176; font-size: 10px; font-weight: 650; }
+.mapping-grid select { width: 100%; padding: 9px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #26354a; font-size: 11px; }
+.validate-import { margin-top: 14px; padding: 10px 13px; border: 0; border-radius: 9px; background: #4b72df; color: #fff; font-size: 11px; font-weight: 650; cursor: pointer; }
+.validate-import:disabled { background: #e5eaf2; color: #8a96a7; cursor: default; }
+.validation-report { margin-top: 15px; padding: 14px; border: 1px solid #dce9e2; border-radius: 10px; background: #f7fbf8; color: #315b48; font-size: 11px; }
+.validation-report p { margin: 6px 0; }
+.validation-report ul { padding-left: 18px; color: #855b39; line-height: 1.7; }
+.area-note { color: #856520; }
+.area-assignment-panel { margin: 12px 0; padding: 13px; border: 1px solid #f1dfb7; border-radius: 10px; background: #fffaf0; color: #755d2a; }
+.area-assignment-panel > p { margin: 6px 0 12px; }
+.area-assignment-panel label { display: inline-grid; min-width: 170px; gap: 6px; margin: 5px 10px 5px 0; color: #526176; font-size: 10px; }
+.area-assignment-panel select { padding: 8px; border: 1px solid #e1d8bf; border-radius: 8px; background: #fff; color: #26354a; font-size: 11px; }
+.diff-report { margin-top: 14px; padding-top: 13px; border-top: 1px solid #dce9e2; }
+.diff-counts { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; }
+.diff-counts span { padding: 6px 8px; border-radius: 7px; background: #fff; color: #486052; font-size: 10px; }
+.diff-report details { margin-top: 8px; color: #526176; }
+.diff-report summary { cursor: pointer; font-size: 11px; font-weight: 650; }
+.diff-report ul { max-height: 190px; overflow: auto; }
+.diff-warning { color: #a35343; }
+.commit-import { margin-top: 12px; padding: 10px 14px; border: 0; border-radius: 9px; background: #287a59; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
+.commit-import:disabled { opacity: .65; cursor: wait; }
+.commit-success { padding: 11px 13px; border-radius: 9px; background: #edf8f1; color: #26734f !important; }
 
 .page-footer { margin: 46px auto 0; color: #8a97a9; font-size: 11px; text-align: center; }
 .page-footer span { padding: 0 7px; color: #bac4d1; }
 
-@media (max-width: 700px) {
+@media (max-width: 760px) {
   .page-shell { padding: 0 20px 24px; }
-  .topbar { height: 70px; }
+  .topbar { min-height: 70px; flex-wrap: wrap; padding: 13px 0; }
+  .topbar-actions { width: 100%; justify-content: space-between; gap: 10px; }
   .service-status { max-width: 175px; font-size: 10px; }
   .welcome-card { margin-top: 40px; }
   .feature-grid { grid-template-columns: 1fr; }
   .feature-card { min-height: 155px; }
   .feature-card p { min-height: 0; }
+  .mapping-grid { grid-template-columns: 1fr; }
+  .import-preview-heading { align-items: flex-start; flex-direction: column; }
   .page-footer { line-height: 1.7; }
 }

@@ -34,9 +34,13 @@ Sentetik örnek verileri kullanın. `.gitignore` güvenli varsayılanları içer
 
 ## Faz A kapsamı
 
-- Flask uygulama fabrikası ve yerel sağlık kontrolü.
+- Flask uygulama fabrikası, yerel sağlık kontrolü ve eğitim-öğretim yılı seçimi.
 - React + TypeScript + Vite geliştirme arayüzü ve API proxy'si.
 - macOS/Windows kullanıcı veri dizini çözümlemesi ve günlük altyapısı.
 - Her iki işletim sistemi için kurulum ve geliştirme başlatma betikleri.
 
-SQLite şeması ve migration'lar, öğrenci aktarımı ve diğer işlevler mimarideki sıraya göre sonraki fazlarda eklenecektir.
+SQLite ve Alembic migration altyapısı eklendi. Eğitim-öğretim yılı ilk açılışta oluşturulur ve başlangıçta güncel yıl seçilir. Faz C kapsamında e-Okul XLSX önizleme ve aktarım akışı hazırlandı; sonraki işlevler mimarideki sıraya göre eklenecektir.
+
+e-Okul aktarım başlangıcı `.xlsx` dosyasını yalnızca bellekte önizler; kullanıcı sütunları eşler, teknik kontrolleri ve seçili yılın fark raporunu inceler. Veritabanına aktarım ayrı bir açık onay düğmesiyle yapılır. Eksik listeden ayrılan öğrenciler silinmez, pasif duruma alınır.
+
+Derslik verisi için sürümlü düzen, fiziksel masa ve ayrı koltuk tabloları eklendi. Kullanılabilir kapasite, düzende açık olan oturma yerlerinden hesaplanır.
