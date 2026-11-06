@@ -46,3 +46,5 @@ e-Okul aktarım başlangıcı `.xlsx` dosyasını yalnızca bellekte önizler; k
 Derslik verisi için sürümlü düzen, fiziksel masa ve ayrı koltuk tabloları eklendi. Kullanılabilir kapasite, düzende açık olan oturma yerlerinden hesaplanır.
 
 Derslik ekranında satır sayısı, blok başına masa sayısı ve masa başına tekli/ikili/üçlü oturma yeri seçilerek başlangıç planı oluşturulabilir. Plan numaralı koltuklarla bloklar halinde görüntülenir; gerçek sınıf ölçüleri kullanıcı tarafından girilir.
+
+Mevcut bir plan düzenlenirken yeni sürüm kopyalanır; eski sürüm korunur. Yeni sürümde masalar sürüklenebilir ve oturma yerleri kullanılabilir/kullanım dışı olarak işaretlenebilir. Değişiklikler yerel veritabanına kaydedilir.

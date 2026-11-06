@@ -1,6 +1,7 @@
 """Derslik ve düzen kayıtlarını yöneten yerel API."""
 
 from flask import Blueprint, current_app, jsonify, request
+from math import isfinite
 from sqlalchemy import func, select
 
 from kelebek.db import current_academic_year_start
@@ -31,6 +32,55 @@ def _layout_payload(session, layout):
         "total_seats": total_seats,
         "available_seats": available_seats,
     }
+
+
+def _layout_detail(session, layout):
+    desks = session.scalars(
+        select(Desk).where(Desk.layout_id == layout.id).order_by(Desk.y, Desk.x)
+    ).all()
+    result = []
+    for desk in desks:
+        seats = session.scalars(
+            select(Seat).where(Seat.desk_id == desk.id).order_by(Seat.seat_index)
+        ).all()
+        result.append(
+            {
+                "id": desk.id,
+                "label": desk.label,
+                "block_label": desk.block_label,
+                "x": desk.x,
+                "y": desk.y,
+                "rotation_degrees": desk.rotation_degrees,
+                "seats": [
+                    {
+                        "id": seat.id,
+                        "seat_number": seat.seat_number,
+                        "seat_index": seat.seat_index,
+                        "is_available": seat.is_available,
+                        "x": seat.x,
+                        "y": seat.y,
+                    }
+                    for seat in seats
+                ],
+            }
+        )
+    return {"layout": _layout_payload(session, layout), "desks": result}
+
+
+def _is_archive_layout(session, layout):
+    if not layout.academic_year_id:
+        return False
+    year = session.get(AcademicYear, layout.academic_year_id)
+    return year is not None and year.start_year < current_academic_year_start()
+
+
+def _is_latest_layout_version(session, layout):
+    query = select(func.max(ClassroomLayout.version)).where(
+        ClassroomLayout.classroom_id == layout.classroom_id,
+        ClassroomLayout.name == layout.name,
+        ClassroomLayout.academic_year_id == layout.academic_year_id,
+    )
+    return layout.version == session.scalar(query)
 
 
 @classrooms_api.get("/classrooms")
@@ -98,37 +148,159 @@ def get_classroom_layout(classroom_id: str, layout_id: str):
         layout = session.get(ClassroomLayout, layout_id)
         if layout is None or layout.classroom_id != classroom_id:
             return jsonify({"error": "Derslik düzeni bulunamadı."}), 404
-        desks = session.scalars(
-            select(Desk).where(Desk.layout_id == layout_id).order_by(Desk.y, Desk.x)
-        ).all()
-        result = []
-        for desk in desks:
-            seats = session.scalars(
-                select(Seat).where(Seat.desk_id == desk.id).order_by(Seat.seat_index)
-            ).all()
-            result.append(
-                {
-                    "id": desk.id,
-                    "label": desk.label,
-                    "block_label": desk.block_label,
-                    "x": desk.x,
-                    "y": desk.y,
-                    "rotation_degrees": desk.rotation_degrees,
-                    "seats": [
-                        {
-                            "id": seat.id,
-                            "seat_number": seat.seat_number,
-                            "seat_index": seat.seat_index,
-                            "is_available": seat.is_available,
-                            "x": seat.x,
-                            "y": seat.y,
-                        }
-                        for seat in seats
-                    ],
-                }
-            )
-        response = {"layout": _layout_payload(session, layout), "desks": result}
+        response = _layout_detail(session, layout)
     return jsonify(response)
+
+
+@classrooms_api.post("/classrooms/<classroom_id>/layouts/<layout_id>/versions")
+def create_layout_version(classroom_id: str, layout_id: str):
+    """Düzenlemeden önce mevcut planı koruyup yeni sürüme kopyala."""
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory.begin() as session:
+        source = session.get(ClassroomLayout, layout_id)
+        if source is None or source.classroom_id != classroom_id:
+            return jsonify({"error": "Derslik düzeni bulunamadı."}), 404
+        if _is_archive_layout(session, source):
+            return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
+        if not _is_latest_layout_version(session, source):
+            return jsonify({"error": "Yeni sürüm yalnızca son düzen sürümünden başlatılabilir."}), 409
+
+        version = session.scalar(
+            select(func.max(ClassroomLayout.version)).where(
+                ClassroomLayout.classroom_id == source.classroom_id,
+                ClassroomLayout.name == source.name,
+                ClassroomLayout.academic_year_id == source.academic_year_id,
+            )
+        ) or source.version
+        updated = ClassroomLayout(
+            classroom_id=source.classroom_id,
+            academic_year_id=source.academic_year_id,
+            name=source.name,
+            version=version + 1,
+        )
+        session.add(updated)
+        session.flush()
+
+        source_desks = session.scalars(
+            select(Desk).where(Desk.layout_id == source.id).order_by(Desk.y, Desk.x)
+        ).all()
+        for source_desk in source_desks:
+            desk = Desk(
+                layout_id=updated.id,
+                label=source_desk.label,
+                block_label=source_desk.block_label,
+                x=source_desk.x,
+                y=source_desk.y,
+                rotation_degrees=source_desk.rotation_degrees,
+            )
+            session.add(desk)
+            session.flush()
+            source_seats = session.scalars(
+                select(Seat).where(Seat.desk_id == source_desk.id).order_by(Seat.seat_index)
+            ).all()
+            for source_seat in source_seats:
+                session.add(
+                    Seat(
+                        layout_id=updated.id,
+                        desk_id=desk.id,
+                        seat_number=source_seat.seat_number,
+                        seat_index=source_seat.seat_index,
+                        x=source_seat.x,
+                        y=source_seat.y,
+                        is_available=source_seat.is_available,
+                        unavailable_reason=source_seat.unavailable_reason,
+                    )
+                )
+        session.flush()
+        response = _layout_detail(session, updated)
+    return jsonify(response), 201
+
+
+@classrooms_api.patch("/classrooms/<classroom_id>/layouts/<layout_id>/desks/<desk_id>")
+def move_layout_desk(classroom_id: str, layout_id: str, desk_id: str):
+    """Masayı yeni koordinata taşı ve ona bağlı koltukları birlikte kaydır."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Yeni masa konumu gerekli."}), 400
+    x, y = payload.get("x"), payload.get("y")
+    if (
+        isinstance(x, bool)
+        or isinstance(y, bool)
+        or not isinstance(x, (int, float))
+        or not isinstance(y, (int, float))
+        or not isfinite(x)
+        or not isfinite(y)
+        or not 0 <= x <= 1000
+        or not 0 <= y <= 1000
+    ):
+        return jsonify({"error": "Masa konumu geçersiz."}), 400
+
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory.begin() as session:
+        layout = session.get(ClassroomLayout, layout_id)
+        desk = session.get(Desk, desk_id)
+        if layout is None or layout.classroom_id != classroom_id or desk is None or desk.layout_id != layout_id:
+            return jsonify({"error": "Masa veya derslik düzeni bulunamadı."}), 404
+        if _is_archive_layout(session, layout):
+            return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
+        if not _is_latest_layout_version(session, layout):
+            return jsonify({"error": "Önce bu düzenin yeni bir sürümünü oluşturun."}), 409
+
+        x, y = float(x), float(y)
+        others = session.scalars(
+            select(Desk).where(Desk.layout_id == layout_id, Desk.id != desk_id)
+        ).all()
+        if any(abs(other.x - x) < 1.4 and abs(other.y - y) < 0.9 for other in others):
+            return jsonify({"error": "Bu konum başka bir masayla çakışıyor."}), 409
+
+        delta_x, delta_y = x - desk.x, y - desk.y
+        desk.x, desk.y = x, y
+        seats = session.scalars(select(Seat).where(Seat.desk_id == desk_id)).all()
+        for seat in seats:
+            seat.x += delta_x
+            seat.y += delta_y
+        session.flush()
+        response = {
+            "id": desk.id,
+            "x": desk.x,
+            "y": desk.y,
+            "seats": [{"id": seat.id, "x": seat.x, "y": seat.y} for seat in seats],
+        }
+    return jsonify({"desk": response})
+
+
+@classrooms_api.patch("/classrooms/<classroom_id>/layouts/<layout_id>/seats/<seat_id>")
+def set_layout_seat_availability(classroom_id: str, layout_id: str, seat_id: str):
+    """Oturma yerini kullanılabilir veya kapalı olarak kaydet."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or type(payload.get("is_available")) is not bool:
+        return jsonify({"error": "Oturma yeri durumu geçersiz."}), 400
+    reason = payload.get("unavailable_reason")
+    if reason is not None and not isinstance(reason, str):
+        return jsonify({"error": "Kapatma açıklaması metin olmalı."}), 400
+    reason = reason.strip() if isinstance(reason, str) else ""
+    if len(reason) > 240:
+        return jsonify({"error": "Kapatma açıklaması 240 karakterden kısa olmalı."}), 400
+
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory.begin() as session:
+        layout = session.get(ClassroomLayout, layout_id)
+        seat = session.get(Seat, seat_id)
+        if layout is None or layout.classroom_id != classroom_id or seat is None or seat.layout_id != layout_id:
+            return jsonify({"error": "Oturma yeri veya derslik düzeni bulunamadı."}), 404
+        if _is_archive_layout(session, layout):
+            return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
+        if not _is_latest_layout_version(session, layout):
+            return jsonify({"error": "Önce bu düzenin yeni bir sürümünü oluşturun."}), 409
+        seat.is_available = payload["is_available"]
+        seat.unavailable_reason = reason or None if not seat.is_available else None
+        session.flush()
+        result = {
+            "id": seat.id,
+            "is_available": seat.is_available,
+            "unavailable_reason": seat.unavailable_reason,
+        }
+    return jsonify({"seat": result})
 
 
 @classrooms_api.post("/classrooms/<classroom_id>/layouts")
@@ -215,6 +387,8 @@ def generate_classroom_layout(classroom_id: str, layout_id: str):
             academic_year = session.get(AcademicYear, layout.academic_year_id)
             if academic_year and academic_year.start_year < current_academic_year_start():
                 return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
+        if not _is_latest_layout_version(session, layout):
+            return jsonify({"error": "Önce bu düzenin yeni bir sürümünü oluşturun."}), 409
         if session.scalar(select(func.count(Desk.id)).where(Desk.layout_id == layout_id)):
             return jsonify({"error": "Bu düzende masalar var. Yeni bir düzen sürümü oluşturarak devam edin."}), 409
 

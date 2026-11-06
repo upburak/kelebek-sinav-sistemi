@@ -112,6 +112,22 @@ h1 { max-width: 710px; margin: 15px 0 13px; font-size: clamp(32px, 4.3vw, 52px);
 .plan-seats span { display: grid; place-items: center; width: 19px; height: 19px; border-radius: 4px; background: #e6edf9; color: #3f5e9d; font-size: 8px; font-weight: 700; }
 .plan-seats span.unavailable { background: #f6dddd; color: #b0474b; }
 .layout-plan .privacy-note { margin-top: 12px; }
+.layout-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.layout-edit-button { padding: 8px 11px; border: 0; border-radius: 8px; background: #287a59; color: #fff; font-size: 10px; font-weight: 650; cursor: pointer; }
+.layout-edit-button:disabled { opacity: .65; cursor: wait; }
+.layout-canvas { position: relative; min-width: 500px; border: 1px solid #e1e7ef; border-radius: 8px; background-color: #f8fafc; background-image: radial-gradient(#d8e0ea 1px, transparent 1px); background-size: 18px 18px; }
+.layout-canvas.editable { border-color: #a8b8e8; }
+.layout-canvas .board-label { position: absolute; top: 7px; margin: 0; }
+.layout-canvas .plan-block-label { position: absolute; top: 33px; color: #8794a5; font-size: 8px; font-weight: 700; }
+.plan-desk-position { position: absolute; display: grid; justify-items: center; gap: 4px; padding: 5px; border: 1px solid #cfd8e5; border-radius: 7px; background: #fff; box-shadow: 0 2px 4px rgb(28 47 82 / 5%); }
+.layout-canvas.editable .plan-desk-position { cursor: grab; }
+.layout-canvas.editable .plan-desk-position:active { cursor: grabbing; }
+.plan-desk-position.dragging { opacity: .45; }
+.plan-desk-position > small { color: #8794a5; font-size: 7px; }
+.plan-seat { display: grid; place-items: center; width: 19px; height: 19px; padding: 0; border: 0; border-radius: 4px; background: #e6edf9; color: #3f5e9d; font-size: 8px; font-weight: 700; }
+.plan-seat:disabled { cursor: default; }
+.plan-seat:not(:disabled) { cursor: pointer; }
+.plan-seat.unavailable { background: #f6dddd; color: #b0474b; }
 .file-picker { display: inline-flex; margin-top: 16px; padding: 9px 11px; border: 1px solid #dce4f0; border-radius: 9px; color: #4265c4; font-size: 11px; font-weight: 650; cursor: pointer; }
 .file-picker input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .file-picker:focus-within { outline: 2px solid #7894ee; outline-offset: 2px; }
@@ -168,6 +184,7 @@ h1 { max-width: 710px; margin: 15px 0 13px; font-size: clamp(32px, 4.3vw, 52px);
   .classroom-manager-heading { flex-direction: column; }
   .layout-list li { flex-direction: column; }
   .layout-actions { align-items: flex-start; flex-direction: column; }
+  .layout-editor-heading { align-items: flex-start; flex-direction: column; }
   .mapping-grid { grid-template-columns: 1fr; }
   .import-preview-heading { align-items: flex-start; flex-direction: column; }
   .page-footer { line-height: 1.7; }

@@ -1,10 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type DragEvent, type FormEvent } from 'react'
 
 type Classroom = { id: string; name: string; layout_count: number }
 type ClassroomLayout = {
   id: string
   name: string
   version: number
+  academic_year_id: string | null
   academic_year_label: string | null
   is_template: boolean
   total_seats: number
@@ -37,21 +38,30 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   const [rowCount, setRowCount] = useState('')
   const [blockSizes, setBlockSizes] = useState('')
   const [seatsPerDesk, setSeatsPerDesk] = useState('')
+  const [editingLayout, setEditingLayout] = useState(false)
+  const [draggingDeskId, setDraggingDeskId] = useState<string | null>(null)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [isTemplate, setIsTemplate] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const selectedClassroom = classrooms.find((item) => item.id === selectedClassroomId)
-  const planRows = selectedLayout
-    ? [...new Set(selectedLayout.desks.map((desk) => desk.y))].sort((a, b) => a - b).map((y) => {
-      const rowDesks = selectedLayout.desks.filter((desk) => desk.y === y)
-      const blocks = [...new Set(rowDesks.map((desk) => desk.block_label ?? ''))].map((blockLabel) => ({
-        label: blockLabel,
-        desks: rowDesks.filter((desk) => (desk.block_label ?? '') === blockLabel),
-      }))
-      return { y, blocks }
-    })
-    : []
+  const maxDeskX = selectedLayout?.desks.length
+    ? Math.max(...selectedLayout.desks.map((desk) => desk.x))
+    : 0
+  const maxDeskY = selectedLayout?.desks.length
+    ? Math.max(...selectedLayout.desks.map((desk) => desk.y))
+    : 0
+  const canvasWidth = Math.max(500, 100 + (maxDeskX + 2.5) * 45)
+  const canvasHeight = Math.max(160, 100 + (maxDeskY + 1.5) * 45)
+  const selectedLatestVersion = selectedLayout
+    ? Math.max(
+      ...layouts
+        .filter((layout) => layout.name === selectedLayout.layout.name && layout.academic_year_id === selectedLayout.layout.academic_year_id)
+        .map((layout) => layout.version),
+    )
+    : 0
+  const selectedIsLatest = selectedLayout?.layout.version === selectedLatestVersion
 
   async function loadClassrooms() {
     const response = await fetch('/api/classrooms')
@@ -74,6 +84,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Düzen açılamadı.')
       setSelectedLayout(data as LayoutDetail)
+      setEditingLayout(false)
       setRowCount('')
       setBlockSizes('')
       setSeatsPerDesk('')
@@ -115,6 +126,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   async function selectClassroom(classroomId: string) {
     setSelectedClassroomId(classroomId)
     setSelectedLayout(null)
+    setEditingLayout(false)
     setError('')
     try {
       await loadLayouts(classroomId)
@@ -177,6 +189,92 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     } finally {
       setSaving(false)
     }
+  }
+
+  async function beginLayoutEdit() {
+    if (!selectedClassroomId || !selectedLayout) return
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(
+        `/api/classrooms/${selectedClassroomId}/layouts/${selectedLayout.layout.id}/versions`,
+        { method: 'POST' },
+      )
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Yeni düzen sürümü oluşturulamadı.')
+      setSelectedLayout(data as LayoutDetail)
+      setEditingLayout(true)
+      await loadLayouts(selectedClassroomId)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Yeni düzen sürümü oluşturulamadı.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function moveDesk(deskId: string, x: number, y: number) {
+    if (!selectedClassroomId || !selectedLayout || !editingLayout) return
+    try {
+      const response = await fetch(
+        `/api/classrooms/${selectedClassroomId}/layouts/${selectedLayout.layout.id}/desks/${deskId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ x, y }),
+        },
+      )
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Masa taşınamadı.')
+      await openLayout(selectedClassroomId, selectedLayout.layout.id)
+      setEditingLayout(true)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Masa taşınamadı.')
+    }
+  }
+
+  async function toggleSeatAvailability(seat: Desk['seats'][number]) {
+    if (!selectedClassroomId || !selectedLayout || !editingLayout) return
+    try {
+      const response = await fetch(
+        `/api/classrooms/${selectedClassroomId}/layouts/${selectedLayout.layout.id}/seats/${seat.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            is_available: !seat.is_available,
+            unavailable_reason: seat.is_available ? 'Kullanım dışı' : '',
+          }),
+        },
+      )
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Oturma yeri durumu değiştirilemedi.')
+      setSelectedLayout((current) => current ? {
+        ...current,
+        desks: current.desks.map((desk) => ({
+          ...desk,
+          seats: desk.seats.map((item) => item.id === seat.id ? { ...item, is_available: data.seat.is_available } : item),
+        })),
+        layout: {
+          ...current.layout,
+          available_seats: current.layout.available_seats + (data.seat.is_available ? 1 : -1),
+        },
+      } : current)
+      await loadLayouts(selectedClassroomId)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Oturma yeri durumu değiştirilemedi.')
+    }
+  }
+
+  function dropDesk(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    if (!selectedLayout || !editingLayout) return
+    const deskId = event.dataTransfer.getData('text/plain') || draggingDeskId
+    if (!deskId) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const x = Math.max(0, Math.round(((event.clientX - bounds.left - dragOffset.x - 20) / 45) * 10) / 10)
+    const y = Math.max(0, Math.round(((event.clientY - bounds.top - dragOffset.y - 50) / 45) * 10) / 10)
+    setDraggingDeskId(null)
+    void moveDesk(deskId, x, y)
   }
 
   return (
@@ -266,7 +364,20 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
           )}
           {selectedLayout && (
             <div className="layout-editor">
-              <h4>{selectedLayout.layout.name} · v{selectedLayout.layout.version}</h4>
+              <div className="layout-editor-heading">
+                <h4>{selectedLayout.layout.name} · v{selectedLayout.layout.version}</h4>
+                {selectedLayout.desks.length > 0 && !readOnly && selectedIsLatest && (
+                  <button
+                    type="button"
+                    className="layout-edit-button"
+                    disabled={saving}
+                    onClick={() => editingLayout ? setEditingLayout(false) : void beginLayoutEdit()}
+                  >
+                    {editingLayout ? 'Düzenlemeyi bitir' : 'Kopyala ve düzenle'}
+                  </button>
+                )}
+              </div>
+              {!selectedIsLatest && <p className="privacy-note">Bu eski sürüm salt okunur; düzenleme için en son sürümü aç.</p>}
               {selectedLayout.desks.length === 0 ? (
                 <form className="layout-generator" onSubmit={generateLayout}>
                   <p>Fiziksel sınıfa göre satırları ve blok başına masa sayılarını gir.</p>
@@ -280,29 +391,56 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
                 </form>
               ) : (
                 <div className="layout-plan" aria-label="Derslik oturma planı">
-                  <div className="board-label">TAHTA</div>
-                  {planRows.map((row) => (
-                    <div className="plan-row" key={row.y}>
-                      {row.blocks.map((block) => (
-                        <div className="plan-block" key={`${row.y}-${block.label}`}>
-                          <span className="plan-block-label">{block.label}</span>
-                          <div className="plan-desks">
-                            {block.desks.map((desk) => (
-                              <div className="plan-desk" key={desk.id}>
-                                <small>{desk.label}</small>
-                                <div className="plan-seats">
-                                  {desk.seats.map((seat) => (
-                                    <span className={seat.is_available ? '' : 'unavailable'} key={seat.id}>{seat.seat_number}</span>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                  <p className="privacy-note">
+                    {editingLayout
+                      ? 'Masaları sürükleyerek taşı. Koltuğa tıklayarak kullanıma kapat veya yeniden aç; değişiklikler anında kaydedilir.'
+                      : 'Önce “Kopyala ve düzenle” ile yeni sürüm aç. Önceki düzen korunur.'}
+                  </p>
+                  <div
+                    className={`layout-canvas ${editingLayout ? 'editable' : ''}`}
+                    style={{ width: canvasWidth, height: canvasHeight }}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={dropDesk}
+                  >
+                    <div className="board-label" style={{ left: canvasWidth / 2 - 70 }}>TAHTA</div>
+                    {[...new Set(selectedLayout.desks.map((desk) => desk.block_label ?? ''))].map((blockLabel) => {
+                      const firstDesk = selectedLayout.desks.find((desk) => (desk.block_label ?? '') === blockLabel)
+                      if (!firstDesk) return null
+                      return <span className="plan-block-label" style={{ left: 20 + firstDesk.x * 45 }} key={blockLabel}>{blockLabel}</span>
+                    })}
+                    {selectedLayout.desks.map((desk) => (
+                      <div
+                        className={`plan-desk-position ${draggingDeskId === desk.id ? 'dragging' : ''}`}
+                        key={desk.id}
+                        draggable={editingLayout}
+                        style={{ left: 20 + desk.x * 45, top: 50 + desk.y * 45 }}
+                        onDragStart={(event) => {
+                          setDraggingDeskId(desk.id)
+                          const bounds = event.currentTarget.getBoundingClientRect()
+                          setDragOffset({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+                          event.dataTransfer.setData('text/plain', desk.id)
+                          event.dataTransfer.effectAllowed = 'move'
+                        }}
+                        onDragEnd={() => setDraggingDeskId(null)}
+                      >
+                        <small>{desk.label}</small>
+                        <div className="plan-seats">
+                          {desk.seats.map((seat) => (
+                            <button
+                              className={`plan-seat ${seat.is_available ? '' : 'unavailable'}`}
+                              type="button"
+                              key={seat.id}
+                              disabled={!editingLayout}
+                              aria-label={`Koltuk ${seat.seat_number}${seat.is_available ? ' kullanılabilir' : ' kullanım dışı'}`}
+                              onClick={() => void toggleSeatAvailability(seat)}
+                            >
+                              {seat.seat_number}
+                            </button>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  ))}
-                  <p className="privacy-note">Masa taşıma ve oturma yeri kapatma kontrolleri sıradaki düzenleme adımında eklenecek.</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

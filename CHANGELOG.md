@@ -7,3 +7,4 @@
 - Faz C başlangıcı: e-Okul XLSX önizleme, sütun eşleştirme, teknik doğrulama, yıl bazlı fark raporu ve kullanıcı onaylı yerel aktarım.
 - Faz D veri temeli: sürümlü derslik düzenleri, fiziksel masalar ve ayrı oturma yerleri; SQLite yabancı anahtar denetimi etkin.
 - Faz D ilk ekranı: derslik/düzen yönetimi, blok bazlı başlangıç planı üretimi ve numaralı oturma yeri önizlemesi.
+- Faz D düzenleme: yeni sürüme kopyalama, sürükle-bırak masa taşıma ve oturma yerini kullanıma kapatma/açma.
