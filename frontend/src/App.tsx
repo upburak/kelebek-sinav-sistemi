@@ -72,6 +72,18 @@ type StudentImportCommitResult = {
   classes: { class_level: string; section: string; student_count: number }[]
 }
 
+type StudentRecord = {
+  id: string
+  school_number: string
+  first_name: string
+  last_name: string
+  class_level: string
+  section: string
+  area: string | null
+}
+
+type StudentDraft = Omit<StudentRecord, 'id' | 'area'> & { area: string }
+
 type SchoolAdministrator = { id: string; role: 'principal' | 'vice_principal'; full_name: string; title: string; display_order: number }
 type SchoolProfile = {
   school_name: string
@@ -117,6 +129,13 @@ export default function App() {
   const [importCommitResult, setImportCommitResult] = useState<StudentImportCommitResult | null>(null)
   const [importError, setImportError] = useState('')
   const [importLoading, setImportLoading] = useState(false)
+  const [students, setStudents] = useState<StudentRecord[]>([])
+  const [studentsLoading, setStudentsLoading] = useState(false)
+  const [studentsError, setStudentsError] = useState('')
+  const [studentFormOpen, setStudentFormOpen] = useState(false)
+  const [studentSaving, setStudentSaving] = useState(false)
+  const [studentMessage, setStudentMessage] = useState('')
+  const [studentDraft, setStudentDraft] = useState<StudentDraft>({ school_number: '', first_name: '', last_name: '', class_level: '9', section: 'A', area: '' })
   const [classroomPanelOpen, setClassroomPanelOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('overview')
   const [schoolProfile, setSchoolProfile] = useState<SchoolProfile>(blankSchoolProfile)
@@ -169,6 +188,25 @@ export default function App() {
 
     return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    if (activeSection !== 'students' || !activeYearId) return
+    const controller = new AbortController()
+    setStudentsLoading(true)
+    setStudentsError('')
+    fetch(`/api/students?academic_year_id=${encodeURIComponent(activeYearId)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error ?? 'Öğrenci listesi alınamadı.')
+        setStudents(data.students as StudentRecord[])
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === 'AbortError') return
+        setStudentsError(error instanceof Error ? error.message : 'Öğrenci listesi alınamadı.')
+      })
+      .finally(() => setStudentsLoading(false))
+    return () => controller.abort()
+  }, [activeSection, activeYearId])
 
   const activeYear = academicYears.find((year) => year.id === activeYearId)
   const hasDraftChange = Boolean(draftYearId && draftYearId !== activeYearId)
@@ -241,6 +279,33 @@ export default function App() {
     }
   }
 
+  async function saveManualStudent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!activeYearId || activeYear?.is_archive) return
+    setStudentSaving(true)
+    setStudentsError('')
+    setStudentMessage('')
+    try {
+      const response = await fetch('/api/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...studentDraft, academic_year_id: activeYearId }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Öğrenci eklenemedi.')
+      setStudents((current) => [...current, data.student as StudentRecord].sort((a, b) =>
+        Number(a.class_level) - Number(b.class_level) || a.section.localeCompare(b.section, 'tr') || a.last_name.localeCompare(b.last_name, 'tr'),
+      ))
+      setStudentDraft({ school_number: '', first_name: '', last_name: '', class_level: studentDraft.class_level, section: studentDraft.section, area: studentDraft.area })
+      setStudentMessage('Öğrenci seçili eğitim yılına eklendi.')
+      setStudentFormOpen(false)
+    } catch (error) {
+      setStudentsError(error instanceof Error ? error.message : 'Öğrenci eklenemedi.')
+    } finally {
+      setStudentSaving(false)
+    }
+  }
+
   async function validateStudentFile() {
     if (!selectedStudentFile || !importPreview) return
     const formData = new FormData()
@@ -284,6 +349,11 @@ export default function App() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Öğrenci listesi kaydedilemedi.')
       setImportCommitResult(data as StudentImportCommitResult)
+      if (activeYearId) {
+        const listResponse = await fetch(`/api/students?academic_year_id=${encodeURIComponent(activeYearId)}`)
+        const listData = await listResponse.json()
+        if (listResponse.ok) setStudents(listData.students as StudentRecord[])
+      }
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Öğrenci listesi kaydedilemedi.')
     } finally {
@@ -530,6 +600,9 @@ export default function App() {
             <a className="template-download" href="/api/student-import/template" download>
               <WorkspaceIcon name="reports" size={15} /> Örnekli Excel şablonunu indir
             </a>
+            <a className="template-download demo-download" href="/api/student-import/sample" download>
+              <WorkspaceIcon name="students" size={15} /> 48 sentetik öğrenci örneğini indir
+            </a>
             <p className="template-caption">e-Okul listeleri ve başlıkları tanınan standart Excel dosyaları okunur. Şablondaki tüm kişiler sentetiktir.</p>
             {importError && <p className="import-error" role="alert">{importError}</p>}
           </article>}
@@ -745,6 +818,42 @@ export default function App() {
               </p>
             )}
             <p className="privacy-note">Dosya bu adımda veritabanına kaydedilmez.</p>
+          </section>
+        )}
+
+        {activeSection === 'students' && (
+          <section className="student-registry" aria-labelledby="student-registry-title">
+            <div className="student-registry-heading">
+              <div>
+                <span className="eyebrow">{activeYear?.label ?? 'EĞİTİM YILI'}</span>
+                <h2 id="student-registry-title">Kayıtlı öğrenci listesi</h2>
+                <p>Excel aktarımını ve tekil öğrenci eklemelerini bu yıl için burada görebilirsin.</p>
+              </div>
+              <div className="student-registry-actions">
+                <span className="student-total"><strong>{students.length}</strong> öğrenci</span>
+                <button type="button" className="student-add-button" disabled={!activeYearId || activeYear?.is_archive} onClick={() => { setStudentFormOpen((open) => !open); setStudentMessage('') }}>
+                  {studentFormOpen ? 'Formu kapat' : '+ Öğrenci ekle'}
+                </button>
+              </div>
+            </div>
+            {activeYear?.is_archive && <p className="student-archive-note">Arşiv yılı salt okunur; bu yıla öğrenci eklenemez.</p>}
+            {studentFormOpen && <form className="student-entry-form" onSubmit={saveManualStudent}>
+              <label><span>Okul numarası *</span><input required maxLength={64} value={studentDraft.school_number} onChange={(event) => setStudentDraft({ ...studentDraft, school_number: event.target.value })} /></label>
+              <label><span>Ad *</span><input required maxLength={120} value={studentDraft.first_name} onChange={(event) => setStudentDraft({ ...studentDraft, first_name: event.target.value })} /></label>
+              <label><span>Soyad *</span><input required maxLength={120} value={studentDraft.last_name} onChange={(event) => setStudentDraft({ ...studentDraft, last_name: event.target.value })} /></label>
+              <label><span>Sınıf *</span><select value={studentDraft.class_level} onChange={(event) => setStudentDraft({ ...studentDraft, class_level: event.target.value, area: ['9', '10'].includes(event.target.value) ? '' : studentDraft.area || 'Sayısal' })}><option value="9">9. sınıf</option><option value="10">10. sınıf</option><option value="11">11. sınıf</option><option value="12">12. sınıf</option></select></label>
+              <label><span>Şube *</span><input required maxLength={32} value={studentDraft.section} onChange={(event) => setStudentDraft({ ...studentDraft, section: event.target.value })} /></label>
+              {['11', '12'].includes(studentDraft.class_level) && <label><span>Alan *</span><select required value={studentDraft.area} onChange={(event) => setStudentDraft({ ...studentDraft, area: event.target.value })}><option value="">Alan seç</option>{areaOptions.map((area) => <option key={area}>{area}</option>)}</select></label>}
+              <div className="student-entry-footer"><small>* Zorunlu alan · Okul numarası seçili yılda benzersiz olmalı.</small><button type="submit" disabled={studentSaving}>{studentSaving ? 'Kaydediliyor…' : 'Öğrenciyi kaydet'}</button></div>
+            </form>}
+            {studentsError && <p className="student-error" role="alert">{studentsError}</p>}
+            {studentMessage && <p className="student-success" role="status">{studentMessage}</p>}
+            {studentsLoading ? <p className="student-empty">Öğrenci listesi yükleniyor…</p> : students.length === 0 ? <div className="student-empty"><strong>Bu eğitim yılında henüz öğrenci yok.</strong><span>Excel şablonunu kullanabilir veya yukarıdan tek öğrenci ekleyebilirsin. İndirilen demo kayıtları yalnızca sen içe aktarırsan kaydedilir.</span></div> : <div className="table-scroll student-table-scroll">
+              <table>
+                <thead><tr><th>Okul no</th><th>Ad soyad</th><th>Sınıf / şube</th><th>Alan</th></tr></thead>
+                <tbody>{students.map((student) => <tr key={student.id}><td>{student.school_number}</td><td>{student.first_name} {student.last_name}</td><td>{student.class_level}/{student.section}</td><td>{student.area || '—'}</td></tr>)}</tbody>
+              </table>
+            </div>}
           </section>
         )}
       </section>

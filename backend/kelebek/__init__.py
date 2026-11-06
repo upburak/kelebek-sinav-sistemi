@@ -7,6 +7,7 @@ from kelebek.api.classrooms import classrooms_api
 from kelebek.api.health import health_api
 from kelebek.api.school_profile import school_profile_api
 from kelebek.api.student_import import student_import_api
+from kelebek.api.students import students_api
 from kelebek.config import configure_logging
 from kelebek.db import initialize_database
 
@@ -22,6 +23,7 @@ def create_app() -> Flask:
     app.register_blueprint(academic_year_api, url_prefix="/api")
     app.register_blueprint(classrooms_api, url_prefix="/api")
     app.register_blueprint(student_import_api, url_prefix="/api")
+    app.register_blueprint(students_api, url_prefix="/api")
 
     @app.errorhandler(413)
     def request_too_large(_error):

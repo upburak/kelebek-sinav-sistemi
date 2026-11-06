@@ -119,6 +119,54 @@ def download_student_template():
     )
 
 
+@student_import_api.get("/student-import/sample")
+def download_student_sample():
+    """Tamamen sentetik, dengeli sınıf dağılımlı örnek XLSX üret."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    from kelebek.demo_data import build_demo_student_records
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "SENTETİK DEMO"
+    headers = ["Okul No", "Ad", "Soyad", "Sınıf", "Şube", "Alan"]
+    sheet.append(headers)
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="146B68")
+        cell.alignment = Alignment(vertical="center")
+    for record in build_demo_student_records():
+        sheet.append([
+            record["school_number"], record["first_name"], record["last_name"],
+            int(record["class_level"]), record["section"], record["area"],
+        ])
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = f"A1:F{sheet.max_row}"
+    sheet.row_dimensions[1].height = 25
+    for column, width in enumerate((18, 24, 28, 13, 13, 20), start=1):
+        sheet.column_dimensions[get_column_letter(column)].width = width
+
+    notes = workbook.create_sheet("ÖNCE OKUYUN")
+    notes.append(["UYARI: Bu çalışma kitabındaki tüm kayıtlar tamamen sentetiktir; gerçek öğrenci değildir."])
+    notes.append(["Test için 9, 10, 11 ve 12. sınıflardan toplam 48 örnek öğrenci içerir."])
+    notes.append(["Okul numaraları DEMO ile başlar; örnek ad ve soyadlar özellikle gerçek dışı tutulmuştur."])
+    notes.append(["Dosyayı uygulamaya aktarırsanız örnek kayıtlar seçili eğitim yılına kaydedilir."])
+    notes.column_dimensions["A"].width = 110
+    for row in notes.iter_rows():
+        row[0].alignment = Alignment(wrap_text=True, vertical="top")
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+    return send_file(
+        stream,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="kelebek_sentetik_demo_48_ogrenci.xlsx",
+    )
+
+
 def _json_value(value):
     if isinstance(value, (date, datetime, time)):
         return value.isoformat()
