@@ -46,6 +46,8 @@ build/
 !/tests/fixtures/**/*.csv
 !/tests/fixtures/**/*.xls
 !/tests/fixtures/**/*.xlsx
+!frontend/public/downloads/kelebek_ogrenci_sablonu_ornek_verili.xlsx
+!frontend/public/downloads/kelebek_sentetik_demo_48_ogrenci.xlsx
 
 # Platform clutter
 .DS_Store

@@ -551,8 +551,9 @@ body { background: #f2f6f2; }
 .scheme-desks i { border-color: #20a39a; background: #ccebe5; }
 .plan-seat { background: #d8efeb; color: #126a66; }
 .file-picker { gap: 8px; margin-top: 13px; padding: 10px 13px; border-radius: 10px; font-size: 12px; }
-.template-download { display: inline-flex; align-items: center; gap: 7px; margin: 12px 0 0 10px; color: #bd5c35; font-size: 12px; font-weight: 700; text-decoration: none; }
+.template-download { display: inline-flex; align-items: center; gap: 7px; margin: 12px 0 0 10px; padding: 0; border: 0; background: transparent; color: #bd5c35; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .template-download:hover { color: #913d22; text-decoration: underline; }
+.template-download:disabled { color: #8c9b9d; cursor: wait; text-decoration: none; }
 .template-caption { max-width: 600px; margin-top: 10px !important; color: #718693 !important; font-size: 11px !important; }
 .import-preview { border-top: 4px solid #20a39a; }
 .preview-badge { background: #e5f4ed; color: #167453; }

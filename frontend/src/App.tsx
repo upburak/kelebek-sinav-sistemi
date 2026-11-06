@@ -129,6 +129,7 @@ export default function App() {
   const [importCommitResult, setImportCommitResult] = useState<StudentImportCommitResult | null>(null)
   const [importError, setImportError] = useState('')
   const [importLoading, setImportLoading] = useState(false)
+  const [workbookDownload, setWorkbookDownload] = useState<'template' | 'sample' | null>(null)
   const [students, setStudents] = useState<StudentRecord[]>([])
   const [studentsLoading, setStudentsLoading] = useState(false)
   const [studentsError, setStudentsError] = useState('')
@@ -276,6 +277,43 @@ export default function App() {
       setImportError(error instanceof Error ? error.message : 'Dosya önizlemesi oluşturulamadı.')
     } finally {
       setImportLoading(false)
+    }
+  }
+
+  async function downloadStudentWorkbook(kind: 'template' | 'sample') {
+    setWorkbookDownload(kind)
+    setImportError('')
+    try {
+      const fileName = kind === 'template'
+        ? 'kelebek_ogrenci_sablonu_ornek_verili.xlsx'
+        : 'kelebek_sentetik_demo_48_ogrenci.xlsx'
+      const response = await fetch(`/downloads/${fileName}`)
+      const contentType = response.headers.get('content-type')?.toLocaleLowerCase('en-US') ?? ''
+      if (!response.ok) {
+        if (contentType.includes('text/html')) {
+          throw new Error('Excel servisi yanıt vermedi. Uygulamayı kapatıp yeniden başlatın; sonra tekrar indirin.')
+        }
+        const body = await response.json().catch(() => ({})) as { error?: string }
+        throw new Error(body.error ?? 'Excel dosyası oluşturulamadı.')
+      }
+      if (!contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) {
+        throw new Error('Excel dosyası yerine web sayfası yanıt verdi. Yerel servis kapalı olabilir; uygulamayı yeniden başlatıp tekrar deneyin.')
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (error) {
+      setImportError(error instanceof TypeError
+        ? 'Yerel Excel servisine bağlanılamadı. Uygulamayı yeniden başlatıp tekrar deneyin.'
+        : error instanceof Error ? error.message : 'Excel dosyası indirilemedi.')
+    } finally {
+      setWorkbookDownload(null)
     }
   }
 
@@ -597,12 +635,12 @@ export default function App() {
                 onChange={(event) => previewStudentFile(event.target.files?.[0])}
               />
             </label>
-            <a className="template-download" href="/api/student-import/template" download>
-              <WorkspaceIcon name="reports" size={15} /> Örnekli Excel şablonunu indir
-            </a>
-            <a className="template-download demo-download" href="/api/student-import/sample" download>
-              <WorkspaceIcon name="students" size={15} /> 48 sentetik öğrenci örneğini indir
-            </a>
+            <button className="template-download" type="button" disabled={workbookDownload !== null} onClick={() => downloadStudentWorkbook('template')}>
+              <WorkspaceIcon name="reports" size={15} /> {workbookDownload === 'template' ? 'Şablon hazırlanıyor…' : 'Örnekli Excel şablonunu indir'}
+            </button>
+            <button className="template-download demo-download" type="button" disabled={workbookDownload !== null} onClick={() => downloadStudentWorkbook('sample')}>
+              <WorkspaceIcon name="students" size={15} /> {workbookDownload === 'sample' ? 'Örnekler hazırlanıyor…' : '48 sentetik öğrenci örneğini indir'}
+            </button>
             <p className="template-caption">e-Okul listeleri ve başlıkları tanınan standart Excel dosyaları okunur. Şablondaki tüm kişiler sentetiktir.</p>
             {importError && <p className="import-error" role="alert">{importError}</p>}
           </article>}
