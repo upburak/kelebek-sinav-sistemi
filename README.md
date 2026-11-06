@@ -44,3 +44,5 @@ SQLite ve Alembic migration altyapısı eklendi. Eğitim-öğretim yılı ilk a�
 e-Okul aktarım başlangıcı `.xlsx` dosyasını yalnızca bellekte önizler; kullanıcı sütunları eşler, teknik kontrolleri ve seçili yılın fark raporunu inceler. Veritabanına aktarım ayrı bir açık onay düğmesiyle yapılır. Eksik listeden ayrılan öğrenciler silinmez, pasif duruma alınır.
 
 Derslik verisi için sürümlü düzen, fiziksel masa ve ayrı koltuk tabloları eklendi. Kullanılabilir kapasite, düzende açık olan oturma yerlerinden hesaplanır.
+
+Derslik ekranında satır sayısı, blok başına masa sayısı ve masa başına tekli/ikili/üçlü oturma yeri seçilerek başlangıç planı oluşturulabilir. Plan numaralı koltuklarla bloklar halinde görüntülenir; gerçek sınıf ölçüleri kullanıcı tarafından girilir.

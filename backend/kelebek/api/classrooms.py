@@ -4,7 +4,7 @@ from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, select
 
 from kelebek.db import current_academic_year_start
-from kelebek.models import AcademicYear, Classroom, ClassroomLayout, Seat
+from kelebek.models import AcademicYear, Classroom, ClassroomLayout, Desk, Seat
 
 
 classrooms_api = Blueprint("classrooms", __name__)
@@ -90,6 +90,47 @@ def list_classroom_layouts(classroom_id: str):
     return jsonify({"layouts": result})
 
 
+@classrooms_api.get("/classrooms/<classroom_id>/layouts/<layout_id>")
+def get_classroom_layout(classroom_id: str, layout_id: str):
+    """Bir düzenin fiziksel masa ve oturma yeri görünümünü döndür."""
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory() as session:
+        layout = session.get(ClassroomLayout, layout_id)
+        if layout is None or layout.classroom_id != classroom_id:
+            return jsonify({"error": "Derslik düzeni bulunamadı."}), 404
+        desks = session.scalars(
+            select(Desk).where(Desk.layout_id == layout_id).order_by(Desk.y, Desk.x)
+        ).all()
+        result = []
+        for desk in desks:
+            seats = session.scalars(
+                select(Seat).where(Seat.desk_id == desk.id).order_by(Seat.seat_index)
+            ).all()
+            result.append(
+                {
+                    "id": desk.id,
+                    "label": desk.label,
+                    "block_label": desk.block_label,
+                    "x": desk.x,
+                    "y": desk.y,
+                    "rotation_degrees": desk.rotation_degrees,
+                    "seats": [
+                        {
+                            "id": seat.id,
+                            "seat_number": seat.seat_number,
+                            "seat_index": seat.seat_index,
+                            "is_available": seat.is_available,
+                            "x": seat.x,
+                            "y": seat.y,
+                        }
+                        for seat in seats
+                    ],
+                }
+            )
+        response = {"layout": _layout_payload(session, layout), "desks": result}
+    return jsonify(response)
+
+
 @classrooms_api.post("/classrooms/<classroom_id>/layouts")
 def create_classroom_layout(classroom_id: str):
     """Yeni boş yıl düzeni veya tekrar kullanılabilir şablon oluştur."""
@@ -140,3 +181,79 @@ def create_classroom_layout(classroom_id: str):
         session.flush()
         result = _layout_payload(session, layout)
     return jsonify({"layout": result}), 201
+
+
+@classrooms_api.post("/classrooms/<classroom_id>/layouts/<layout_id>/generate")
+def generate_classroom_layout(classroom_id: str, layout_id: str):
+    """Parametrelerden başlangıç blok/masa/oturma yeri planı oluştur."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Düzen ölçüleri gerekli."}), 400
+    rows = payload.get("rows")
+    block_sizes = payload.get("block_sizes")
+    seats_per_desk = payload.get("seats_per_desk")
+    if type(rows) is not int or not 1 <= rows <= 40:
+        return jsonify({"error": "Satır sayısı 1 ile 40 arasında olmalı."}), 400
+    if (
+        not isinstance(block_sizes, list)
+        or not block_sizes
+        or any(type(size) is not int or not 1 <= size <= 80 for size in block_sizes)
+    ):
+        return jsonify({"error": "Blok başına masa sayılarını pozitif tam sayılarla girin."}), 400
+    if type(seats_per_desk) is not int or seats_per_desk not in {1, 2, 3}:
+        return jsonify({"error": "Masa başına oturma yeri sayısı 1, 2 veya 3 olabilir."}), 400
+    total_seats = rows * sum(block_sizes) * seats_per_desk
+    if total_seats > 600:
+        return jsonify({"error": "Bir düzen en fazla 600 oturma yeri içerebilir."}), 400
+
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory.begin() as session:
+        layout = session.get(ClassroomLayout, layout_id)
+        if layout is None or layout.classroom_id != classroom_id:
+            return jsonify({"error": "Derslik düzeni bulunamadı."}), 404
+        if layout.academic_year_id:
+            academic_year = session.get(AcademicYear, layout.academic_year_id)
+            if academic_year and academic_year.start_year < current_academic_year_start():
+                return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
+        if session.scalar(select(func.count(Desk.id)).where(Desk.layout_id == layout_id)):
+            return jsonify({"error": "Bu düzende masalar var. Yeni bir düzen sürümü oluşturarak devam edin."}), 409
+
+        seat_number = 1
+        desk_counter = 0
+        row_spacing = 2.0
+        desk_spacing = 2.0
+        aisle_spacing = 2.6
+        for row_index in range(rows):
+            x_cursor = 0.0
+            for block_index, desk_count in enumerate(block_sizes):
+                if block_index:
+                    x_cursor += aisle_spacing
+                for _desk_index in range(desk_count):
+                    desk_counter += 1
+                    desk = Desk(
+                        layout_id=layout_id,
+                        label=f"S{row_index + 1}-M{desk_counter}",
+                        block_label=f"B{block_index + 1}",
+                        x=x_cursor,
+                        y=row_index * row_spacing,
+                        rotation_degrees=0,
+                    )
+                    session.add(desk)
+                    session.flush()
+                    for seat_index in range(1, seats_per_desk + 1):
+                        session.add(
+                            Seat(
+                                layout_id=layout_id,
+                                desk_id=desk.id,
+                                seat_number=seat_number,
+                                seat_index=seat_index,
+                                x=x_cursor + 0.25 + (seat_index - 1) * 0.45,
+                                y=row_index * row_spacing,
+                                is_available=True,
+                            )
+                        )
+                        seat_number += 1
+                    x_cursor += desk_spacing
+        session.flush()
+        response = _layout_payload(session, layout)
+    return jsonify({"layout": response, "desk_count": desk_counter, "seat_count": total_seats}), 201

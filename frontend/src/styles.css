@@ -90,6 +90,28 @@ h1 { max-width: 710px; margin: 15px 0 13px; font-size: clamp(32px, 4.3vw, 52px);
 .layout-list { display: grid; gap: 8px; padding: 0; list-style: none; }
 .layout-list li { display: flex; justify-content: space-between; gap: 14px; padding: 11px 12px; border: 1px solid #edf0f5; border-radius: 9px; color: #425167; font-size: 11px; }
 .layout-list li > span { display: grid; gap: 4px; }
+.layout-actions { display: flex !important; align-items: center; gap: 10px; }
+.layout-open { padding: 7px 9px; border: 1px solid #dce4f0; border-radius: 7px; background: #fff; color: #4265c4; font-size: 10px; cursor: pointer; }
+.layout-editor { margin-top: 17px; padding: 15px; border: 1px solid #e7ecf3; border-radius: 11px; background: #fafbfd; }
+.layout-editor h4 { margin: 0 0 12px; color: #34445b; font-size: 12px; }
+.layout-generator { display: flex; flex-wrap: wrap; align-items: end; gap: 11px; }
+.layout-generator > p, .layout-generator > small { flex-basis: 100%; margin: 0; color: #75839a; font-size: 10px; }
+.layout-generator label { display: grid; min-width: 125px; gap: 5px; color: #526176; font-size: 10px; }
+.layout-generator input, .layout-generator select { width: 100%; padding: 8px; border: 1px solid #dfe6f0; border-radius: 7px; background: #fff; color: #26354a; font: inherit; font-size: 11px; }
+.layout-generator > button { padding: 9px 11px; border: 0; border-radius: 8px; background: #4b72df; color: #fff; font-size: 10px; font-weight: 650; cursor: pointer; }
+.layout-generator > button:disabled { background: #e5eaf2; color: #8a96a7; cursor: default; }
+.layout-plan { overflow-x: auto; padding: 12px; border-radius: 9px; background: #f1f4f8; }
+.board-label { width: max-content; min-width: 140px; margin: 0 auto 15px; padding: 5px 18px; border: 1px solid #cdd6e3; border-radius: 0 0 9px 9px; background: #fff; color: #8190a3; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-align: center; }
+.plan-row { display: flex; align-items: end; justify-content: center; gap: 24px; min-width: max-content; margin: 0 auto 13px; }
+.plan-block { display: grid; justify-items: center; gap: 5px; }
+.plan-block-label { color: #8a97a9; font-size: 8px; font-weight: 700; }
+.plan-desks { display: flex; gap: 8px; }
+.plan-desk { display: grid; justify-items: center; gap: 3px; padding: 4px; border: 1px solid #cfd8e5; border-radius: 6px; background: #fff; }
+.plan-desk > small { color: #8794a5; font-size: 7px; }
+.plan-seats { display: flex; gap: 3px; }
+.plan-seats span { display: grid; place-items: center; width: 19px; height: 19px; border-radius: 4px; background: #e6edf9; color: #3f5e9d; font-size: 8px; font-weight: 700; }
+.plan-seats span.unavailable { background: #f6dddd; color: #b0474b; }
+.layout-plan .privacy-note { margin-top: 12px; }
 .file-picker { display: inline-flex; margin-top: 16px; padding: 9px 11px; border: 1px solid #dce4f0; border-radius: 9px; color: #4265c4; font-size: 11px; font-weight: 650; cursor: pointer; }
 .file-picker input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .file-picker:focus-within { outline: 2px solid #7894ee; outline-offset: 2px; }
@@ -145,6 +167,7 @@ h1 { max-width: 710px; margin: 15px 0 13px; font-size: clamp(32px, 4.3vw, 52px);
   .classroom-manager { padding: 17px; }
   .classroom-manager-heading { flex-direction: column; }
   .layout-list li { flex-direction: column; }
+  .layout-actions { align-items: flex-start; flex-direction: column; }
   .mapping-grid { grid-template-columns: 1fr; }
   .import-preview-heading { align-items: flex-start; flex-direction: column; }
   .page-footer { line-height: 1.7; }
