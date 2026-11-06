@@ -87,6 +87,7 @@ export default function App() {
   const [importError, setImportError] = useState('')
   const [importLoading, setImportLoading] = useState(false)
   const [classroomPanelOpen, setClassroomPanelOpen] = useState(false)
+  const [activeSection, setActiveSection] = useState('overview')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -244,13 +245,32 @@ export default function App() {
   }[health]
 
   return (
-    <main className="page-shell">
-      <header className="topbar">
-        <a className="brand" href="/" aria-label="Kelebek Sınav Sistemi ana sayfa">
+    <main className="app-shell">
+      <aside className="app-sidebar">
+        <a className="brand" href="/" aria-label="Kelebek Sınav Sistemi ana sayfa" onClick={() => setActiveSection('overview')}>
           <span className="brand-mark" aria-hidden="true">K</span>
           <span>Kelebek <strong>Sınav Sistemi</strong></span>
         </a>
+        <div className="sidebar-school">
+          <span className="school-avatar">O</span>
+          <span><strong>Örnek Anadolu Lisesi</strong><small>Tasarım verisi · kayıtlı değil</small></span>
+          <span className="profile-status" aria-label="Tamamlanmadı" />
+        </div>
+        <div className="sidebar-caption">ÇALIŞMA ALANI</div>
+        <nav className="main-navigation" aria-label="Ana gezinme">
+          <button className={activeSection === 'overview' ? 'active' : ''} type="button" onClick={() => setActiveSection('overview')}><span className="nav-icon">⌂</span> Genel Bakış</button>
+          <button className={activeSection === 'school' ? 'active' : ''} type="button" onClick={() => { setActiveSection('school'); document.getElementById('school-profile')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }}><span className="nav-icon">▦</span> Okul ve yöneticiler</button>
+          <button className={activeSection === 'students' ? 'active' : ''} type="button" onClick={() => { setActiveSection('students'); document.getElementById('student-import')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }}><span className="nav-icon">♙</span> Öğrenci kayıtları</button>
+          <button className={activeSection === 'classrooms' ? 'active' : ''} type="button" onClick={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}><span className="nav-icon">▤</span> Derslikler</button>
+          <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><span className="nav-icon">◷</span> Sınav organizasyonları <small>Yakında</small></button>
+          <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><span className="nav-icon">▧</span> Raporlar <small>Yakında</small></button>
+        </nav>
+        <div className="sidebar-footer"><span className={`status-dot ${health}`} /><span>{statusText}</span><small>Veriler bu bilgisayarda</small></div>
+      </aside>
 
+      <div className="app-main">
+      <header className="topbar">
+        <div className="breadcrumb"><span>Çalışma alanı</span><b>/</b><strong>{activeSection === 'school' ? 'Okul ve yöneticiler' : activeSection === 'students' ? 'Öğrenci kayıtları' : activeSection === 'classrooms' ? 'Derslikler' : 'Genel Bakış'}</strong></div>
         <div className="topbar-actions">
           <div className="year-control">
             <label htmlFor="academic-year-select">Eğitim-öğretim yılı</label>
@@ -293,12 +313,10 @@ export default function App() {
       </header>
 
       <section className="welcome-card" aria-labelledby="welcome-title">
-        <div className="eyebrow">YEREL SINAV ORGANİZASYONU</div>
-        <h1 id="welcome-title">Sınav planlaması için çalışma alanınız</h1>
-        <p className="welcome-copy">
-          Öğrencileri, derslikleri ve oturma düzenlerini tek bir güvenli çalışma alanında yönetin.
-          Uygulama verileri bu bilgisayarda saklanır.
-        </p>
+        <div className="page-heading">
+          <div><div className="eyebrow">KELEBEK <span>·</span> OKUL YÖNETİMİ</div><h1 id="welcome-title">Genel Bakış</h1><p>Okulunuzu ve sınav hazırlık sürecinizi tek çalışma alanından yönetin.</p></div>
+          <div className="current-year-pill"><small>ÇALIŞMA YILI</small><strong>{activeYear?.label ?? 'Yıl bilgisi yükleniyor'}</strong></div>
+        </div>
 
         {activeYear?.is_archive && (
           <div className="archive-banner" role="status">
@@ -306,24 +324,27 @@ export default function App() {
           </div>
         )}
 
-        <div className="setup-notice">
-          <span className="notice-icon" aria-hidden="true">✦</span>
-          <div>
-            <strong>{activeYear ? activeYear.label + ' çalışma yılı seçili' : 'Başlangıç ortamı hazır'}</strong>
-            <p>
-              {academicYears.length <= 1
-                ? 'Geçmiş yıl kayıtları oluştukça yıl seçicisinde görünecek.'
-                : 'Yıl seçimini sağ üstten değiştirebilirsiniz.'}
-            </p>
-          </div>
+        <div className="dashboard-grid">
+          <section className="school-profile-card" id="school-profile">
+            <div className="school-card-head"><span className="school-avatar large">O</span><span className="sample-badge">TASARIM ÖRNEĞİ</span></div>
+            <div className="school-card-copy"><div className="eyebrow">OKUL KİMLİĞİ</div><h2>Örnek Anadolu Lisesi</h2><p>Kadıköy · İstanbul <span className="sample-inline">örnek konum</span></p></div>
+            <div className="manager-preview"><div><span>Okul Müdürü</span><strong>Ayşe Yılmaz <i>örnek</i></strong></div><div><span>Müdür Yardımcıları</span><strong>Mert Demir · Selin Kaya <i>örnek</i></strong></div></div>
+            <div className="profile-note">Örnek içerik yalnızca tasarım içindir; okul profiliniz henüz kaydedilmedi.</div>
+          </section>
+          <section className="setup-card">
+            <div className="section-heading"><div><span className="eyebrow">BAŞLANGIÇ SIRASI</span><h2>Kurulum adımları</h2></div><span className="step-count">1 / 3</span></div>
+            <ol className="setup-steps"><li className="current"><span>1</span><div><strong>Okul bilgileri</strong><small>Okul ve yönetici profili</small></div><b>Hazırlanıyor</b></li><li><span>2</span><div><strong>Öğrenci ve sınıflar</strong><small>e-Okul listesini içeri aktar</small></div><b>Bekliyor</b></li><li><span>3</span><div><strong>Derslik düzenleri</strong><small>Gerçek oturma planlarını tanımla</small></div><b>Bekliyor</b></li></ol>
+          </section>
         </div>
+
+        <div className="section-heading module-heading"><div><span className="eyebrow">MODÜLLER</span><h2>Yönetim alanları</h2></div><span className="module-caption">Hazır bölümler kullanılabilir; diğerleri geliştirme aşamasında.</span></div>
 
         <div className="feature-grid">
           <article className="feature-card">
             <span className="feature-number">01</span>
             <h2>Öğrenci kayıtları</h2>
             <p>Okul ve sınıf listeleri için güvenli yerel kayıt alanı.</p>
-            <label className="file-picker">
+            <label className="file-picker" id="student-import">
               <span>{importLoading ? 'Dosya okunuyor…' : 'e-Okul .xlsx dosyası seç'}</span>
               <input
                 type="file"
@@ -342,7 +363,7 @@ export default function App() {
               Derslikleri yönet
             </button>
           </article>
-          <article className="feature-card">
+          <article className="feature-card muted-card">
             <span className="feature-number">03</span>
             <h2>Sınav dağıtımı</h2>
             <p>Öğrenci gruplarını seçilen dersliklere dengeli yerleştirme.</p>
@@ -553,6 +574,7 @@ export default function App() {
       <footer className="page-footer">
         Çevrimdışı çalışmak üzere tasarlanmıştır <span aria-hidden="true">·</span> Veriler bu bilgisayarda kalır
       </footer>
+      </div>
     </main>
   )
 }
