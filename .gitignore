@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Node / frontend build output
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local application data and backups
+/data/
+/\.local-data/
+/instance/
+/backups/
+/backup/
+/exports/
+*.log
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.bak
+*.backup
+
+# Student lists and generated reports (allow synthetic fixtures explicitly)
+*.csv
+*.xls
+*.xlsx
+!*.example.csv
+!*.example.xls
+!*.example.xlsx
+!/tests/fixtures/**/*.csv
+!/tests/fixtures/**/*.xls
+!/tests/fixtures/**/*.xlsx
+
+# Platform clutter
+.DS_Store
+Thumbs.db
+Desktop.ini
