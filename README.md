@@ -27,10 +27,7 @@ Geliştirme sunucusu API sağlık kontrolünü `/api/health` üzerinden sağlar.
 
 ## Veri güvenliği
 
-Öğrenci verileri ve SQLite veritabanı kaynak kod klasöründe tutulmaz. Uygulama verileri
-macOS'ta `~/Library/Application Support/Kelebek Sinav Sistemi`, Windows'ta
-`%APPDATA%\Kelebek Sinav Sistemi` altına yazılır. Geliştirme sırasında `KELEBEK_DATA_DIR`
-değişkeni veri klasörünü proje içindeki Git tarafından yoksayılan `.local-data/` dizinine yönlendirir.
+Öğrenci verileri ve SQLite veritabanı kaynak kod klasöründe tutulmaz. Uygulama verileri macOS kullanıcı hesabında `~/Library/Application Support/Kelebek Sinav Sistemi`, Windows kullanıcı hesabında `%APPDATA%\Kelebek Sinav Sistemi` altında saklanır. Geliştirme betikleri de bu işletim sistemi veri konumlarını kullanır; uygulama verileri proje klasörünün dışında kalır. `KELEBEK_DATA_DIR` yalnızca özel, yerel denemelerde geçici bir veri dizini seçmek için kullanılabilir.
 
 Gerçek öğrenci listeleri, veritabanları, yedekler, dışa aktarımlar ve sırlar Git'e eklenmez.
 Sentetik örnek verileri kullanın. `.gitignore` güvenli varsayılanları içerir.

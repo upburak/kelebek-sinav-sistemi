@@ -9,7 +9,6 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 
 export PYTHONPATH="$ROOT/backend${PYTHONPATH:+:$PYTHONPATH}"
-export KELEBEK_DATA_DIR="$ROOT/.local-data"
 "$PYTHON" -m flask --app kelebek:create_app run --host 127.0.0.1 --port 5000 &
 BACKEND_PID=$!
 cleanup() { kill "$BACKEND_PID" 2>/dev/null || true; }
