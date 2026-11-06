@@ -39,6 +39,7 @@ type StudentImportPreview = {
   header_row: number
   headers: (string | number | boolean | null)[]
   preview_rows: (string | number | boolean | null)[][]
+  auto_mapping: Record<string, number>
   saved: false
 }
 
@@ -173,7 +174,7 @@ export default function App() {
   const hasDraftChange = Boolean(draftYearId && draftYearId !== activeYearId)
   const requiredMappingsComplete = importFields
     .filter((field) => field.required)
-    .every((field) => importMapping[field.key] !== undefined)
+    .every((field) => Boolean(importMapping[field.key]))
   const areaAssignmentsComplete = importValidation?.missing_area_by_class.every(
     (item) => Boolean(areaAssignments[`${item.class_level}/${item.section}`]),
   ) ?? true
@@ -228,7 +229,11 @@ export default function App() {
       const response = await fetch('/api/student-import/preview', { method: 'POST', body: formData })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Dosya önizlemesi oluşturulamadı.')
-      setImportPreview(data as StudentImportPreview)
+      const preview = data as StudentImportPreview
+      setImportPreview(preview)
+      setImportMapping(Object.fromEntries(
+        Object.entries(preview.auto_mapping ?? {}).map(([field, column]) => [field, String(column)]),
+      ))
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Dosya önizlemesi oluşturulamadı.')
     } finally {
@@ -514,7 +519,7 @@ export default function App() {
             <h2>Öğrenci kayıtları</h2>
             <p>Okul ve sınıf listeleri için güvenli yerel kayıt alanı.</p>
             <label className="file-picker" id="student-import">
-              <span>{importLoading ? 'Dosya okunuyor…' : 'e-Okul .xlsx dosyası seç'}</span>
+              <span>{importLoading ? 'Dosya okunuyor…' : 'Excel dosyası seç (.xlsx)'}</span>
               <input
                 type="file"
                 accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -522,6 +527,10 @@ export default function App() {
                 onChange={(event) => previewStudentFile(event.target.files?.[0])}
               />
             </label>
+            <a className="template-download" href="/api/student-import/template" download>
+              <WorkspaceIcon name="reports" size={15} /> Örnekli Excel şablonunu indir
+            </a>
+            <p className="template-caption">e-Okul listeleri ve başlıkları tanınan standart Excel dosyaları okunur. Şablondaki tüm kişiler sentetiktir.</p>
             {importError && <p className="import-error" role="alert">{importError}</p>}
           </article>}
           {activeSection === 'overview' && <article className="feature-card">
@@ -585,7 +594,7 @@ export default function App() {
             <div className="mapping-panel">
               <div>
                 <span className="eyebrow">SÜTUN EŞLEŞTİRME</span>
-                <p>Her bilgi için dosyadaki karşılık gelen sütunu seç.</p>
+                <p>{Object.keys(importPreview.auto_mapping ?? {}).length ? 'Başlıklar otomatik eşleştirildi. İstersen seçimleri değiştirebilirsin.' : 'Başlıklar tanınmadı; her bilgi için dosyadaki sütunu seç.'}</p>
               </div>
               <div className="mapping-grid">
                 {importFields.map((field) => (

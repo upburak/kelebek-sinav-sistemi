@@ -3,9 +3,11 @@
 from datetime import date, datetime, time
 from io import BytesIO
 import json
+import re
+import unicodedata
 from zipfile import BadZipFile
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, send_file
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 from sqlalchemy import select
@@ -27,6 +29,94 @@ FIELD_LABELS = {
     "area": "Alan",
 }
 AREA_OPTIONS = {"Sayısal", "Eşit Ağırlık", "Sözel", "Dil"}
+HEADER_ALIASES = {
+    "school_number": {"okul no", "okul numarasi", "ogrenci no", "ogrenci numarasi", "okul num", "numara", "no", "school number", "student number"},
+    "first_name": {"ad", "adi", "ogrenci adi", "first name", "firstname", "given name"},
+    "last_name": {"soyad", "soyadi", "ogrenci soyadi", "last name", "lastname", "surname", "family name"},
+    "class_level": {"sinif", "sinif seviyesi", "sinif duzeyi", "sinif kademesi", "grade", "class level", "grade level"},
+    "section": {"sube", "sinif subesi", "sube adi", "section", "class section"},
+    "area": {"alan", "bolum", "program", "academic area", "field of study"},
+}
+
+
+def _normalize_header(value):
+    text = str(value or "").casefold().replace("ı", "i")
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(character for character in text if not unicodedata.combining(character))
+    return re.sub(r"[^a-z0-9]+", " ", text).strip()
+
+
+def _auto_map_headers(headers):
+    normalized_aliases = {
+        field: {_normalize_header(alias) for alias in aliases}
+        for field, aliases in HEADER_ALIASES.items()
+    }
+    candidates = {}
+    for column, header in enumerate(headers):
+        normalized = _normalize_header(header)
+        if not normalized:
+            continue
+        for field, aliases in normalized_aliases.items():
+            if normalized in aliases:
+                candidates.setdefault(field, []).append(column)
+    # Only map a field when exactly one column matches and that column is not
+    # also a candidate for another field. Ambiguous workbooks stay editable.
+    counts = {}
+    for columns in candidates.values():
+        for column in columns:
+            counts[column] = counts.get(column, 0) + 1
+    return {
+        field: columns[0]
+        for field, columns in candidates.items()
+        if len(columns) == 1 and counts[columns[0]] == 1
+    }
+
+
+@student_import_api.get("/student-import/template")
+def download_student_template():
+    """İndirmek için örnek satırlı, sentetik öğrenci Excel şablonu üret."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Öğrenci Şablonu"
+    headers = ["Okul No", "Ad", "Soyad", "Sınıf", "Şube", "Alan"]
+    sheet.append(headers)
+    for cell in sheet[1]:
+        cell.font = Font(name="Aptos", bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="173B57")
+        cell.alignment = Alignment(vertical="center")
+    examples = [
+        ["ÖRNEK-001", "ÖRNEK AD", "ÖRNEK SOYAD", 9, "A", ""],
+        ["ÖRNEK-002", "DENEME AD", "DENEME SOYAD", 10, "B", ""],
+        ["ÖRNEK-003", "SENTETİK AD", "SENTETİK SOYAD", 11, "A", "Sayısal"],
+    ]
+    for row in examples:
+        sheet.append(row)
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = f"A1:F{sheet.max_row}"
+    sheet.row_dimensions[1].height = 25
+    for column, width in enumerate((18, 22, 24, 14, 14, 20), start=1):
+        sheet.column_dimensions[get_column_letter(column)].width = width
+    notes = workbook.create_sheet("Bilgi")
+    notes.append(["Bu dosyadaki tüm öğrenci bilgileri sentetiktir; gerçek kişi değildir."])
+    notes.append(["Örnek satırları silip kendi listenizi ekleyebilirsiniz."])
+    notes.append(["Zorunlu başlıklar: Okul No, Ad, Soyad, Sınıf, Şube. Alan isteğe bağlıdır."])
+    notes.append(["Sınıf 11–12 öğrencilerinde Alan boşsa aktarım öncesi uygulama içinden atanır."])
+    notes.column_dimensions["A"].width = 100
+    for row in notes.iter_rows():
+        row[0].alignment = Alignment(wrap_text=True, vertical="top")
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+    return send_file(
+        stream,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="kelebek_ogrenci_sablonu_ornek_verili.xlsx",
+    )
 
 
 def _json_value(value):
@@ -312,6 +402,7 @@ def preview_student_workbook():
                     "sheet_name": sheet.title,
                     "header_row": header_row_number,
                     "headers": headers,
+                    "auto_mapping": _auto_map_headers(headers),
                     "saved": False,
                     **result,
                     "diff": diff_report,
@@ -337,6 +428,7 @@ def preview_student_workbook():
                 "sheet_names": workbook.sheetnames,
                 "header_row": header_row_number,
                 "headers": headers,
+                "auto_mapping": _auto_map_headers(headers),
                 "preview_rows": preview_rows,
                 "saved": False,
             }
