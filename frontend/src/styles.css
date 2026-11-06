@@ -263,6 +263,8 @@ button { transition: background-color .16s ease, border-color .16s ease, color .
 .current-year-pill small { color: #8c97a1; font-size: 8px; font-weight: 700; letter-spacing: .07em; }
 .current-year-pill strong { color: #344152; font-size: 11px; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr); gap: 16px; }
+.dashboard-grid.single-panel { grid-template-columns: minmax(0, 650px); }
+.feature-grid.single-module { grid-template-columns: minmax(0, 430px); }
 .school-profile-card, .setup-card { min-width: 0; padding: 20px; border: 1px solid #e5e9ec; border-radius: 11px; background: #fff; box-shadow: 0 2px 7px #1e2a3908; }
 .school-card-head { display: flex; align-items: center; justify-content: space-between; }
 .school-avatar.large { width: 44px; height: 44px; flex-basis: 44px; border-radius: 11px; font-size: 17px; }
@@ -301,6 +303,12 @@ button { transition: background-color .16s ease, border-color .16s ease, color .
 .feature-state { margin-top: 11px; padding: 5px 7px; border-radius: 5px; background: #f1f2f3; color: #89939d; font-size: 9px; }
 .archive-banner { max-width: none; margin: -8px 0 17px; padding: 10px 12px; font-size: 10px; }
 .classroom-manager { padding: 20px; border-color: #e5e9ec; border-radius: 11px; box-shadow: 0 3px 12px #1e2a3908; }
+.room-create-form button, .layout-create-form button, .layout-generator > button { background: #245b53; }
+.room-create-form button:hover:not(:disabled), .layout-create-form button:hover:not(:disabled), .layout-generator > button:hover:not(:disabled) { background: #194840; }
+.room-create-form button:disabled, .layout-create-form button:disabled, .layout-generator > button:disabled { background: #e8eeec; color: #899a95; }
+.layout-open, .layout-edit-button { border-color: #dfe7e4; background: #fff; color: #286158; }
+.layout-edit-button { border: 0; background: #245b53; color: #fff; }
+.layout-edit-button:hover:not(:disabled) { background: #194840; }
 .import-preview { padding: 18px; border-color: #e5e9ec; border-radius: 11px; box-shadow: 0 3px 12px #1e2a3908; }
 .page-footer { margin: 23px auto 0; color: #a0a8b0; font-size: 9px; text-align: left; }
 
@@ -309,6 +317,7 @@ button { transition: background-color .16s ease, border-color .16s ease, color .
   .app-sidebar { padding-right: 11px; padding-left: 11px; }
   .welcome-card { width: min(100% - 40px, 1250px); }
   .dashboard-grid { grid-template-columns: 1fr; }
+  .dashboard-grid.single-panel, .feature-grid.single-module { grid-template-columns: 1fr; }
 }
 @media (max-width: 680px) {
   .app-shell { grid-template-columns: 1fr; }

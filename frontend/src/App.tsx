@@ -164,6 +164,7 @@ export default function App() {
   }
 
   async function previewStudentFile(file: File | undefined) {
+    setActiveSection('students')
     setImportPreview(null)
     setImportValidation(null)
     setImportCommitResult(null)
@@ -243,11 +244,18 @@ export default function App() {
     online: 'Yerel servis çalışıyor',
     offline: 'Yerel servisle bağlantı kurulamadı',
   }[health]
+  const sectionTitle = activeSection === 'school'
+    ? 'Okul ve yöneticiler'
+    : activeSection === 'students'
+      ? 'Öğrenci kayıtları'
+      : activeSection === 'classrooms'
+        ? 'Derslikler'
+        : 'Genel Bakış'
 
   return (
     <main className="app-shell">
       <aside className="app-sidebar">
-        <a className="brand" href="/" aria-label="Kelebek Sınav Sistemi ana sayfa" onClick={() => setActiveSection('overview')}>
+        <a className="brand" href="/" aria-label="Kelebek Sınav Sistemi ana sayfa" onClick={() => { setActiveSection('overview'); setClassroomPanelOpen(false) }}>
           <span className="brand-mark" aria-hidden="true">K</span>
           <span>Kelebek <strong>Sınav Sistemi</strong></span>
         </a>
@@ -258,9 +266,9 @@ export default function App() {
         </div>
         <div className="sidebar-caption">ÇALIŞMA ALANI</div>
         <nav className="main-navigation" aria-label="Ana gezinme">
-          <button className={activeSection === 'overview' ? 'active' : ''} type="button" onClick={() => setActiveSection('overview')}><span className="nav-icon">⌂</span> Genel Bakış</button>
-          <button className={activeSection === 'school' ? 'active' : ''} type="button" onClick={() => { setActiveSection('school'); document.getElementById('school-profile')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }}><span className="nav-icon">▦</span> Okul ve yöneticiler</button>
-          <button className={activeSection === 'students' ? 'active' : ''} type="button" onClick={() => { setActiveSection('students'); document.getElementById('student-import')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }}><span className="nav-icon">♙</span> Öğrenci kayıtları</button>
+          <button className={activeSection === 'overview' ? 'active' : ''} type="button" onClick={() => { setActiveSection('overview'); setClassroomPanelOpen(false) }}><span className="nav-icon">⌂</span> Genel Bakış</button>
+          <button className={activeSection === 'school' ? 'active' : ''} type="button" onClick={() => { setActiveSection('school'); setClassroomPanelOpen(false) }}><span className="nav-icon">▦</span> Okul ve yöneticiler</button>
+          <button className={activeSection === 'students' ? 'active' : ''} type="button" onClick={() => { setActiveSection('students'); setClassroomPanelOpen(false) }}><span className="nav-icon">♙</span> Öğrenci kayıtları</button>
           <button className={activeSection === 'classrooms' ? 'active' : ''} type="button" onClick={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}><span className="nav-icon">▤</span> Derslikler</button>
           <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><span className="nav-icon">◷</span> Sınav organizasyonları <small>Yakında</small></button>
           <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><span className="nav-icon">▧</span> Raporlar <small>Yakında</small></button>
@@ -270,7 +278,7 @@ export default function App() {
 
       <div className="app-main">
       <header className="topbar">
-        <div className="breadcrumb"><span>Çalışma alanı</span><b>/</b><strong>{activeSection === 'school' ? 'Okul ve yöneticiler' : activeSection === 'students' ? 'Öğrenci kayıtları' : activeSection === 'classrooms' ? 'Derslikler' : 'Genel Bakış'}</strong></div>
+        <div className="breadcrumb"><span>Çalışma alanı</span><b>/</b><strong>{sectionTitle}</strong></div>
         <div className="topbar-actions">
           <div className="year-control">
             <label htmlFor="academic-year-select">Eğitim-öğretim yılı</label>
@@ -314,7 +322,7 @@ export default function App() {
 
       <section className="welcome-card" aria-labelledby="welcome-title">
         <div className="page-heading">
-          <div><div className="eyebrow">KELEBEK <span>·</span> OKUL YÖNETİMİ</div><h1 id="welcome-title">Genel Bakış</h1><p>Okulunuzu ve sınav hazırlık sürecinizi tek çalışma alanından yönetin.</p></div>
+          <div><div className="eyebrow">KELEBEK <span>·</span> OKUL YÖNETİMİ</div><h1 id="welcome-title">{sectionTitle}</h1><p>{activeSection === 'school' ? 'Okul kimliği ve yönetici bilgileri.' : activeSection === 'students' ? 'Öğrenci listesini içeri aktarın ve kayıt farklarını inceleyin.' : activeSection === 'classrooms' ? 'Derslikleri ve fiziksel oturma düzenlerini yönetin.' : 'Okulunuzu ve sınav hazırlık sürecinizi tek çalışma alanından yönetin.'}</p></div>
           <div className="current-year-pill"><small>ÇALIŞMA YILI</small><strong>{activeYear?.label ?? 'Yıl bilgisi yükleniyor'}</strong></div>
         </div>
 
@@ -324,23 +332,23 @@ export default function App() {
           </div>
         )}
 
-        <div className="dashboard-grid">
+        {activeSection !== 'students' && activeSection !== 'classrooms' && <div className={`dashboard-grid ${activeSection === 'school' ? 'single-panel' : ''}`}>
           <section className="school-profile-card" id="school-profile">
             <div className="school-card-head"><span className="school-avatar large">O</span><span className="sample-badge">TASARIM ÖRNEĞİ</span></div>
             <div className="school-card-copy"><div className="eyebrow">OKUL KİMLİĞİ</div><h2>Örnek Anadolu Lisesi</h2><p>Kadıköy · İstanbul <span className="sample-inline">örnek konum</span></p></div>
             <div className="manager-preview"><div><span>Okul Müdürü</span><strong>Ayşe Yılmaz <i>örnek</i></strong></div><div><span>Müdür Yardımcıları</span><strong>Mert Demir · Selin Kaya <i>örnek</i></strong></div></div>
             <div className="profile-note">Örnek içerik yalnızca tasarım içindir; okul profiliniz henüz kaydedilmedi.</div>
           </section>
-          <section className="setup-card">
+          {activeSection === 'overview' && <section className="setup-card">
             <div className="section-heading"><div><span className="eyebrow">BAŞLANGIÇ SIRASI</span><h2>Kurulum adımları</h2></div><span className="step-count">1 / 3</span></div>
             <ol className="setup-steps"><li className="current"><span>1</span><div><strong>Okul bilgileri</strong><small>Okul ve yönetici profili</small></div><b>Hazırlanıyor</b></li><li><span>2</span><div><strong>Öğrenci ve sınıflar</strong><small>e-Okul listesini içeri aktar</small></div><b>Bekliyor</b></li><li><span>3</span><div><strong>Derslik düzenleri</strong><small>Gerçek oturma planlarını tanımla</small></div><b>Bekliyor</b></li></ol>
-          </section>
-        </div>
+          </section>}
+        </div>}
 
-        <div className="section-heading module-heading"><div><span className="eyebrow">MODÜLLER</span><h2>Yönetim alanları</h2></div><span className="module-caption">Hazır bölümler kullanılabilir; diğerleri geliştirme aşamasında.</span></div>
+        {activeSection !== 'school' && activeSection !== 'classrooms' && <div className="section-heading module-heading"><div><span className="eyebrow">{activeSection === 'students' ? 'ÖĞRENCİ İŞLEMLERİ' : 'MODÜLLER'}</span><h2>{activeSection === 'students' ? 'Liste aktarımı' : 'Yönetim alanları'}</h2></div><span className="module-caption">{activeSection === 'students' ? 'Liste önizlemesi kaydetmeden önce kontrol edilir.' : 'Hazır bölümler kullanılabilir; diğerleri geliştirme aşamasında.'}</span></div>}
 
-        <div className="feature-grid">
-          <article className="feature-card">
+        {activeSection !== 'school' && activeSection !== 'classrooms' && <div className={`feature-grid ${activeSection === 'students' ? 'single-module' : ''}`}>
+          {(activeSection === 'overview' || activeSection === 'students') && <article className="feature-card">
             <span className="feature-number">01</span>
             <h2>Öğrenci kayıtları</h2>
             <p>Okul ve sınıf listeleri için güvenli yerel kayıt alanı.</p>
@@ -354,33 +362,33 @@ export default function App() {
               />
             </label>
             {importError && <p className="import-error" role="alert">{importError}</p>}
-          </article>
-          <article className="feature-card">
+          </article>}
+          {activeSection === 'overview' && <article className="feature-card">
             <span className="feature-number">02</span>
             <h2>Derslik düzeni</h2>
             <p>Fiziksel masa ve oturma yerlerini tanımlama.</p>
             <button className="manager-open" type="button" onClick={() => setClassroomPanelOpen(true)}>
               Derslikleri yönet
             </button>
-          </article>
-          <article className="feature-card muted-card">
+          </article>}
+          {activeSection === 'overview' && <article className="feature-card muted-card">
             <span className="feature-number">03</span>
             <h2>Sınav dağıtımı</h2>
             <p>Öğrenci gruplarını seçilen dersliklere dengeli yerleştirme.</p>
             <span className="feature-state">Hazırlanıyor</span>
-          </article>
-        </div>
+          </article>}
+        </div>}
 
-        {classroomPanelOpen && (
+        {classroomPanelOpen && activeSection === 'classrooms' && (
           <ClassroomManager
             academicYearId={activeYearId}
             academicYearLabel={activeYear?.label ?? ''}
             readOnly={activeYear?.is_archive ?? false}
-            onClose={() => setClassroomPanelOpen(false)}
+            onClose={() => { setClassroomPanelOpen(false); setActiveSection('overview') }}
           />
         )}
 
-        {importPreview && (
+        {activeSection === 'students' && importPreview && (
           <section className="import-preview" aria-labelledby="import-preview-title">
             <div className="import-preview-heading">
               <div>
