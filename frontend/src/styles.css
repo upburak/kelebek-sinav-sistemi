@@ -657,6 +657,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .exam-organization-list { display: grid; gap: 10px; }
 .exam-organization-card-wrap { display: grid; gap: 0; }
 .exam-organization-card { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 15px; border: 1px solid #dce7e8; border-radius: 12px; background: #fffefa; box-shadow: 0 5px 16px rgb(18 56 75 / 4%); }
+.exam-report-link { grid-column: 2 / -1; justify-self: start; padding: 7px 10px; border: 1px solid #bdd9cd; border-radius: 8px; background: #f0f8f4; color: #23644a; font-size: 10px; font-weight: 700; text-decoration: none; }
+.exam-report-link:hover { background: #e4f3eb; }
 .exam-date-block { display: grid; justify-items: center; gap: 1px; padding: 8px 5px; border-radius: 9px; background: #fff0e9; color: #b94f2b; }
 .exam-date-block strong { font-size: 17px; line-height: 1; }
 .exam-date-block span { font-size: 9px; font-weight: 700; text-transform: uppercase; }
@@ -725,6 +727,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .exam-organization-card { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; }
   .exam-organization-meta { grid-column: 2; display: flex; justify-content: space-between; }
   .exam-room-open { grid-column: 2; justify-self: start; }
+  .exam-report-link { grid-column: 2; }
   .exam-room-options { grid-template-columns: 1fr; }
   .exam-room-footer { align-items: stretch; flex-direction: column; }
   .exam-room-panel-heading { align-items: flex-start; flex-direction: column; }

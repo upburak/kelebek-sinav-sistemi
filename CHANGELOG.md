@@ -8,3 +8,4 @@
 - Faz D veri temeli: sürümlü derslik düzenleri, fiziksel masalar ve ayrı oturma yerleri; SQLite yabancı anahtar denetimi etkin.
 - Faz D ilk ekranı: derslik/düzen yönetimi, blok bazlı başlangıç planı üretimi ve numaralı oturma yeri önizlemesi.
 - Faz D düzenleme: yeni sürüme kopyalama, sürükle-bırak masa taşıma ve oturma yerini kullanıma kapatma/açma.
+- Faz H ilk raporu: kesinleşmiş sınavlardan derslik başına tek sayfalık, gerçek masa/koridor düzenini koruyan Türkçe oturma planı PDF ön izlemesi.

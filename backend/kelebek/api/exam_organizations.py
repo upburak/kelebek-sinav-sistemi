@@ -2,8 +2,9 @@
 
 import hashlib
 import json
+from io import BytesIO
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, send_file
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
@@ -24,6 +25,7 @@ from kelebek.services.exam_organizer import (
     update_organization_rules,
     update_organization_rooms,
 )
+from kelebek.services.reporting import build_seating_plan_pdf, safe_report_stem
 
 
 exam_organizations_api = Blueprint("exam_organizations", __name__)
@@ -593,3 +595,31 @@ def finalize_distribution(organization_id: str):
     except IntegrityError:
         return jsonify({"error": "Kesinleştirme kaydedilemedi; veriler değişmiş olabilir. Yeniden kontrol edin."}), 409
     return jsonify({"organization": result, "review": review})
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/reports/seating-plan.pdf")
+def download_seating_plan_pdf(organization_id: str):
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    try:
+        with session_factory() as session:
+            organization = session.get(ExamOrganization, organization_id)
+            if organization is None:
+                return jsonify({"error": "Sınav organizasyonu bulunamadı."}), 404
+            if organization.status != "completed":
+                return jsonify({"error": "Oturma planı PDF'i yalnızca kesinleştirilmiş sınavlar için oluşturulur."}), 409
+            try:
+                review = _review_selected_candidate(session, organization)
+            except ValueError as error:
+                return jsonify({"error": str(error)}), 409
+            if not review["can_finalize"]:
+                return jsonify({"error": "Dağıtımın son kontrolü geçerli değil; PDF oluşturulamadı."}), 409
+            pdf_bytes = build_seating_plan_pdf(session, organization, review["candidate_id"])
+            filename_stem = safe_report_stem(organization.name)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 409
+    return send_file(
+        BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=f"{filename_stem}-oturma-planlari.pdf",
+    )

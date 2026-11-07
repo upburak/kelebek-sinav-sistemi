@@ -549,6 +549,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
             <div className="exam-organization-copy"><span className="exam-status">{organization.status === 'completed' ? 'Tamamlandı' : 'Taslak'}</span><h3>{organization.name}</h3><p>{organization.course_names.length ? organization.course_names.join(' · ') : 'Genel sınav'} · {organization.participant_count} öğrenci</p></div>
             <div className="exam-organization-meta"><small>{organization.course_count} ders</small><small>{organization.exam_date}</small><small>{selectedRoomCount ? `${selectedRoomCount} derslik · ${organization.available_capacity} kullanılabilir yer` : 'Derslik seçilmedi'}</small></div>
             <button className="exam-room-open" type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRoomEditor(organization)}>{roomEditorOpen ? 'Derslik seçimini kapat' : selectedRoomCount ? 'Derslikleri düzenle' : 'Derslik seç'}</button>
+            {organization.status === 'completed' && <a className="exam-report-link" href={`/api/exam-organizations/${encodeURIComponent(organization.id)}/reports/seating-plan.pdf`} target="_blank" rel="noreferrer">Oturma planı PDF ön izle</a>}
           </div>
           {roomEditorOpen && <div className="exam-room-panel">
             <div className="exam-room-panel-heading"><div><strong>Adım 02 · Derslik ve kapasite</strong><small>Her fiziksel derslikten bir düzen seç. Kullanım dışı yerler kapasiteye sayılmaz.</small></div><span>{organization.participant_count} öğrenci</span></div>
