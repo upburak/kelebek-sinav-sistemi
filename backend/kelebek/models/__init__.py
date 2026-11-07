@@ -17,6 +17,7 @@ from kelebek.models.distribution_run import DistributionRun
 from kelebek.models.distribution_candidate import DistributionCandidate
 from kelebek.models.seat_assignment import SeatAssignment
 from kelebek.models.distribution_event import DistributionEvent
+from kelebek.models.distribution_report import DistributionReport
 from kelebek.models.school_profile import SchoolAdministrator, SchoolProfile
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "ExamOrganizationClassroom",
     "DistributionRun", "DistributionCandidate", "SeatAssignment",
     "DistributionEvent",
+    "DistributionReport",
 ]

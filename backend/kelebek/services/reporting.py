@@ -2,8 +2,11 @@
 
 import os
 import re
+import hashlib
+import json
 from io import BytesIO
 from pathlib import Path
+from datetime import datetime, timezone
 
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.utils import simpleSplit
@@ -18,6 +21,7 @@ from kelebek.models import (
     ClassroomLayout,
     Course,
     Desk,
+    DistributionReport,
     ExamCourse,
     ExamOrganization,
     ExamOrganizationClassroom,
@@ -32,6 +36,7 @@ PAGE_SIZE = landscape(A4)
 PAGE_WIDTH, PAGE_HEIGHT = PAGE_SIZE
 FONT_REGULAR = "KelebekSans"
 FONT_BOLD = "KelebekSansBold"
+SEATING_PLAN_REPORT_TYPE = "seating_plan_pdf"
 
 
 def _register_fonts() -> tuple[str, str]:
@@ -82,6 +87,99 @@ def safe_report_stem(name: str) -> str:
         "ç": "c", "Ç": "C", "ö": "o", "Ö": "O", "ü": "u", "Ü": "U",
     }))
     return re.sub(r"[^A-Za-z0-9._-]+", "-", normalized).strip("-._")[:60] or "sinav"
+
+
+def seating_plan_report_path(file_name: str) -> Path:
+    return get_data_dir() / "Exports" / "PDF" / file_name
+
+
+def report_data_fingerprint(session, organization: ExamOrganization, candidate_id: str) -> str:
+    assignments = session.execute(
+        select(SeatAssignment.participant_id, SeatAssignment.seat_id,
+               ExamParticipant.school_number, ExamParticipant.first_name,
+               ExamParticipant.last_name, ExamParticipant.class_level, ExamParticipant.section)
+        .join(ExamParticipant, ExamParticipant.id == SeatAssignment.participant_id)
+        .where(SeatAssignment.candidate_id == candidate_id)
+        .order_by(SeatAssignment.participant_id)
+    ).all()
+    selections = session.execute(
+        select(ExamOrganizationClassroom.classroom_id, Classroom.name,
+               ExamOrganizationClassroom.layout_id, ClassroomLayout.name)
+        .join(Classroom, Classroom.id == ExamOrganizationClassroom.classroom_id)
+        .join(ClassroomLayout, ClassroomLayout.id == ExamOrganizationClassroom.layout_id)
+        .where(ExamOrganizationClassroom.organization_id == organization.id)
+        .order_by(Classroom.name)
+    ).all()
+    layout_data = []
+    for _room_id, room_name, layout_id, layout_name in selections:
+        desks = session.execute(
+            select(Desk.id, Desk.label, Desk.block_label, Desk.x, Desk.y)
+            .where(Desk.layout_id == layout_id).order_by(Desk.y, Desk.x)
+        ).all()
+        seats = session.execute(
+            select(Seat.id, Seat.desk_id, Seat.seat_number, Seat.seat_index, Seat.is_available)
+            .where(Seat.layout_id == layout_id).order_by(Seat.seat_number)
+        ).all()
+        layout_data.append({
+            "room": room_name, "layout": layout_name,
+            "desks": [list(row) for row in desks], "seats": [list(row) for row in seats],
+        })
+    course_names = session.scalars(
+        select(Course.name).join(ExamCourse, ExamCourse.course_id == Course.id)
+        .where(ExamCourse.organization_id == organization.id).order_by(ExamCourse.display_order)
+    ).all()
+    profile = session.get(SchoolProfile, 1)
+    snapshot = {
+        "organization": [organization.name, organization.exam_date.isoformat(), course_names,
+                         profile.school_name if profile else ""],
+        "candidate_id": candidate_id,
+        "assignments": [list(row) for row in assignments],
+        "layouts": layout_data,
+    }
+    raw = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def report_status(session, organization: ExamOrganization) -> dict:
+    report = session.scalar(select(DistributionReport).where(
+        DistributionReport.organization_id == organization.id,
+        DistributionReport.report_type == SEATING_PLAN_REPORT_TYPE,
+    ))
+    if report is None:
+        return {"report_status": "not_generated", "report_updated_at": None}
+    report_path = seating_plan_report_path(report.file_name)
+    current = (
+        report.candidate_id == organization.selected_candidate_id
+        and report_path.is_file()
+        and report.data_fingerprint == report_data_fingerprint(
+            session, organization, organization.selected_candidate_id or ""
+        )
+    )
+    return {
+        "report_status": "current" if current else "stale",
+        "report_updated_at": report.created_at.isoformat(),
+    }
+
+
+def record_seating_plan_report(session, organization: ExamOrganization, candidate_id: str, file_name: str) -> None:
+    report = session.scalar(select(DistributionReport).where(
+        DistributionReport.organization_id == organization.id,
+        DistributionReport.report_type == SEATING_PLAN_REPORT_TYPE,
+    ))
+    if report is None:
+        report = DistributionReport(
+            organization_id=organization.id,
+            candidate_id=candidate_id,
+            report_type=SEATING_PLAN_REPORT_TYPE,
+            data_fingerprint=report_data_fingerprint(session, organization, candidate_id),
+            file_name=file_name,
+        )
+        session.add(report)
+    else:
+        report.candidate_id = candidate_id
+        report.data_fingerprint = report_data_fingerprint(session, organization, candidate_id)
+        report.file_name = file_name
+        report.created_at = datetime.now(timezone.utc)
 
 
 def _draw_fitted_text(pdf, text: str, x: float, y: float, max_width: float,

@@ -19,4 +19,7 @@ class DistributionEvent(Base):
     displaced_participant_id: Mapped[str | None] = mapped_column(ForeignKey("exam_participants.id", ondelete="RESTRICT"), nullable=True)
     from_seat_id: Mapped[str | None] = mapped_column(ForeignKey("seats.id", ondelete="RESTRICT"), nullable=True)
     to_seat_id: Mapped[str | None] = mapped_column(ForeignKey("seats.id", ondelete="RESTRICT"), nullable=True)
+    related_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("distribution_events.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

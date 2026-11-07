@@ -25,7 +25,12 @@ from kelebek.services.exam_organizer import (
     update_organization_rules,
     update_organization_rooms,
 )
-from kelebek.services.reporting import build_seating_plan_pdf, safe_report_stem
+from kelebek.services.reporting import (
+    build_seating_plan_pdf,
+    record_seating_plan_report,
+    report_status,
+    safe_report_stem,
+)
 
 
 exam_organizations_api = Blueprint("exam_organizations", __name__)
@@ -35,6 +40,29 @@ RULE_NAMES = (
     "prevent_different_grade_same_area_adjacent", "prevent_different_grade_same_area_front_back",
     "prevent_same_grade_area_adjacent", "prevent_same_grade_area_front_back",
 )
+MANUAL_EVENT_TYPES = {"seat_move", "seat_swap", "seat_to_pool"}
+
+
+def _candidate_history_state(events):
+    undo_stack, redo_stack = [], []
+    for event in events:
+        if event.event_type in MANUAL_EVENT_TYPES:
+            undo_stack.append(event)
+            redo_stack.clear()
+        elif event.event_type == "undo" and event.related_event_id:
+            original = next((item for item in undo_stack if item.id == event.related_event_id), None)
+            if original:
+                undo_stack.remove(original)
+                redo_stack.append(original)
+        elif event.event_type == "redo" and event.related_event_id:
+            original = next((item for item in redo_stack if item.id == event.related_event_id), None)
+            if original:
+                redo_stack.remove(original)
+                undo_stack.append(original)
+    return {"can_undo": bool(undo_stack), "can_redo": bool(redo_stack),
+            "undo_count": len(undo_stack), "redo_count": len(redo_stack),
+            "undo_event_id": undo_stack[-1].id if undo_stack else None,
+            "redo_event_id": redo_stack[-1].id if redo_stack else None}
 
 
 def _distribution_fingerprint(session, organization):
@@ -216,6 +244,12 @@ def _serialize_candidate(session, organization, candidate):
             "classroom_id": classroom.id, "classroom_name": classroom.name,
             "layout_id": layout.id, "layout_name": layout.name, "desks": desk_payloads,
         })
+    event_rows = session.execute(
+        select(DistributionEvent, ExamParticipant)
+        .join(ExamParticipant, ExamParticipant.id == DistributionEvent.participant_id)
+        .where(DistributionEvent.candidate_id == candidate.id)
+        .order_by(DistributionEvent.created_at, DistributionEvent.id)
+    ).all()
     return {
         "candidate_id": candidate.id,
         "run_id": candidate.run_id,
@@ -224,13 +258,18 @@ def _serialize_candidate(session, organization, candidate):
         "status": candidate.status,
         "affected_student_count": candidate.affected_student_count,
         "events": [{
+            "id": event.id,
             "event_type": event.event_type,
             "participant_id": event.participant_id,
+            "participant_name": f"{participant.first_name} {participant.last_name}",
+            "school_number": participant.school_number,
             "displaced_participant_id": event.displaced_participant_id,
             "from_seat_id": event.from_seat_id,
             "to_seat_id": event.to_seat_id,
+            "related_event_id": event.related_event_id,
             "created_at": event.created_at.isoformat(),
-        } for event in session.scalars(select(DistributionEvent).where(DistributionEvent.candidate_id == candidate.id).order_by(DistributionEvent.created_at)).all()],
+        } for event, participant in event_rows],
+        "history": _candidate_history_state([event for event, _participant in event_rows]),
         "summary": _candidate_summary(assignments, capacities),
         "available_seats": available_seats,
         "assignments": assignments,
@@ -477,6 +516,23 @@ def select_distribution_candidate(organization_id: str):
     return jsonify({"selected_candidate_id": candidate_id})
 
 
+def _set_assignment_pair(session, assignments, participant_id, moving_target_id, displaced_id=None,
+                         displaced_target_id=None):
+    by_participant = {item.participant_id: item for item in assignments}
+    moving = by_participant.get(participant_id)
+    displaced = by_participant.get(displaced_id) if displaced_id else None
+    if moving is None or (displaced_id and displaced is None):
+        raise ValueError("İşlem geçmişindeki öğrenci artık bu dağıtımda bulunmuyor.")
+    moving.seat_id = None
+    session.flush()
+    if displaced:
+        displaced.seat_id = displaced_target_id
+        session.flush()
+    moving.seat_id = moving_target_id
+    session.flush()
+    return moving, displaced
+
+
 @exam_organizations_api.post("/exam-organizations/<organization_id>/distribution-candidates/<candidate_id>/moves")
 def move_candidate_participant(organization_id: str, candidate_id: str):
     payload = request.get_json(silent=True)
@@ -491,11 +547,15 @@ def move_candidate_participant(organization_id: str, candidate_id: str):
             candidate = session.get(DistributionCandidate, candidate_id)
             if organization is None or candidate is None:
                 return jsonify({"error": "Sınav veya aday bulunamadı."}), 404
-            if organization.status != "draft" or organization.selected_candidate_id != candidate.id:
-                return jsonify({"error": "Önce bu adayı incelemeye alın. Kesinleşmiş dağıtım değiştirilemez."}), 409
+            if organization.status not in {"draft", "completed"} or organization.selected_candidate_id != candidate.id:
+                return jsonify({"error": "Önce bu adayı incelemeye alın."}), 409
             year = session.get(AcademicYear, organization.academic_year_id)
             run = session.get(DistributionRun, candidate.run_id)
-            if year is None or year.start_year < current_academic_year_start() or run is None or run.config_hash != _distribution_fingerprint(session, organization):
+            if year is None:
+                return jsonify({"error": "Eğitim-öğretim yılı bulunamadı."}), 404
+            if year.start_year < current_academic_year_start():
+                return jsonify({"error": "Arşiv yılındaki kesinleşmiş dağıtım salt okunurdur."}), 403
+            if run is None or run.config_hash != _distribution_fingerprint(session, organization):
                 return jsonify({"error": "Adayın verileri güncel değil; yeni aday üretin."}), 409
             try:
                 _review_selected_candidate(session, organization)
@@ -517,40 +577,137 @@ def move_candidate_participant(organization_id: str, candidate_id: str):
             target_assignment = next((item for item in assignments if target and item.seat_id == target.id), None)
             displaced_id = target_assignment.participant_id if target_assignment else None
             source_seat_id = moving.seat_id
-            child = DistributionCandidate(
-                run_id=run.id,
-                derived_from_candidate_id=candidate.id,
-                status="manual",
-                affected_student_count=0,
-                objective_value=candidate.objective_value,
-                generation_index=(session.scalar(select(func.max(DistributionCandidate.generation_index)).where(DistributionCandidate.run_id == run.id)) or 0) + 1,
-            )
-            session.add(child); session.flush()
-            for item in assignments:
-                seat_id = item.seat_id
-                if item.participant_id == participant_id:
-                    seat_id = target.id if target else None
-                elif target_assignment and item.participant_id == displaced_id:
-                    seat_id = source_seat_id
-                session.add(SeatAssignment(candidate_id=child.id, participant_id=item.participant_id, seat_id=seat_id))
-            session.add(DistributionEvent(
-                candidate_id=child.id,
-                event_type="seat_to_pool" if target is None else "seat_swap" if target_assignment else "seat_move",
-                participant_id=participant_id,
-                displaced_participant_id=displaced_id,
-                from_seat_id=source_seat_id,
-                to_seat_id=target.id if target else None,
-            ))
-            session.flush()
-            review = _review_selected_candidate(session, organization, candidate_id=child.id)
-            child.affected_student_count = review["affected_student_count"]
-            organization.selected_candidate_id = child.id
-            session.flush()
-            result = _serialize_candidate(session, organization, child)
+            event_type = "seat_to_pool" if target is None else "seat_swap" if target_assignment else "seat_move"
+            if organization.status == "completed":
+                _set_assignment_pair(
+                    session, assignments, participant_id, target.id if target else None,
+                    displaced_id, source_seat_id if target_assignment else None,
+                )
+                candidate.status = "manual"
+                session.add(DistributionEvent(
+                    candidate_id=candidate.id,
+                    event_type=event_type,
+                    participant_id=participant_id,
+                    displaced_participant_id=displaced_id,
+                    from_seat_id=source_seat_id,
+                    to_seat_id=target.id if target else None,
+                ))
+                session.flush()
+                review = _review_selected_candidate(session, organization)
+                candidate.affected_student_count = review["affected_student_count"]
+                result = _serialize_candidate(session, organization, candidate)
+                result["report_status"] = report_status(session, organization)["report_status"]
+            else:
+                child = DistributionCandidate(
+                    run_id=run.id,
+                    derived_from_candidate_id=candidate.id,
+                    status="manual",
+                    affected_student_count=0,
+                    objective_value=candidate.objective_value,
+                    generation_index=(session.scalar(select(func.max(DistributionCandidate.generation_index)).where(DistributionCandidate.run_id == run.id)) or 0) + 1,
+                )
+                session.add(child); session.flush()
+                for item in assignments:
+                    seat_id = item.seat_id
+                    if item.participant_id == participant_id:
+                        seat_id = target.id if target else None
+                    elif target_assignment and item.participant_id == displaced_id:
+                        seat_id = source_seat_id
+                    session.add(SeatAssignment(candidate_id=child.id, participant_id=item.participant_id, seat_id=seat_id))
+                session.add(DistributionEvent(
+                    candidate_id=child.id,
+                    event_type=event_type,
+                    participant_id=participant_id,
+                    displaced_participant_id=displaced_id,
+                    from_seat_id=source_seat_id,
+                    to_seat_id=target.id if target else None,
+                ))
+                session.flush()
+                review = _review_selected_candidate(session, organization, candidate_id=child.id)
+                child.affected_student_count = review["affected_student_count"]
+                organization.selected_candidate_id = child.id
+                session.flush()
+                result = _serialize_candidate(session, organization, child)
             result["review"] = review
     except IntegrityError:
         return jsonify({"error": "Taşıma kaydedilemedi; koltuk durumu değişmiş olabilir."}), 409
     return jsonify({"candidate": result}), 201
+
+
+@exam_organizations_api.post("/exam-organizations/<organization_id>/distribution-candidates/<candidate_id>/history/<action>")
+def change_completed_distribution_history(organization_id: str, candidate_id: str, action: str):
+    if action not in {"undo", "redo"}:
+        return jsonify({"error": "Geçmiş işlemi geçersiz."}), 404
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    try:
+        with session_factory.begin() as session:
+            organization = session.get(ExamOrganization, organization_id)
+            candidate = session.get(DistributionCandidate, candidate_id)
+            if organization is None or candidate is None:
+                return jsonify({"error": "Sınav veya dağıtım bulunamadı."}), 404
+            run = session.get(DistributionRun, candidate.run_id)
+            if run is None or run.organization_id != organization.id:
+                return jsonify({"error": "Sınav veya dağıtım bulunamadı."}), 404
+            if organization.status != "completed" or organization.selected_candidate_id != candidate.id:
+                return jsonify({"error": "İşlem geçmişi yalnızca seçili, kesinleşmiş dağıtımda değiştirilebilir."}), 409
+            year = session.get(AcademicYear, organization.academic_year_id)
+            if year is None or year.start_year < current_academic_year_start():
+                return jsonify({"error": "Arşiv yılındaki kesinleşmiş dağıtım salt okunurdur."}), 403
+            if run is None or run.config_hash != _distribution_fingerprint(session, organization):
+                return jsonify({"error": "Sınav veya derslik ayarları değişmiş; bu geçmiş kaydı düzenlenemiyor."}), 409
+            try:
+                _review_selected_candidate(session, organization)
+            except ValueError as error:
+                return jsonify({"error": str(error)}), 409
+
+            events = session.scalars(
+                select(DistributionEvent).where(DistributionEvent.candidate_id == candidate.id)
+                .order_by(DistributionEvent.created_at, DistributionEvent.id)
+            ).all()
+            history = _candidate_history_state(events)
+            event_id = history["undo_event_id"] if action == "undo" else history["redo_event_id"]
+            if not event_id:
+                return jsonify({"error": "Geri alınacak işlem yok." if action == "undo" else "Yinelenecek işlem yok."}), 409
+            original = next(event for event in events if event.id == event_id)
+            assignments = session.scalars(
+                select(SeatAssignment).where(SeatAssignment.candidate_id == candidate.id)
+            ).all()
+            by_participant = {item.participant_id: item for item in assignments}
+            moving = by_participant.get(original.participant_id)
+            displaced = by_participant.get(original.displaced_participant_id) if original.displaced_participant_id else None
+            if moving is None or (original.displaced_participant_id and displaced is None):
+                return jsonify({"error": "İşlemdeki öğrenci bu dağıtımda bulunmuyor."}), 409
+            if action == "undo":
+                expected_moving, expected_displaced = original.to_seat_id, original.from_seat_id
+                moving_target, displaced_target = original.from_seat_id, original.to_seat_id
+            else:
+                expected_moving, expected_displaced = original.from_seat_id, original.to_seat_id
+                moving_target, displaced_target = original.to_seat_id, original.from_seat_id
+            if moving.seat_id != expected_moving or (displaced and displaced.seat_id != expected_displaced):
+                return jsonify({"error": "Geçmiş işleminin beklenen koltuk durumu bulunamadı; başka bir değişiklikle çakışıyor."}), 409
+            source_seat_id = moving.seat_id
+            _set_assignment_pair(
+                session, assignments, original.participant_id, moving_target,
+                original.displaced_participant_id, displaced_target if displaced else None,
+            )
+            session.add(DistributionEvent(
+                candidate_id=candidate.id,
+                event_type=action,
+                participant_id=original.participant_id,
+                displaced_participant_id=original.displaced_participant_id,
+                from_seat_id=source_seat_id,
+                to_seat_id=moving_target,
+                related_event_id=original.id,
+            ))
+            session.flush()
+            review = _review_selected_candidate(session, organization)
+            candidate.affected_student_count = review["affected_student_count"]
+            result = _serialize_candidate(session, organization, candidate)
+            result["review"] = review
+            result["report_status"] = report_status(session, organization)["report_status"]
+    except IntegrityError:
+        return jsonify({"error": "Geçmiş işlemi uygulanamadı; koltuk durumu çakışıyor."}), 409
+    return jsonify({"candidate": result})
 
 
 @exam_organizations_api.get("/exam-organizations/<organization_id>/final-review")
@@ -601,7 +758,7 @@ def finalize_distribution(organization_id: str):
 def download_seating_plan_pdf(organization_id: str):
     session_factory = current_app.extensions["kelebek_session_factory"]
     try:
-        with session_factory() as session:
+        with session_factory.begin() as session:
             organization = session.get(ExamOrganization, organization_id)
             if organization is None:
                 return jsonify({"error": "Sınav organizasyonu bulunamadı."}), 404
@@ -615,6 +772,10 @@ def download_seating_plan_pdf(organization_id: str):
                 return jsonify({"error": "Dağıtımın son kontrolü geçerli değil; PDF oluşturulamadı."}), 409
             pdf_bytes = build_seating_plan_pdf(session, organization, review["candidate_id"])
             filename_stem = safe_report_stem(organization.name)
+            record_seating_plan_report(
+                session, organization, review["candidate_id"],
+                f"{filename_stem}-oturma-planlari.pdf",
+            )
     except ValueError as error:
         return jsonify({"error": str(error)}), 409
     return send_file(

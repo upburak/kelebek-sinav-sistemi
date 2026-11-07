@@ -19,6 +19,7 @@ from kelebek.models import (
     Seat,
     StudentYearEnrollment,
 )
+from kelebek.services.reporting import report_status
 
 
 class ExamOrganizerError(ValueError):
@@ -143,6 +144,11 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
             "version": layout.version,
             "available_seats": available,
         })
+    report_status_by_org = {
+        item.id: report_status(session, item) if item.status == "completed"
+        else {"report_status": "not_generated", "report_updated_at": None}
+        for item in organizations
+    }
     return [
         {
             "id": item.id,
@@ -167,6 +173,7 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
             ),
             "rules": _serialize_rules(item),
             "selected_candidate_id": item.selected_candidate_id,
+            **report_status_by_org[item.id],
         }
         for item in organizations
     ]
