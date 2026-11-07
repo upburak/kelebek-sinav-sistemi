@@ -696,6 +696,20 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .exam-room-footer button { padding: 9px 12px; border: 0; border-radius: 8px; background: #146b68; color: #fff; font-size: 10px; font-weight: 700; cursor: pointer; }
 .exam-room-footer button:disabled { background: #dce5e3; color: #81918f; cursor: not-allowed; }
 .room-empty { padding: 16px; }
+.grid-column-config { display: grid; grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); gap: 10px; }
+.grid-column-config fieldset { min-width: 0; margin: 0; padding: 10px; border: 1px solid #dce4ee; border-radius: 10px; background: #fff; }
+.grid-column-config legend { padding: 0 5px; color: #35445a; font-size: 11px; font-weight: 750; }
+.grid-column-config fieldset > label { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #5b6878; font-size: 11px; }
+.grid-column-config input[type=number], .grid-cell-config select { padding: 5px; border: 1px solid #d7deea; border-radius: 6px; background: #fff; color: #27344a; }
+.grid-cell-config { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; max-height: 210px; margin-top: 8px; overflow: auto; }
+.grid-cell-config label { display: grid; gap: 3px; color: #718093; font-size: 9px; }
+.grid-scheme { display: flex; align-items: flex-start; justify-content: center; gap: 14px; overflow: auto; }
+.grid-scheme-column { display: grid; gap: 4px; min-width: 90px; padding: 7px; border: 1px solid #dce4ee; border-radius: 8px; background: #fff; }
+.grid-scheme-column strong { color: #40536b; font-size: 9px; }
+.grid-scheme-column span { padding: 3px 5px; border-radius: 4px; background: #edf3fa; color: #53667e; font-size: 8px; text-align: center; }
+.aisle-config { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; color: #58677c; font-size: 10px; }
+.aisle-config strong { color: #35445a; }
+.aisle-config label { display: flex; align-items: center; gap: 5px; }
 .exam-empty { display: grid; justify-items: start; gap: 6px; padding: 22px; border: 1px dashed #cadbd5; border-radius: 12px; background: #f8faf7; color: #647b8a; font-size: 12px; }
 .exam-empty strong { color: #173247; font-size: 14px; }
 .exam-empty button { margin-top: 5px; padding: 8px 10px; border: 0; border-radius: 8px; background: #146b68; color: #fff; font-size: 11px; font-weight: 650; cursor: pointer; }

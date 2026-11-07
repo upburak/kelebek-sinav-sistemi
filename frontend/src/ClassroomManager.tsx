@@ -35,10 +35,10 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   const [selectedLayout, setSelectedLayout] = useState<LayoutDetail | null>(null)
   const [classroomName, setClassroomName] = useState('')
   const [layoutName, setLayoutName] = useState('Ana düzen')
-  const [rowCount, setRowCount] = useState('')
-  const [blockCount, setBlockCount] = useState('1')
-  const [blockSizes, setBlockSizes] = useState<string[]>([''])
-  const [seatsPerDesk, setSeatsPerDesk] = useState('')
+  const [columnCount, setColumnCount] = useState('3')
+  const [columnLengths, setColumnLengths] = useState<string[]>(['5', '6', '6'])
+  const [cellSeats, setCellSeats] = useState<string[][]>([Array(5).fill('2'), Array(6).fill('2'), Array(6).fill('2')])
+  const [aisleAfter, setAisleAfter] = useState<boolean[]>([false, false])
   const [editingLayout, setEditingLayout] = useState(false)
   const [draggingDeskId, setDraggingDeskId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
@@ -74,10 +74,11 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     )
     : 0
   const selectedIsLatest = selectedLayout?.layout.version === selectedLatestVersion
-  const validBlockSizes = blockSizes.length === Number(blockCount)
-    && blockSizes.length > 0
-    && blockSizes.every((size) => /^\d+$/.test(size) && Number(size) > 0)
-  const generatedSeatCount = Number(rowCount) * blockSizes.reduce((total, size) => total + Number(size || 0), 0) * Number(seatsPerDesk)
+  const validGrid = columnLengths.length === Number(columnCount)
+    && cellSeats.length === Number(columnCount)
+    && columnLengths.every((length, index) => /^\d+$/.test(length) && Number(length) > 0 && cellSeats[index]?.length === Number(length))
+    && cellSeats.flat().every((count) => ['1', '2', '3'].includes(count))
+  const generatedSeatCount = cellSeats.flat().reduce((total, count) => total + Number(count || 0), 0)
 
   async function loadClassrooms() {
     const response = await fetch('/api/classrooms')
@@ -101,10 +102,10 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       if (!response.ok) throw new Error(data.error ?? 'Düzen açılamadı.')
       setSelectedLayout(data as LayoutDetail)
       setEditingLayout(false)
-      setRowCount('')
-      setBlockCount('1')
-      setBlockSizes([''])
-      setSeatsPerDesk('')
+      setColumnCount('3')
+      setColumnLengths(['5', '6', '6'])
+      setCellSeats([Array(5).fill('2'), Array(6).fill('2'), Array(6).fill('2')])
+      setAisleAfter([false, false])
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Düzen açılamadı.')
     }
@@ -185,16 +186,16 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     setSaving(true)
     setError('')
     try {
-      const parsedBlocks = blockSizes.map((value) => Number(value))
       const response = await fetch(
         `/api/classrooms/${selectedClassroomId}/layouts/${selectedLayout.layout.id}/generate`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            rows: Number(rowCount),
-            block_sizes: parsedBlocks,
-            seats_per_desk: Number(seatsPerDesk),
+            columns: Number(columnCount),
+            column_lengths: columnLengths.map(Number),
+            cell_seats: cellSeats.map((column) => column.map(Number)),
+            aisle_after: aisleAfter,
           }),
         },
       )
@@ -208,11 +209,23 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     }
   }
 
-  function changeBlockCount(value: string) {
-    setBlockCount(value)
+  function changeColumnCount(value: string) {
+    setColumnCount(value)
     const count = Number(value)
-    if (Number.isInteger(count) && count >= 1 && count <= 8) {
-      setBlockSizes((current) => Array.from({ length: count }, (_, index) => current[index] ?? ''))
+    if (Number.isInteger(count) && count >= 1 && count <= 12) {
+      setColumnLengths((current) => Array.from({ length: count }, (_, index) => current[index] ?? '5'))
+      setCellSeats((current) => Array.from({ length: count }, (_, index) => current[index] ?? Array(5).fill('2')))
+      setAisleAfter((current) => Array.from({ length: Math.max(0, count - 1) }, (_, index) => current[index] ?? false))
+    }
+  }
+
+  function changeColumnLength(columnIndex: number, value: string) {
+    setColumnLengths((current) => current.map((length, index) => index === columnIndex ? value : length))
+    const count = Number(value)
+    if (Number.isInteger(count) && count >= 1 && count <= 40) {
+      setCellSeats((current) => current.map((column, index) => index === columnIndex
+        ? Array.from({ length: count }, (_, cellIndex) => column[cellIndex] ?? '2')
+        : column))
     }
   }
 
@@ -296,8 +309,8 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     const deskId = event.dataTransfer.getData('text/plain') || draggingDeskId
     if (!deskId) return
     const bounds = event.currentTarget.getBoundingClientRect()
-    const x = Math.max(0, Math.round(((event.clientX - bounds.left - dragOffset.x - 70) / 45) * 10) / 10)
-    const y = Math.max(0, Math.round(((event.clientY - bounds.top - dragOffset.y - 50) / 45) * 10) / 10)
+    const x = Math.max(0, Math.round((event.clientX - bounds.left - dragOffset.x - 70) / 90) * 2)
+    const y = Math.max(0, Math.round((event.clientY - bounds.top - dragOffset.y - 50) / 90) * 2)
     setDraggingDeskId(null)
     void moveDesk(deskId, x, y)
   }
@@ -405,68 +418,14 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
               {!selectedIsLatest && <p className="privacy-note">Bu eski sürüm salt okunur; düzenleme için en son sürümü aç.</p>}
               {selectedLayout.desks.length === 0 ? (
                 <form className="layout-generator" onSubmit={generateLayout}>
-                  <div className="generator-intro">
-                    <strong>Önce sınıfın plan ölçülerini gir</strong>
-                    <p><b>Satır</b>, tahtadan arkaya doğru kaç masa dizisi olduğunu söyler. <b>Blok</b>, koridorla ayrılan yan yana masa grubudur. Her blok için bir satırdaki masa sayısını gir.</p>
+                  <div className="generator-intro"><strong>Sınıf planını sütun ve hücrelerle kur</strong><p>Sütunlar tahtadan arkaya uzanır. Uzunlukları değişebilir; sütun aralarına koridor ekleyebilir, her hücreye 1–3 koltuk verebilirsin.</p></div>
+                  <div className="generator-fields"><label><span>Sütun sayısı</span><small>Soldan sağa</small><input type="number" min="1" max="12" required value={columnCount} onChange={(event) => changeColumnCount(event.target.value)} disabled={readOnly || saving} /></label></div>
+                  <div className="grid-column-config">
+                    {columnLengths.map((length, columnIndex) => <fieldset key={columnIndex}><legend>Sütun {columnIndex + 1}</legend><label>Hücre sayısı <input type="number" min="1" max="40" value={length} onChange={(event) => changeColumnLength(columnIndex, event.target.value)} disabled={readOnly || saving} /></label><div className="grid-cell-config">{cellSeats[columnIndex]?.map((seatCount, rowIndex) => <label key={rowIndex}>Satır {rowIndex + 1}<select value={seatCount} onChange={(event) => setCellSeats((current) => current.map((column, index) => index === columnIndex ? column.map((value, cellIndex) => cellIndex === rowIndex ? event.target.value : value) : column))} disabled={readOnly || saving}><option value="1">1 kişi</option><option value="2">2 kişi</option><option value="3">3 kişi</option></select></label>)}</div></fieldset>)}
                   </div>
-                  <div className="generator-fields">
-                    <label>
-                      <span>Satır sayısı</span><small>Önden arkaya</small>
-                      <input type="number" min="1" max="40" required value={rowCount} onChange={(event) => setRowCount(event.target.value)} disabled={readOnly || saving} />
-                    </label>
-                    <label>
-                      <span>Blok sayısı</span><small>Koridorla ayrılan gruplar</small>
-                      <input type="number" min="1" max="8" required value={blockCount} onChange={(event) => changeBlockCount(event.target.value)} disabled={readOnly || saving} />
-                    </label>
-                    <label>
-                      <span>Her masadaki oturma yeri</span><small>Masalar aynı tipteyse</small>
-                      <select required value={seatsPerDesk} onChange={(event) => setSeatsPerDesk(event.target.value)} disabled={readOnly || saving}>
-                        <option value="">Oturma biçimi seç</option>
-                        <option value="1">Tekli · 1 öğrenci</option>
-                        <option value="2">İkili · 2 öğrenci</option>
-                        <option value="3">Üçlü · 3 öğrenci</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div className="block-count-fields">
-                    {blockSizes.map((size, index) => (
-                      <label key={index}>
-                        <span>Blok {index + 1}</span><small>Bir satırdaki masa sayısı</small>
-                        <input
-                          type="number"
-                          min="1"
-                          max="80"
-                          required
-                          value={size}
-                          onChange={(event) => setBlockSizes((values) => values.map((item, itemIndex) => itemIndex === index ? event.target.value : item))}
-                          disabled={readOnly || saving}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  {Number(rowCount) > 0 && validBlockSizes && Number(seatsPerDesk) > 0 && (
-                    <div className="layout-scheme" aria-label="Plan ölçülerinin şeması">
-                      <span className="scheme-board">TAHTA / ÖN</span>
-                      <div className="scheme-row">
-                        {blockSizes.map((size, index) => (
-                          <div className="scheme-group" key={index}>
-                            {index > 0 && <span className="scheme-aisle">KORİDOR</span>}
-                            <div className="scheme-block">
-                              <strong>Blok {index + 1}</strong>
-                              <span>{size} masa / satır</span>
-                              <div className="scheme-desks">
-                                {Array.from({ length: Math.min(Number(size), 8) }, (_, deskIndex) => <i key={deskIndex} />)}
-                                {Number(size) > 8 && <small>+{Number(size) - 8}</small>}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <p>{rowCount} satır × {blockSizes.reduce((total, size) => total + Number(size), 0)} masa / satır × {seatsPerDesk} öğrenci / masa = <b>{generatedSeatCount} oturma yeri</b></p>
-                      <small>Bu şema bir satırı gösterir; aynı sıra {rowCount} kez arkaya doğru devam eder.</small>
-                    </div>
-                  )}
-                  <button type="submit" disabled={readOnly || saving || !validBlockSizes || Number(rowCount) < 1 || !seatsPerDesk}>
+                  {Number(columnCount) > 1 && <div className="aisle-config"><strong>Koridorlar</strong>{columnCount && Array.from({ length: Number(columnCount) - 1 }, (_, index) => <label key={index}><input type="checkbox" checked={aisleAfter[index] ?? false} onChange={(event) => setAisleAfter((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.checked : item))} /> Sütun {index + 1} ile {index + 2} arasına koridor</label>)}</div>}
+                  {validGrid && <div className="layout-scheme" aria-label="Plan ölçülerinin şeması"><span className="scheme-board">TAHTA / ÖN</span><div className="grid-scheme">{columnLengths.map((length, columnIndex) => <div className="grid-scheme-column" key={columnIndex}><strong>Sütun {columnIndex + 1} · {length} hücre</strong>{cellSeats[columnIndex]?.map((count, rowIndex) => <span key={rowIndex}>S{rowIndex + 1} · {count} koltuk</span>)}</div>)}</div><p>{columnLengths.reduce((sum, item) => sum + Number(item), 0)} hücre · <b>{generatedSeatCount} kullanılabilir koltuk</b></p></div>}
+                  <button type="submit" disabled={readOnly || saving || !validGrid || generatedSeatCount > 600}>
                     {saving ? 'Oluşturuluyor…' : 'Bu ölçülerle planı oluştur'}
                   </button>
                 </form>
