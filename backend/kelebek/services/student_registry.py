@@ -120,19 +120,18 @@ def add_student_to_year(session: Session, academic_year_id: str, payload: dict) 
         .order_by(StudentYearEnrollment.created_at.desc())
     ).all()
     if history:
+        latest = history[0]
         normalized_name = (first_name.casefold(), last_name.casefold())
-        matching_history = [
-            row
-            for row in history
-            if (row.first_name.strip().casefold(), row.last_name.strip().casefold())
-            == normalized_name
-        ]
-        if not matching_history:
-            raise StudentRegistryError(
-                "Bu okul numarası başka bir öğrenci kaydında kullanılmış. Yanlış kişiyi birleştirmemek için ekleme durduruldu.",
-                409,
-            )
-        student_id = matching_history[0].student_id
+        latest_name = (latest.first_name.strip().casefold(), latest.last_name.strip().casefold())
+        if latest_name == normalized_name:
+            student_id = latest.student_id
+        else:
+            # A school number may be reassigned later. Never merge the new
+            # person with a historical identity when the latest name differs.
+            student = Student()
+            session.add(student)
+            session.flush()
+            student_id = student.id
     else:
         student = Student()
         session.add(student)

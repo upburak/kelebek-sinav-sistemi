@@ -12,10 +12,12 @@ from kelebek.models.exam_organization import ExamOrganization
 from kelebek.models.exam_course import ExamCourse
 from kelebek.models.exam_participant import ExamParticipant
 from kelebek.models.exam_course_participant import ExamCourseParticipant
+from kelebek.models.exam_organization_classroom import ExamOrganizationClassroom
 from kelebek.models.school_profile import SchoolAdministrator, SchoolProfile
 
 __all__ = [
     "AcademicYear", "Classroom", "ClassroomLayout", "Desk", "Seat", "Student",
     "StudentYearEnrollment", "SchoolAdministrator", "SchoolProfile", "Course",
     "ExamOrganization", "ExamCourse", "ExamParticipant", "ExamCourseParticipant",
+    "ExamOrganizationClassroom",
 ]

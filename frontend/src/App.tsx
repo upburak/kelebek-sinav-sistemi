@@ -677,6 +677,7 @@ export default function App() {
           academicYearLabel={activeYear?.label ?? ''}
           readOnly={activeYear?.is_archive ?? false}
           onStudents={() => setActiveSection('students')}
+          onClassrooms={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}
         />}
 
         {activeSection === 'students' && importPreview && (

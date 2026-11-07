@@ -9,6 +9,17 @@ type GroupOption = {
 
 type CourseOption = { id: string; name: string }
 type CourseDraft = { id: number; name: string; groupKeys: string[] }
+type RoomOption = {
+  classroom_id: string
+  classroom_name: string
+  layout_id: string
+  layout_name: string
+  version: number
+  total_seats: number
+  available_seats: number
+  can_select: boolean
+  is_latest: boolean
+}
 type ExamOrganization = {
   id: string
   name: string
@@ -17,6 +28,10 @@ type ExamOrganization = {
   course_names: string[]
   course_count: number
   participant_count: number
+  room_selections: { classroom_id: string; classroom_name: string; layout_id: string; layout_name: string; version: number; available_seats: number }[]
+  available_capacity: number
+  capacity_sufficient: boolean
+  capacity_deficit: number
 }
 
 type Props = {
@@ -24,6 +39,7 @@ type Props = {
   academicYearLabel: string
   readOnly: boolean
   onStudents: () => void
+  onClassrooms: () => void
 }
 
 function groupKey(group: GroupOption) {
@@ -65,10 +81,11 @@ function GroupSelector({
   </div>
 }
 
-export default function ExamOrganizer({ academicYearId, academicYearLabel, readOnly, onStudents }: Props) {
+export default function ExamOrganizer({ academicYearId, academicYearLabel, readOnly, onStudents, onClassrooms }: Props) {
   const [organizations, setOrganizations] = useState<ExamOrganization[]>([])
   const [groups, setGroups] = useState<GroupOption[]>([])
   const [courseCatalog, setCourseCatalog] = useState<CourseOption[]>([])
+  const [roomOptions, setRoomOptions] = useState<RoomOption[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -79,6 +96,11 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
   const [generalGroupKeys, setGeneralGroupKeys] = useState<string[]>([])
   const [courses, setCourses] = useState<CourseDraft[]>([])
   const [nextCourseId, setNextCourseId] = useState(1)
+  const [activeRoomOrganizationId, setActiveRoomOrganizationId] = useState<string | null>(null)
+  const [selectedLayoutByClassroom, setSelectedLayoutByClassroom] = useState<Record<string, string>>({})
+  const [roomSaving, setRoomSaving] = useState(false)
+  const [roomError, setRoomError] = useState('')
+  const [roomMessage, setRoomMessage] = useState('')
 
   useEffect(() => {
     if (!academicYearId) {
@@ -94,17 +116,20 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       fetch(`/api/exam-organizations?academic_year_id=${encodeURIComponent(academicYearId)}`, { signal: controller.signal }),
       fetch(`/api/student-groups?academic_year_id=${encodeURIComponent(academicYearId)}`, { signal: controller.signal }),
       fetch('/api/courses', { signal: controller.signal }),
+      fetch(`/api/exam-room-options?academic_year_id=${encodeURIComponent(academicYearId)}`, { signal: controller.signal }),
     ])
-      .then(async ([organizationResponse, groupResponse, courseResponse]) => {
-        const [organizationData, groupData, courseData] = await Promise.all([
-          organizationResponse.json(), groupResponse.json(), courseResponse.json(),
+      .then(async ([organizationResponse, groupResponse, courseResponse, roomResponse]) => {
+        const [organizationData, groupData, courseData, roomData] = await Promise.all([
+          organizationResponse.json(), groupResponse.json(), courseResponse.json(), roomResponse.json(),
         ])
         if (!organizationResponse.ok) throw new Error(organizationData.error ?? 'Organizasyonlar yüklenemedi.')
         if (!groupResponse.ok) throw new Error(groupData.error ?? 'Öğrenci grupları yüklenemedi.')
         if (!courseResponse.ok) throw new Error(courseData.error ?? 'Ders listesi yüklenemedi.')
+        if (!roomResponse.ok) throw new Error(roomData.error ?? 'Derslik düzenleri yüklenemedi.')
         setOrganizations(organizationData.organizations as ExamOrganization[])
         setGroups(groupData.groups as GroupOption[])
         setCourseCatalog(courseData.courses as CourseOption[])
+        setRoomOptions(roomData.rooms as RoomOption[])
       })
       .catch((reason: unknown) => {
         if (reason instanceof Error && reason.name === 'AbortError') return
@@ -125,6 +150,17 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
   const selectionsComplete = withCourses
     ? courses.length > 0 && courses.every((course) => Boolean(course.name.trim()) && course.groupKeys.length > 0)
     : generalGroupKeys.length > 0
+  const roomOptionsByClassroom = useMemo(() => {
+    const result = new Map<string, RoomOption[]>()
+    for (const room of roomOptions) {
+      result.set(room.classroom_id, [...(result.get(room.classroom_id) ?? []), room])
+    }
+    return Array.from(result.values())
+  }, [roomOptions])
+  const selectedRoomCapacity = Object.values(selectedLayoutByClassroom).reduce((total, layoutId) => {
+    const room = roomOptions.find((item) => item.layout_id === layoutId)
+    return total + (room?.available_seats ?? 0)
+  }, 0)
 
   function toggleCourseMode(enabled: boolean) {
     setWithCourses(enabled)
@@ -171,6 +207,8 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       if (!response.ok) throw new Error(data.error ?? 'Organizasyon oluşturulamadı.')
       const organization = data.organization as ExamOrganization
       setOrganizations((items) => [organization, ...items].sort((a, b) => b.exam_date.localeCompare(a.exam_date)))
+      setActiveRoomOrganizationId(organization.id)
+      setSelectedLayoutByClassroom({})
       const newCourses = organization.course_names.map((courseName) => ({ id: 0, name: courseName }))
       setCourseCatalog((items) => {
         const names = new Set(items.map((item) => item.name.toLocaleLowerCase('tr-TR')))
@@ -188,6 +226,61 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     }
   }
 
+  function toggleRoomEditor(organization: ExamOrganization) {
+    if (activeRoomOrganizationId === organization.id) {
+      setActiveRoomOrganizationId(null)
+      setRoomError('')
+      return
+    }
+    setActiveRoomOrganizationId(organization.id)
+    setSelectedLayoutByClassroom(Object.fromEntries(
+      (organization.room_selections ?? []).map((room) => [room.classroom_id, room.layout_id]),
+    ))
+    setRoomError('')
+    setRoomMessage('')
+  }
+
+  function toggleRoom(classroomId: string, checked: boolean) {
+    setSelectedLayoutByClassroom((selected) => {
+      const next = { ...selected }
+      if (!checked) {
+        delete next[classroomId]
+      } else {
+        const defaultLayout = roomOptionsByClassroom
+          .find((items) => items[0]?.classroom_id === classroomId)
+          ?.find((item) => item.can_select)
+        if (defaultLayout) next[classroomId] = defaultLayout.layout_id
+      }
+      return next
+    })
+    setRoomMessage('')
+  }
+
+  async function saveRoomSelection(organizationId: string) {
+    setRoomSaving(true)
+    setRoomError('')
+    setRoomMessage('')
+    try {
+      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/classrooms`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layout_ids: Object.values(selectedLayoutByClassroom) }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Derslik seçimi kaydedilemedi.')
+      const updated = data.organization as ExamOrganization
+      setOrganizations((items) => items.map((item) => item.id === updated.id ? updated : item))
+      setSelectedLayoutByClassroom(Object.fromEntries(
+        updated.room_selections.map((room) => [room.classroom_id, room.layout_id]),
+      ))
+      setRoomMessage('Derslik seçimi kaydedildi.')
+    } catch (reason) {
+      setRoomError(reason instanceof Error ? reason.message : 'Derslik seçimi kaydedilemedi.')
+    } finally {
+      setRoomSaving(false)
+    }
+  }
+
   return <section className="exam-organizer" aria-labelledby="exam-organizer-title">
     <div className="exam-organizer-heading">
       <div>
@@ -201,6 +294,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     </div>
 
     {readOnly && <p className="exam-archive-note">Bu eğitim yılı arşiv olarak açıldı. Organizasyonlar görüntülenebilir; yeni kayıt oluşturulamaz.</p>}
+    {!loading && groups.length === 0 && organizations.length > 0 && <div className="exam-empty"><strong>Bu eğitim yılında yeni sınava alınabilecek aktif öğrenci grubu yok.</strong><span>Mevcut organizasyon kayıtları aşağıda görüntülenebilir.</span><button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button></div>}
 
     {formOpen && <form className="exam-create-form" onSubmit={createOrganization}>
       <div className="exam-form-title"><span className="exam-step-number">01</span><div><strong>Organizasyon bilgileri</strong><small>İsim ve sınav tarihi, taslak kaydına eklenir.</small></div></div>
@@ -230,12 +324,39 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     </form>}
 
     {error && !formOpen && <p className="exam-error" role="alert">{error}</p>}
-    {loading ? <div className="exam-empty">Organizasyonlar yükleniyor…</div> : !groups.length ? <div className="exam-empty"><strong>Bu eğitim yılında öğrenci grubu bulunamadı.</strong><span>Önce öğrenci listesini içe aktar veya örnek verilerle başlangıç yap.</span><button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button></div> : organizations.length === 0 && !formOpen ? <div className="exam-empty"><strong>Henüz sınav organizasyonu yok.</strong><span>İlk taslağı oluştur; ders seçmek zorunlu değil.</span>{!readOnly && <button type="button" onClick={() => setFormOpen(true)}>İlk organizasyonu oluştur</button>}</div> : <div className="exam-organization-list">
-      {organizations.map((organization) => <article className="exam-organization-card" key={organization.id}>
-        <div className="exam-date-block"><strong>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { day: '2-digit' })}</strong><span>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { month: 'short' })}</span></div>
-        <div className="exam-organization-copy"><span className="exam-status">{organization.status === 'completed' ? 'Tamamlandı' : 'Taslak'}</span><h3>{organization.name}</h3><p>{organization.course_names.length ? organization.course_names.join(' · ') : 'Genel sınav'} · {organization.participant_count} öğrenci</p></div>
-        <div className="exam-organization-meta"><small>{organization.course_count} ders</small><small>{organization.exam_date}</small></div>
-      </article>)}
+    {loading ? <div className="exam-empty">Organizasyonlar yükleniyor…</div> : organizations.length === 0 && !formOpen ? <div className="exam-empty"><strong>{groups.length ? 'Henüz sınav organizasyonu yok.' : 'Bu eğitim yılında öğrenci grubu bulunamadı.'}</strong><span>{groups.length ? 'İlk taslağı oluştur; ders seçmek zorunlu değil.' : 'Önce öğrenci listesini içe aktar veya örnek verilerle başlangıç yap.'}</span>{groups.length ? !readOnly && <button type="button" onClick={() => setFormOpen(true)}>İlk organizasyonu oluştur</button> : <button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button>}</div> : <div className="exam-organization-list">
+      {organizations.map((organization) => {
+        const selectedRoomCount = organization.room_selections?.length ?? 0
+        const roomEditorOpen = activeRoomOrganizationId === organization.id
+        return <article className="exam-organization-card-wrap" key={organization.id}>
+          <div className="exam-organization-card">
+            <div className="exam-date-block"><strong>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { day: '2-digit' })}</strong><span>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { month: 'short' })}</span></div>
+            <div className="exam-organization-copy"><span className="exam-status">{organization.status === 'completed' ? 'Tamamlandı' : 'Taslak'}</span><h3>{organization.name}</h3><p>{organization.course_names.length ? organization.course_names.join(' · ') : 'Genel sınav'} · {organization.participant_count} öğrenci</p></div>
+            <div className="exam-organization-meta"><small>{organization.course_count} ders</small><small>{organization.exam_date}</small><small>{selectedRoomCount ? `${selectedRoomCount} derslik · ${organization.available_capacity} kullanılabilir yer` : 'Derslik seçilmedi'}</small></div>
+            <button className="exam-room-open" type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRoomEditor(organization)}>{roomEditorOpen ? 'Derslik seçimini kapat' : selectedRoomCount ? 'Derslikleri düzenle' : 'Derslik seç'}</button>
+          </div>
+          {roomEditorOpen && <div className="exam-room-panel">
+            <div className="exam-room-panel-heading"><div><strong>Adım 02 · Derslik ve kapasite</strong><small>Her fiziksel derslikten bir düzen seç. Kullanım dışı yerler kapasiteye sayılmaz.</small></div><span>{organization.participant_count} öğrenci</span></div>
+            {!roomOptionsByClassroom.length ? <div className="exam-empty room-empty"><strong>Bu eğitim yılı için oturma düzeni yok.</strong><span>Derslik oluşturup bu eğitim yılına ait masa ve oturma yeri düzeni hazırlamalısın.</span><button type="button" onClick={onClassrooms}>Derslik düzenlerine git</button></div> : <div className="exam-room-options">
+              {roomOptionsByClassroom.map((layouts) => {
+                const classroomId = layouts[0].classroom_id
+                const classroomName = layouts[0].classroom_name
+                const selectedLayoutId = selectedLayoutByClassroom[classroomId] ?? ''
+                const selectedLayout = layouts.find((layout) => layout.layout_id === selectedLayoutId)
+                const canSelect = layouts.some((layout) => layout.can_select)
+                return <article className={`exam-room-option ${selectedLayoutId ? 'selected' : ''}`} key={classroomId}>
+                  <label className="exam-room-check"><input type="checkbox" checked={Boolean(selectedLayoutId)} disabled={!canSelect && !selectedLayoutId} onChange={(event) => toggleRoom(classroomId, event.target.checked)} /><span><strong>{classroomName}</strong><small>{selectedLayout ? `${selectedLayout.available_seats} / ${selectedLayout.total_seats} kullanılabilir` : `${layouts.length} düzen seçeneği`}</small></span></label>
+                  {selectedLayoutId && <label className="exam-layout-choice"><span>Oturma düzeni</span><select value={selectedLayoutId} onChange={(event) => { setSelectedLayoutByClassroom((selected) => ({ ...selected, [classroomId]: event.target.value })); setRoomMessage('') }}>{layouts.map((layout) => <option key={layout.layout_id} value={layout.layout_id} disabled={!layout.can_select}>{layout.layout_name} · v{layout.version}{layout.is_latest ? ' · Güncel' : ' · Önceki sürüm'} · {layout.available_seats} yer</option>)}</select></label>}
+                  {!canSelect && <small className="exam-layout-empty">Bu dersliğin düzeninde henüz oturma yeri yok.</small>}
+                </article>
+              })}
+            </div>}
+            <div className={`exam-capacity-check ${selectedRoomCapacity >= organization.participant_count && selectedRoomCapacity > 0 ? 'enough' : 'short'}`}><span>Toplam kullanılabilir kapasite</span><strong>{selectedRoomCapacity} / {organization.participant_count}</strong><small>{selectedRoomCapacity >= organization.participant_count && selectedRoomCapacity > 0 ? 'Kapasite yeterli. Dağıtım aşamasında yeniden doğrulanacak.' : `${Math.max(0, organization.participant_count - selectedRoomCapacity)} kişilik kapasite eksiği var.`}</small></div>
+            {roomError && <p className="exam-error" role="alert">{roomError}</p>}{roomMessage && <p className="exam-room-success" role="status">{roomMessage}</p>}
+            <div className="exam-room-footer"><span>Bu seçim taslakta saklanır. Öğrenciler koltuklara henüz dağıtılmaz.</span><button type="button" disabled={roomSaving || !roomOptionsByClassroom.length} onClick={() => saveRoomSelection(organization.id)}>{roomSaving ? 'Kaydediliyor…' : 'Derslik seçimini kaydet'}</button></div>
+          </div>}
+        </article>
+      })}
     </div>}
   </section>
 }

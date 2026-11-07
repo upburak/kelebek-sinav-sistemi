@@ -9,10 +9,14 @@ from kelebek.db import current_academic_year_start
 from kelebek.models import (
     AcademicYear,
     Course,
+    Classroom,
+    ClassroomLayout,
     ExamCourse,
     ExamCourseParticipant,
     ExamOrganization,
+    ExamOrganizationClassroom,
     ExamParticipant,
+    Seat,
     StudentYearEnrollment,
 )
 
@@ -28,6 +32,51 @@ def list_courses(session: Session) -> list[dict]:
         {"id": course.id, "name": course.name}
         for course in session.scalars(select(Course).order_by(Course.normalized_name)).all()
     ]
+
+
+def _layout_capacity(session: Session, layout_id: str) -> tuple[int, int]:
+    total = session.scalar(
+        select(func.count(Seat.id)).where(Seat.layout_id == layout_id)
+    ) or 0
+    available = session.scalar(
+        select(func.count(Seat.id)).where(
+            Seat.layout_id == layout_id,
+            Seat.is_available.is_(True),
+        )
+    ) or 0
+    return total, available
+
+
+def list_room_options(session: Session, academic_year_id: str) -> list[dict]:
+    """Seçili eğitim yılının fiziksel düzen sürümlerini ve kapasitelerini döndür."""
+    layouts = session.execute(
+        select(ClassroomLayout, Classroom)
+        .join(Classroom, Classroom.id == ClassroomLayout.classroom_id)
+        .where(ClassroomLayout.academic_year_id == academic_year_id)
+        .order_by(Classroom.name, ClassroomLayout.name, ClassroomLayout.version.desc())
+    ).all()
+    result = []
+    for layout, classroom in layouts:
+        total, available = _layout_capacity(session, layout.id)
+        latest_version = session.scalar(
+            select(func.max(ClassroomLayout.version)).where(
+                ClassroomLayout.classroom_id == layout.classroom_id,
+                ClassroomLayout.name == layout.name,
+                ClassroomLayout.academic_year_id == academic_year_id,
+            )
+        )
+        result.append({
+            "classroom_id": classroom.id,
+            "classroom_name": classroom.name,
+            "layout_id": layout.id,
+            "layout_name": layout.name,
+            "version": layout.version,
+            "total_seats": total,
+            "available_seats": available,
+            "can_select": total > 0,
+            "is_latest": layout.version == latest_version,
+        })
+    return result
 
 
 def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
@@ -62,6 +111,24 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
     ).all()
     for organization_id, name in course_rows:
         courses_by_org.setdefault(organization_id, []).append(name)
+    room_selections_by_org = {}
+    room_rows = session.execute(
+        select(ExamOrganizationClassroom, Classroom, ClassroomLayout)
+        .join(Classroom, Classroom.id == ExamOrganizationClassroom.classroom_id)
+        .join(ClassroomLayout, ClassroomLayout.id == ExamOrganizationClassroom.layout_id)
+        .where(ExamOrganizationClassroom.organization_id.in_(ids))
+        .order_by(ExamOrganizationClassroom.display_order, Classroom.name)
+    ).all()
+    for selection, classroom, layout in room_rows:
+        _total, available = _layout_capacity(session, layout.id)
+        room_selections_by_org.setdefault(selection.organization_id, []).append({
+            "classroom_id": classroom.id,
+            "classroom_name": classroom.name,
+            "layout_id": layout.id,
+            "layout_name": layout.name,
+            "version": layout.version,
+            "available_seats": available,
+        })
     return [
         {
             "id": item.id,
@@ -71,9 +138,68 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
             "course_names": courses_by_org.get(item.id, []),
             "course_count": course_counts.get(item.id, 0),
             "participant_count": participant_counts.get(item.id, 0),
+            "room_selections": room_selections_by_org.get(item.id, []),
+            "available_capacity": sum(
+                room["available_seats"] for room in room_selections_by_org.get(item.id, [])
+            ),
+            "capacity_sufficient": bool(room_selections_by_org.get(item.id)) and sum(
+                room["available_seats"] for room in room_selections_by_org.get(item.id, [])
+            ) >= participant_counts.get(item.id, 0),
+            "capacity_deficit": max(
+                0,
+                participant_counts.get(item.id, 0) - sum(
+                    room["available_seats"] for room in room_selections_by_org.get(item.id, [])
+                ),
+            ),
         }
         for item in organizations
     ]
+
+
+def update_organization_rooms(session: Session, organization_id: str, payload: dict) -> dict:
+    organization = session.get(ExamOrganization, organization_id)
+    if organization is None:
+        raise ExamOrganizerError("Sınav organizasyonu bulunamadı.", 404)
+    year = session.get(AcademicYear, organization.academic_year_id)
+    if year is None:
+        raise ExamOrganizerError("Organizasyonun eğitim-öğretim yılı bulunamadı.", 404)
+    if year.start_year < current_academic_year_start() or organization.status != "draft":
+        raise ExamOrganizerError("Bu organizasyon salt okunur; derslik seçimi değiştirilemez.", 403)
+
+    layout_ids = payload.get("layout_ids")
+    if not isinstance(layout_ids, list) or any(not isinstance(item, str) for item in layout_ids):
+        raise ExamOrganizerError("Derslik düzeni seçimleri geçersiz.")
+    if len(layout_ids) != len(set(layout_ids)):
+        raise ExamOrganizerError("Aynı oturma düzenini birden fazla seçmeyin.")
+    layouts = session.scalars(
+        select(ClassroomLayout).where(ClassroomLayout.id.in_(layout_ids))
+    ).all() if layout_ids else []
+    if len(layouts) != len(layout_ids):
+        raise ExamOrganizerError("Seçilen derslik düzenlerinden biri bulunamadı; seçimi yenileyin.", 409)
+
+    classroom_ids = set()
+    for layout in layouts:
+        if layout.academic_year_id != organization.academic_year_id:
+            raise ExamOrganizerError("Yalnızca bu eğitim yılı için oluşturulmuş derslik düzenleri seçilebilir.", 409)
+        _total, available = _layout_capacity(session, layout.id)
+        if available == 0:
+            raise ExamOrganizerError("Oturulabilir yeri olmayan bir derslik düzeni seçilemez.")
+        if layout.classroom_id in classroom_ids:
+            raise ExamOrganizerError("Her fiziksel derslik için yalnızca bir oturma düzeni seçin.")
+        classroom_ids.add(layout.classroom_id)
+    session.query(ExamOrganizationClassroom).filter_by(organization_id=organization.id).delete()
+    for order, layout in enumerate(layouts):
+        session.add(ExamOrganizationClassroom(
+            organization_id=organization.id,
+            classroom_id=layout.classroom_id,
+            layout_id=layout.id,
+            display_order=order,
+        ))
+    session.flush()
+    return next(
+        item for item in list_organizations(session, organization.academic_year_id)
+        if item["id"] == organization.id
+    )
 
 
 def _validated_group(group, available_by_group):
@@ -228,4 +354,8 @@ def create_organization(session: Session, payload: dict) -> dict:
         ],
         "course_count": len(raw_courses),
         "participant_count": len(participants_by_enrollment),
+        "room_selections": [],
+        "available_capacity": 0,
+        "capacity_sufficient": False,
+        "capacity_deficit": len(participants_by_enrollment),
     }
