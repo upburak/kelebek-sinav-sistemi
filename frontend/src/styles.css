@@ -755,6 +755,16 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .candidate-group-summary small { background: #e9e7fb; color: #50488f; }
 .exam-candidate-result details { display: grid; gap: 7px; }
 .exam-candidate-result summary { color: #5148c8; font-weight: 700; cursor: pointer; }
+.exam-candidate-result .candidate-review-button { background: #176b68; }
+.final-review-panel { display: grid; gap: 9px; margin: 0 18px 18px; padding: 16px; border: 1px solid #e4c98c; border-radius: 11px; background: #fffbf0; color: #655426; font-size: 11px; }
+.final-review-panel > strong { color: #493b19; font-size: 13px; }
+.final-review-panel > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.final-review-panel > div small { padding: 5px 7px; border-radius: 6px; background: #f6f0dc; }
+.final-review-panel label { display: flex; align-items: flex-start; gap: 7px; padding-top: 7px; border-top: 1px solid #eee2c2; color: #403819; font-weight: 650; }
+.final-review-panel input { accent-color: #5148c8; }
+.final-review-panel > div:last-child button { padding: 8px 11px; border: 0; border-radius: 7px; background: #e6e1d2; color: #554b32; font-size: 10px; font-weight: 700; cursor: pointer; }
+.final-review-panel > div:last-child button:last-child { background: #5148c8; color: #fff; }
+.final-review-panel > div:last-child button:disabled { background: #d9d5ca; color: #8b8679; cursor: not-allowed; }
 @media (max-width: 700px) { .exam-rule-list { grid-template-columns: 1fr; } .exam-rule-toolbar { padding-right: 14px; padding-left: 14px; } }
 
 @media (max-width: 980px) {

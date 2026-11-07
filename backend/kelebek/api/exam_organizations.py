@@ -14,7 +14,7 @@ from kelebek.models import (
     ExamParticipant, Seat, SeatAssignment,
 )
 from kelebek.distribution.neighbors import build_neighbor_pairs
-from kelebek.distribution.solver import DistributionError, solve_candidate
+from kelebek.distribution.solver import DistributionError, evaluate_assignments, solve_candidate
 from kelebek.services.exam_organizer import (
     ExamOrganizerError,
     create_organization,
@@ -82,6 +82,66 @@ def _candidate_summary(assignments, room_capacities):
         "empty_seats": room["available_seats"] - used_by_room.get(room_id, 0),
     } for room_id, room in room_capacities.items()]
     return {"groups": list(groups.values()), "rooms": rooms}
+
+
+def _review_selected_candidate(session, organization):
+    if not organization.selected_candidate_id:
+        raise ValueError("Önce incelenecek dağıtım adayını seçin.")
+    candidate = session.get(DistributionCandidate, organization.selected_candidate_id)
+    run = session.get(DistributionRun, candidate.run_id) if candidate else None
+    if candidate is None or run is None or run.organization_id != organization.id or run.config_hash != _distribution_fingerprint(session, organization):
+        raise ValueError("Seçili aday güncel değil. Güncel derslik ve kurallarla yeni aday üretin.")
+    participants = session.scalars(select(ExamParticipant).where(ExamParticipant.organization_id == organization.id)).all()
+    selections = session.execute(
+        select(ExamOrganizationClassroom, Classroom, ClassroomLayout)
+        .join(Classroom, Classroom.id == ExamOrganizationClassroom.classroom_id)
+        .join(ClassroomLayout, ClassroomLayout.id == ExamOrganizationClassroom.layout_id)
+        .where(ExamOrganizationClassroom.organization_id == organization.id)
+    ).all()
+    seat_pairs = {"adjacent": [], "front_back": []}
+    available_seat_ids = set()
+    room_capacities = []
+    for _selection, _classroom, layout in selections:
+        desks = session.scalars(select(Desk).where(Desk.layout_id == layout.id)).all()
+        seats_by_desk = {}
+        seats = session.scalars(select(Seat).where(Seat.layout_id == layout.id)).all()
+        for seat in seats:
+            seats_by_desk.setdefault(seat.desk_id, []).append(seat)
+            if seat.is_available:
+                available_seat_ids.add(seat.id)
+        graph = build_neighbor_pairs([{
+            "id": desk.id, "x": desk.x, "y": desk.y, "block_label": desk.block_label,
+            "seats": [{"id": seat.id, "seat_index": seat.seat_index, "is_available": seat.is_available} for seat in seats_by_desk.get(desk.id, [])],
+        } for desk in desks])
+        seat_pairs["adjacent"].extend(graph["adjacent"])
+        seat_pairs["front_back"].extend(graph["front_back"])
+        room_capacities.append({"classroom_id": _classroom.id, "classroom_name": _classroom.name, "available_seats": len([seat for seat in seats if seat.is_available])})
+    rows = session.scalars(select(SeatAssignment).where(SeatAssignment.candidate_id == candidate.id)).all()
+    assignment_map = {row.participant_id: row.seat_id for row in rows}
+    if len(rows) != len(participants) or len(assignment_map) != len(participants):
+        raise ValueError("Adayda her öğrenci için tam olarak bir koltuk bulunmalı.")
+    if any(seat_id not in available_seat_ids for seat_id in assignment_map.values()):
+        raise ValueError("Adayda seçili olmayan veya kullanım dışı bir koltuk var. Yeniden dağıtım yapın.")
+    rules = {name: getattr(organization, name) for name in RULE_NAMES}
+    evaluation = evaluate_assignments([{
+        "id": item.id, "class_level": item.class_level, "section": item.section, "area": item.area,
+    } for item in participants], seat_pairs, rules, assignment_map)
+    assigned_by_room = {}
+    seat_room = {seat.id: classroom.id for selection, classroom, layout in selections
+                 for seat in session.scalars(select(Seat).where(Seat.layout_id == layout.id)).all()}
+    for seat_id in assignment_map.values():
+        room_id = seat_room.get(seat_id)
+        assigned_by_room[room_id] = assigned_by_room.get(room_id, 0) + 1
+    return {
+        "candidate_id": candidate.id,
+        "participant_count": len(participants),
+        "available_capacity": len(available_seat_ids),
+        "empty_seats": len(available_seat_ids) - len(participants),
+        **evaluation,
+        "rooms": [{**room, "assigned_students": assigned_by_room.get(room["classroom_id"], 0),
+                   "empty_seats": room["available_seats"] - assigned_by_room.get(room["classroom_id"], 0)} for room in room_capacities],
+        "can_finalize": evaluation["affected_student_count"] <= 5,
+    }
 
 
 @exam_organizations_api.get("/courses")
@@ -377,3 +437,46 @@ def select_distribution_candidate(organization_id: str):
     except IntegrityError:
         return jsonify({"error": "Aday seçimi kaydedilemedi; sayfayı yenileyip tekrar deneyin."}), 409
     return jsonify({"selected_candidate_id": candidate_id})
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/final-review")
+def review_distribution_candidate(organization_id: str):
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory() as session:
+        organization = session.get(ExamOrganization, organization_id)
+        if organization is None:
+            return jsonify({"error": "Sınav organizasyonu bulunamadı."}), 404
+        try:
+            review = _review_selected_candidate(session, organization)
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 409
+    return jsonify({"review": review})
+
+
+@exam_organizations_api.post("/exam-organizations/<organization_id>/finalize")
+def finalize_distribution(organization_id: str):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or payload.get("confirm") is not True:
+        return jsonify({"error": "Kesinleştirmek için açık onay gereklidir."}), 400
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    try:
+        with session_factory.begin() as session:
+            organization = session.get(ExamOrganization, organization_id)
+            if organization is None:
+                return jsonify({"error": "Sınav organizasyonu bulunamadı."}), 404
+            if organization.status != "draft":
+                return jsonify({"error": "Bu sınav organizasyonu zaten kesinleştirilmiş."}), 409
+            year = session.get(AcademicYear, organization.academic_year_id)
+            if year is None or year.start_year < current_academic_year_start():
+                return jsonify({"error": "Arşiv yılındaki organizasyon kesinleştirilemez."}), 403
+            try:
+                review = _review_selected_candidate(session, organization)
+            except ValueError as error:
+                return jsonify({"error": str(error)}), 409
+            if not review["can_finalize"]:
+                return jsonify({"error": "Beşten fazla öğrenci kural ihlalinden etkileniyor; bu dağıtım kesinleştirilemez.", "review": review}), 409
+            organization.status = "completed"
+            result = next(item for item in list_organizations(session, organization.academic_year_id) if item["id"] == organization.id)
+    except IntegrityError:
+        return jsonify({"error": "Kesinleştirme kaydedilemedi; veriler değişmiş olabilir. Yeniden kontrol edin."}), 409
+    return jsonify({"organization": result, "review": review})

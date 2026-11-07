@@ -12,6 +12,7 @@ type CourseDraft = { id: number; name: string; groupKeys: string[] }
 type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back'
 type RuleSet = Record<RuleKey, boolean>
 type CandidatePreview = { candidate_id: string; run_id: string; generation_index: number; status: string; affected_student_count: number; summary: { groups: { class_level: string; section: string; area: string | null; student_count: number }[]; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[] }; assignments: { participant_id: string; seat_id: string; seat_number: number; classroom_id: string; classroom_name: string; first_name: string; last_name: string; school_number: string; class_level: string; section: string }[] }
+type FinalReview = { candidate_id: string; participant_count: number; available_capacity: number; empty_seats: number; affected_student_count: number; violation_count: number; can_finalize: boolean; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[] }
 const ruleLabels: { key: RuleKey; title: string; position: string }[] = [
   { key: 'prevent_same_section_adjacent', title: 'Aynı şubedeki öğrenciler', position: 'Yan yana' },
   { key: 'prevent_same_section_front_back', title: 'Aynı şubedeki öğrenciler', position: 'Önlü arkalı' },
@@ -123,6 +124,12 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
   const [candidateError, setCandidateError] = useState('')
   const [candidateErrorId, setCandidateErrorId] = useState<string | null>(null)
   const [candidates, setCandidates] = useState<Record<string, CandidatePreview[]>>({})
+  const [finalReviews, setFinalReviews] = useState<Record<string, FinalReview>>({})
+  const [reviewLoadingId, setReviewLoadingId] = useState<string | null>(null)
+  const [reviewError, setReviewError] = useState('')
+  const [finalizeConfirmId, setFinalizeConfirmId] = useState<string | null>(null)
+  const [finalizeConfirmed, setFinalizeConfirmed] = useState(false)
+  const [finalizing, setFinalizing] = useState(false)
 
   useEffect(() => {
     if (!academicYearId) {
@@ -384,6 +391,42 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     }
   }
 
+  async function openFinalReview(organizationId: string) {
+    setReviewLoadingId(organizationId)
+    setReviewError('')
+    setFinalizeConfirmId(null)
+    setFinalizeConfirmed(false)
+    try {
+      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/final-review`)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Son kontrol yapılamadı.')
+      setFinalReviews((current) => ({ ...current, [organizationId]: data.review as FinalReview }))
+      setFinalizeConfirmId(organizationId)
+    } catch (reason) {
+      setReviewError(reason instanceof Error ? reason.message : 'Son kontrol yapılamadı.')
+    } finally {
+      setReviewLoadingId(null)
+    }
+  }
+
+  async function finalizeOrganization(organizationId: string) {
+    setFinalizing(true)
+    setReviewError('')
+    try {
+      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/finalize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Organizasyon kesinleştirilemedi.')
+      const updated = data.organization as ExamOrganization
+      setOrganizations((items) => items.map((item) => item.id === organizationId ? updated : item))
+      setFinalizeConfirmId(null)
+      setFinalizeConfirmed(false)
+    } catch (reason) {
+      setReviewError(reason instanceof Error ? reason.message : 'Organizasyon kesinleştirilemedi.')
+    } finally {
+      setFinalizing(false)
+    }
+  }
+
   return <section className="exam-organizer" aria-labelledby="exam-organizer-title">
     <div className="exam-organizer-heading">
       <div>
@@ -461,7 +504,9 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
           <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRuleEditor(organization)}>{activeRuleOrganizationId === organization.id ? 'Kuralları kapat' : 'Dağıtım kuralları'}</button><span>Altı komşuluk kuralı bu sınava özeldir.</span></div>
           <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft' || candidateSavingId === organization.id || !organization.capacity_sufficient} onClick={() => void createCandidate(organization.id)}>{candidateSavingId === organization.id ? 'Aday hesaplanıyor…' : (candidates[organization.id]?.length ? 'Yeni alternatif üret' : 'İlk dağıtım adayını oluştur')}</button><span>{organization.capacity_sufficient ? `${candidates[organization.id]?.length ?? 0} kayıtlı aday · kapasite yeterli` : `${organization.capacity_deficit} kişilik kapasite eksiği var`}</span></div>
           {candidateError && candidateErrorId === organization.id && <p className="exam-error" role="alert">{candidateError}</p>}
-          {(candidates[organization.id] ?? []).map((candidate, candidateIndex) => <div className={`exam-candidate-result ${organization.selected_candidate_id === candidate.candidate_id ? 'selected' : ''}`} key={candidate.candidate_id}><strong>Aday {candidateIndex + 1}{candidateIndex === 0 ? ' · İlk dağıtım' : ' · Alternatif'}</strong><span>{candidate.assignments.length} öğrenci · {candidate.affected_student_count} kural ihlalinden etkilenen öğrenci · {candidate.status === 'optimal' ? 'Denge açısından en iyi bulundu' : 'Geçerli aday bulundu'}</span><div className="candidate-room-summary">{candidate.summary.rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students} öğrenci / {room.available_seats} yer · {room.empty_seats} boş</small>)}</div><div className="candidate-group-summary">{candidate.summary.groups.map((group) => <small key={`${group.class_level}-${group.section}-${group.area ?? ''}`}>{group.class_level}/{group.section}{group.area ? ` · ${group.area}` : ''}: {group.student_count} öğrenci</small>)}</div><details><summary>Oturma listesini gör</summary><div>{candidate.assignments.map((assignment) => <small key={assignment.participant_id}>{assignment.class_level}/{assignment.section} · {assignment.first_name} {assignment.last_name} · {assignment.classroom_name} · Koltuk {assignment.seat_number}</small>)}</div></details><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => void selectCandidate(organization.id,candidate.candidate_id)}>{organization.selected_candidate_id === candidate.candidate_id ? 'Seçili · son kontrole hazırla' : 'Bu adayı incelemeye al'}</button></div>)}
+          {(candidates[organization.id] ?? []).map((candidate, candidateIndex) => <div className={`exam-candidate-result ${organization.selected_candidate_id === candidate.candidate_id ? 'selected' : ''}`} key={candidate.candidate_id}><strong>Aday {candidateIndex + 1}{candidateIndex === 0 ? ' · İlk dağıtım' : ' · Alternatif'}</strong><span>{candidate.assignments.length} öğrenci · {candidate.affected_student_count} kural ihlalinden etkilenen öğrenci · {candidate.status === 'optimal' ? 'Denge açısından en iyi bulundu' : 'Geçerli aday bulundu'}</span><div className="candidate-room-summary">{candidate.summary.rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students} öğrenci / {room.available_seats} yer · {room.empty_seats} boş</small>)}</div><div className="candidate-group-summary">{candidate.summary.groups.map((group) => <small key={`${group.class_level}-${group.section}-${group.area ?? ''}`}>{group.class_level}/{group.section}{group.area ? ` · ${group.area}` : ''}: {group.student_count} öğrenci</small>)}</div><details><summary>Oturma listesini gör</summary><div>{candidate.assignments.map((assignment) => <small key={assignment.participant_id}>{assignment.class_level}/{assignment.section} · {assignment.first_name} {assignment.last_name} · {assignment.classroom_name} · Koltuk {assignment.seat_number}</small>)}</div></details><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => void selectCandidate(organization.id,candidate.candidate_id)}>{organization.selected_candidate_id === candidate.candidate_id ? 'Seçili aday' : 'Bu adayı incelemeye al'}</button>{organization.selected_candidate_id === candidate.candidate_id && <button type="button" className="candidate-review-button" disabled={reviewLoadingId === organization.id} onClick={() => void openFinalReview(organization.id)}>{reviewLoadingId === organization.id ? 'Son kontrol…' : 'Son kontrolü aç'}</button>}</div>)}
+          {reviewError && !finalizeConfirmId && <p className="exam-error" role="alert">{reviewError}</p>}
+          {finalizeConfirmId === organization.id && finalReviews[organization.id] && <div className="final-review-panel"><strong>Son kontrol · kesinleştirme öncesi</strong><span>{finalReviews[organization.id].participant_count} öğrenci · {finalReviews[organization.id].available_capacity} kullanılabilir koltuk · {finalReviews[organization.id].empty_seats} boş koltuk</span><span>{finalReviews[organization.id].violation_count} komşuluk ihlali · {finalReviews[organization.id].affected_student_count} öğrenci etkileniyor</span><div>{finalReviews[organization.id].rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students}/{room.available_seats} dolu · {room.empty_seats} boş</small>)}</div>{!finalReviews[organization.id].can_finalize && <p className="exam-error">Beş kişilik kesin sınır aşıldı; bu dağıtım kesinleştirilemez.</p>}<label><input type="checkbox" checked={finalizeConfirmed} onChange={(event) => setFinalizeConfirmed(event.target.checked)} />Kontrol ettim; bu sınav dağıtımını kesinleştirmek istiyorum.</label>{reviewError && <p className="exam-error" role="alert">{reviewError}</p>}<div><button type="button" onClick={() => setFinalizeConfirmId(null)}>Vazgeç</button><button type="button" disabled={!finalizeConfirmed || !finalReviews[organization.id].can_finalize || finalizing} onClick={() => void finalizeOrganization(organization.id)}>{finalizing ? 'Kesinleştiriliyor…' : 'Onayla ve kesinleştir'}</button></div></div>}
           {activeRuleOrganizationId === organization.id && ruleDraft && <div className="exam-rule-panel"><div className="exam-room-panel-heading"><div><strong>Adım 03 · Oturma kuralları</strong><small>Kuralları birbirinden bağımsız açıp kapatabilirsin. Kurallar yalnızca kullanılabilir fiziksel koltuklar arasında değerlendirilir.</small></div></div><div className="exam-rule-list">{ruleLabels.map((rule) => <label key={rule.key}><span><strong>{rule.title}</strong><small>{rule.position}</small></span><input type="checkbox" checked={ruleDraft[rule.key]} onChange={(event) => setRuleDraft((current) => current ? { ...current, [rule.key]: event.target.checked } : current)} /></label>)}</div>{ruleError && <p className="exam-error" role="alert">{ruleError}</p>}{ruleMessage && <p className="exam-room-success" role="status">{ruleMessage}</p>}<div className="exam-room-footer"><span>Dağıtım adayı oluşturulurken bu ayarlar kullanılacak.</span><button type="button" disabled={ruleSaving} onClick={() => saveRules(organization.id)}>{ruleSaving ? 'Kaydediliyor…' : 'Kuralları kaydet'}</button></div></div>}
         </article>
       })}

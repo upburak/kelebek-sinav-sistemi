@@ -16,6 +16,35 @@ class DistributionError(ValueError):
     pass
 
 
+def _participants_conflict(first: dict, second: dict, rules: dict, relation: str) -> bool:
+    same_section = first["class_level"] == second["class_level"] and first["section"].casefold() == second["section"].casefold()
+    same_area = bool(first.get("area")) and (first.get("area") or "").casefold() == (second.get("area") or "").casefold()
+    if relation == "adjacent":
+        return (same_section and rules["prevent_same_section_adjacent"]) or (
+            same_area and first["class_level"] == second["class_level"] and rules["prevent_same_grade_area_adjacent"]
+        ) or (same_area and first["class_level"] != second["class_level"] and rules["prevent_different_grade_same_area_adjacent"])
+    return (same_section and rules["prevent_same_section_front_back"]) or (
+        same_area and first["class_level"] == second["class_level"] and rules["prevent_same_grade_area_front_back"]
+    ) or (same_area and first["class_level"] != second["class_level"] and rules["prevent_different_grade_same_area_front_back"])
+
+
+def evaluate_assignments(participants: list[dict], seat_pairs: dict, rules: dict, assignments: dict[str, str]) -> dict:
+    """Recompute active rule violations from a persisted participant/seat mapping."""
+    by_seat = {seat_id: participant_id for participant_id, seat_id in assignments.items()}
+    by_participant = {item["id"]: item for item in participants}
+    affected = set()
+    violations = set()
+    for relation in ("adjacent", "front_back"):
+        for first_seat, second_seat in seat_pairs[relation]:
+            first_id, second_id = by_seat.get(first_seat), by_seat.get(second_seat)
+            if not first_id or not second_id:
+                continue
+            if _participants_conflict(by_participant[first_id], by_participant[second_id], rules, relation):
+                violations.add((min(first_id, second_id), max(first_id, second_id), relation))
+                affected.update((first_id, second_id))
+    return {"affected_student_count": len(affected), "violation_count": len(violations)}
+
+
 def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dict, rules: dict, time_limit: float = 12.0, previous_assignments: list[dict] | None = None) -> dict:
     """Assign every participant uniquely, balancing room use and limiting conflicts to five people."""
     if not participants:
@@ -66,14 +95,8 @@ def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dic
             if not any(rules[name] for name in enabled_rules):
                 continue
             relation_conflict = False
-            same_section = first["class_level"] == second["class_level"] and first["section"].casefold() == second["section"].casefold()
-            same_area = bool(first.get("area")) and (first.get("area") or "").casefold() == (second.get("area") or "").casefold()
-            if relation == "adjacent":
-                relation_conflict = (same_section and rules["prevent_same_section_adjacent"]) or (same_area and first["class_level"] == second["class_level"] and rules["prevent_same_grade_area_adjacent"]) or (same_area and first["class_level"] != second["class_level"] and rules["prevent_different_grade_same_area_adjacent"])
-                pairs = seat_pairs["adjacent"]
-            else:
-                relation_conflict = (same_section and rules["prevent_same_section_front_back"]) or (same_area and first["class_level"] == second["class_level"] and rules["prevent_same_grade_area_front_back"]) or (same_area and first["class_level"] != second["class_level"] and rules["prevent_different_grade_same_area_front_back"])
-                pairs = seat_pairs["front_back"]
+            relation_conflict = _participants_conflict(first, second, rules, relation)
+            pairs = seat_pairs[relation]
             if not relation_conflict:
                 continue
             for first_seat, second_seat in pairs:
