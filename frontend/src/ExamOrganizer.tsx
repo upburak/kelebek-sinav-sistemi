@@ -378,6 +378,13 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     }
   }
 
+  function clearFinalReview(organizationId: string) {
+    setFinalReviews((current) => { const next = { ...current }; delete next[organizationId]; return next })
+    setFinalizeConfirmId((current) => current === organizationId ? null : current)
+    setFinalizeConfirmed(false)
+    setReviewError('')
+  }
+
   async function selectCandidate(organizationId: string, candidateId: string) {
     setCandidateError('')
     setCandidateErrorId(null)
@@ -388,6 +395,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Aday seçilemedi.')
       setOrganizations((items) => items.map((item) => item.id === organizationId ? { ...item, selected_candidate_id: candidateId } : item))
+      clearFinalReview(organizationId)
     } catch (reason) {
       setCandidateError(reason instanceof Error ? reason.message : 'Aday seçilemedi.')
       setCandidateErrorId(organizationId)
@@ -408,7 +416,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       const child = data.candidate as CandidatePreview
       setCandidates((current) => ({ ...current, [organizationId]: [...(current[organizationId] ?? []), child] }))
       setOrganizations((items) => items.map((item) => item.id === organizationId ? { ...item, selected_candidate_id: child.candidate_id } : item))
-      setFinalReviews((current) => { const next = { ...current }; delete next[organizationId]; return next })
+      clearFinalReview(organizationId)
       setSelectedPlanStudentByCandidate((current) => { const next = { ...current }; delete next[candidateId]; return next })
     } catch (reason) {
       setCandidateError(reason instanceof Error ? reason.message : 'Öğrenci taşınamadı.')
@@ -438,7 +446,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       const child = data.candidate as CandidatePreview
       setCandidates((current) => ({ ...current, [organizationId]: [...(current[organizationId] ?? []), child] }))
       setOrganizations((items) => items.map((item) => item.id === organizationId ? { ...item, selected_candidate_id: child.candidate_id } : item))
-      setFinalReviews((current) => { const next = { ...current }; delete next[organizationId]; return next })
+      clearFinalReview(organizationId)
     } catch (reason) {
       setCandidateError(reason instanceof Error ? reason.message : 'Öğrenci bekleyen havuza alınamadı.')
       setCandidateErrorId(organizationId)
@@ -469,7 +477,14 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     try {
       const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/finalize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error ?? 'Organizasyon kesinleştirilemedi.')
+      if (!response.ok) {
+        if (data.review) {
+          setFinalReviews((current) => ({ ...current, [organizationId]: data.review as FinalReview }))
+          setFinalizeConfirmId(organizationId)
+          setFinalizeConfirmed(false)
+        }
+        throw new Error(data.error ?? 'Organizasyon kesinleştirilemedi.')
+      }
       const updated = data.organization as ExamOrganization
       setOrganizations((items) => items.map((item) => item.id === organizationId ? updated : item))
       setFinalizeConfirmId(null)
