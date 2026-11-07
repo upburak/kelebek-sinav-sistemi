@@ -745,9 +745,16 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .exam-rule-list label small { color: #777f8c; font-size: 10px; }
 .exam-rule-list input { width: 18px; height: 18px; flex: none; accent-color: #564bd2; }
 .exam-candidate-result { display: grid; gap: 8px; margin: 0 18px 15px; padding: 13px; border: 1px solid #cfe5d8; border-radius: 10px; background: #f2faf4; color: #416654; font-size: 11px; }
+.exam-candidate-result.selected { border-color: #665bd1; background: #f4f2ff; box-shadow: 0 0 0 1px #665bd1; }
 .exam-candidate-result strong { color: #255c43; }
 .exam-candidate-result > div { display: flex; flex-wrap: wrap; gap: 5px; }
 .exam-candidate-result small { padding: 4px 6px; border-radius: 5px; background: #e4f1e8; color: #416654; }
+.exam-candidate-result button { justify-self: start; padding: 7px 10px; border: 0; border-radius: 7px; background: #5148c8; color: #fff; font-size: 10px; font-weight: 700; cursor: pointer; }
+.candidate-room-summary, .candidate-group-summary { display: flex; flex-wrap: wrap; gap: 5px; }
+.candidate-room-summary small { background: #e8f2ec; }
+.candidate-group-summary small { background: #e9e7fb; color: #50488f; }
+.exam-candidate-result details { display: grid; gap: 7px; }
+.exam-candidate-result summary { color: #5148c8; font-weight: 700; cursor: pointer; }
 @media (max-width: 700px) { .exam-rule-list { grid-template-columns: 1fr; } .exam-rule-toolbar { padding-right: 14px; padding-left: 14px; } }
 
 @media (max-width: 980px) {

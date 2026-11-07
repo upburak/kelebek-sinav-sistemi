@@ -23,6 +23,9 @@ class ExamOrganization(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     exam_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    selected_candidate_id: Mapped[str | None] = mapped_column(
+        ForeignKey("distribution_candidates.id", ondelete="RESTRICT"), nullable=True
+    )
     prevent_same_section_adjacent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     prevent_same_section_front_back: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     prevent_different_grade_same_area_adjacent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

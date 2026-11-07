@@ -166,6 +166,7 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
                 ),
             ),
             "rules": _serialize_rules(item),
+            "selected_candidate_id": item.selected_candidate_id,
         }
         for item in organizations
     ]
@@ -203,6 +204,7 @@ def update_organization_rooms(session: Session, organization_id: str, payload: d
             raise ExamOrganizerError("Her fiziksel derslik için yalnızca bir oturma düzeni seçin.")
         classroom_ids.add(layout.classroom_id)
     session.query(ExamOrganizationClassroom).filter_by(organization_id=organization.id).delete()
+    organization.selected_candidate_id = None
     for order, layout in enumerate(layouts):
         session.add(ExamOrganizationClassroom(
             organization_id=organization.id,
@@ -233,6 +235,7 @@ def update_organization_rules(session: Session, organization_id: str, payload: d
         raise ExamOrganizerError("Dağıtım kuralları yalnızca açık veya kapalı olabilir.")
     for field in RULE_FIELDS:
         setattr(organization, field, rules[field])
+    organization.selected_candidate_id = None
     session.flush()
     return next(
         item for item in list_organizations(session, organization.academic_year_id)
@@ -397,4 +400,5 @@ def create_organization(session: Session, payload: dict) -> dict:
         "capacity_sufficient": False,
         "capacity_deficit": len(participants_by_enrollment),
         "rules": {field: True for field in RULE_FIELDS},
+        "selected_candidate_id": None,
     }

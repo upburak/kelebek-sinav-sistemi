@@ -11,7 +11,7 @@ type CourseOption = { id: string; name: string }
 type CourseDraft = { id: number; name: string; groupKeys: string[] }
 type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back'
 type RuleSet = Record<RuleKey, boolean>
-type CandidatePreview = { candidate_id: string; run_id: string; generation_index: number; status: string; affected_student_count: number; assignments: { participant_id: string; seat_id: string; seat_number: number; classroom_id: string; classroom_name: string; first_name: string; last_name: string; school_number: string; class_level: string; section: string }[] }
+type CandidatePreview = { candidate_id: string; run_id: string; generation_index: number; status: string; affected_student_count: number; summary: { groups: { class_level: string; section: string; area: string | null; student_count: number }[]; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[] }; assignments: { participant_id: string; seat_id: string; seat_number: number; classroom_id: string; classroom_name: string; first_name: string; last_name: string; school_number: string; class_level: string; section: string }[] }
 const ruleLabels: { key: RuleKey; title: string; position: string }[] = [
   { key: 'prevent_same_section_adjacent', title: 'Aynı şubedeki öğrenciler', position: 'Yan yana' },
   { key: 'prevent_same_section_front_back', title: 'Aynı şubedeki öğrenciler', position: 'Önlü arkalı' },
@@ -44,6 +44,7 @@ type ExamOrganization = {
   capacity_sufficient: boolean
   capacity_deficit: number
   rules: RuleSet
+  selected_candidate_id: string | null
 }
 
 type Props = {
@@ -367,6 +368,22 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     }
   }
 
+  async function selectCandidate(organizationId: string, candidateId: string) {
+    setCandidateError('')
+    setCandidateErrorId(null)
+    try {
+      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/selected-candidate`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ candidate_id: candidateId }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Aday seçilemedi.')
+      setOrganizations((items) => items.map((item) => item.id === organizationId ? { ...item, selected_candidate_id: candidateId } : item))
+    } catch (reason) {
+      setCandidateError(reason instanceof Error ? reason.message : 'Aday seçilemedi.')
+      setCandidateErrorId(organizationId)
+    }
+  }
+
   return <section className="exam-organizer" aria-labelledby="exam-organizer-title">
     <div className="exam-organizer-heading">
       <div>
@@ -444,7 +461,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
           <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRuleEditor(organization)}>{activeRuleOrganizationId === organization.id ? 'Kuralları kapat' : 'Dağıtım kuralları'}</button><span>Altı komşuluk kuralı bu sınava özeldir.</span></div>
           <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft' || candidateSavingId === organization.id || !organization.capacity_sufficient} onClick={() => void createCandidate(organization.id)}>{candidateSavingId === organization.id ? 'Aday hesaplanıyor…' : (candidates[organization.id]?.length ? 'Yeni alternatif üret' : 'İlk dağıtım adayını oluştur')}</button><span>{organization.capacity_sufficient ? `${candidates[organization.id]?.length ?? 0} kayıtlı aday · kapasite yeterli` : `${organization.capacity_deficit} kişilik kapasite eksiği var`}</span></div>
           {candidateError && candidateErrorId === organization.id && <p className="exam-error" role="alert">{candidateError}</p>}
-          {(candidates[organization.id] ?? []).map((candidate, candidateIndex) => <div className="exam-candidate-result" key={candidate.candidate_id}><strong>Aday {candidateIndex + 1}{candidateIndex === 0 ? ' · İlk dağıtım' : ' · Alternatif'}</strong><span>{candidate.assignments.length} öğrenci · {candidate.affected_student_count} kural ihlalinden etkilenen öğrenci · {candidate.status === 'optimal' ? 'Denge açısından en iyi bulundu' : 'Geçerli aday bulundu'}</span><div>{candidate.assignments.map((assignment) => <small key={assignment.participant_id}>{assignment.class_level}/{assignment.section} · {assignment.first_name} {assignment.last_name} · {assignment.classroom_name} · Koltuk {assignment.seat_number}</small>)}</div></div>)}
+          {(candidates[organization.id] ?? []).map((candidate, candidateIndex) => <div className={`exam-candidate-result ${organization.selected_candidate_id === candidate.candidate_id ? 'selected' : ''}`} key={candidate.candidate_id}><strong>Aday {candidateIndex + 1}{candidateIndex === 0 ? ' · İlk dağıtım' : ' · Alternatif'}</strong><span>{candidate.assignments.length} öğrenci · {candidate.affected_student_count} kural ihlalinden etkilenen öğrenci · {candidate.status === 'optimal' ? 'Denge açısından en iyi bulundu' : 'Geçerli aday bulundu'}</span><div className="candidate-room-summary">{candidate.summary.rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students} öğrenci / {room.available_seats} yer · {room.empty_seats} boş</small>)}</div><div className="candidate-group-summary">{candidate.summary.groups.map((group) => <small key={`${group.class_level}-${group.section}-${group.area ?? ''}`}>{group.class_level}/{group.section}{group.area ? ` · ${group.area}` : ''}: {group.student_count} öğrenci</small>)}</div><details><summary>Oturma listesini gör</summary><div>{candidate.assignments.map((assignment) => <small key={assignment.participant_id}>{assignment.class_level}/{assignment.section} · {assignment.first_name} {assignment.last_name} · {assignment.classroom_name} · Koltuk {assignment.seat_number}</small>)}</div></details><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => void selectCandidate(organization.id,candidate.candidate_id)}>{organization.selected_candidate_id === candidate.candidate_id ? 'Seçili · son kontrole hazırla' : 'Bu adayı incelemeye al'}</button></div>)}
           {activeRuleOrganizationId === organization.id && ruleDraft && <div className="exam-rule-panel"><div className="exam-room-panel-heading"><div><strong>Adım 03 · Oturma kuralları</strong><small>Kuralları birbirinden bağımsız açıp kapatabilirsin. Kurallar yalnızca kullanılabilir fiziksel koltuklar arasında değerlendirilir.</small></div></div><div className="exam-rule-list">{ruleLabels.map((rule) => <label key={rule.key}><span><strong>{rule.title}</strong><small>{rule.position}</small></span><input type="checkbox" checked={ruleDraft[rule.key]} onChange={(event) => setRuleDraft((current) => current ? { ...current, [rule.key]: event.target.checked } : current)} /></label>)}</div>{ruleError && <p className="exam-error" role="alert">{ruleError}</p>}{ruleMessage && <p className="exam-room-success" role="status">{ruleMessage}</p>}<div className="exam-room-footer"><span>Dağıtım adayı oluşturulurken bu ayarlar kullanılacak.</span><button type="button" disabled={ruleSaving} onClick={() => saveRules(organization.id)}>{ruleSaving ? 'Kaydediliyor…' : 'Kuralları kaydet'}</button></div></div>}
         </article>
       })}
