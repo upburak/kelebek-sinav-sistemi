@@ -3,6 +3,7 @@
 from flask import Flask, jsonify
 
 from kelebek.api.academic_years import academic_year_api
+from kelebek.api.backups import backups_api
 from kelebek.api.classrooms import classrooms_api
 from kelebek.api.exam_organizations import exam_organizations_api
 from kelebek.api.health import health_api
@@ -22,6 +23,7 @@ def create_app() -> Flask:
     app.register_blueprint(health_api, url_prefix="/api")
     app.register_blueprint(school_profile_api, url_prefix="/api")
     app.register_blueprint(academic_year_api, url_prefix="/api")
+    app.register_blueprint(backups_api, url_prefix="/api")
     app.register_blueprint(classrooms_api, url_prefix="/api")
     app.register_blueprint(student_import_api, url_prefix="/api")
     app.register_blueprint(students_api, url_prefix="/api")

@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import ClassroomManager from './ClassroomManager'
+import BackupManager from './BackupManager'
 import ExamOrganizer from './ExamOrganizer'
 
 type HealthState = 'checking' | 'online' | 'offline'
-type WorkspaceIconName = 'overview' | 'school' | 'students' | 'classroom' | 'exams' | 'reports'
+type WorkspaceIconName = 'overview' | 'school' | 'students' | 'classroom' | 'exams' | 'reports' | 'backup'
 
 function WorkspaceIcon({ name, size = 17 }: { name: WorkspaceIconName; size?: number }) {
   const paths: Record<WorkspaceIconName, string> = {
@@ -13,6 +14,7 @@ function WorkspaceIcon({ name, size = 17 }: { name: WorkspaceIconName; size?: nu
     classroom: 'M3 4h18v16H3zM3 10h18M9 10v10m6-10v10M6 7h.01M12 7h.01M18 7h.01',
     exams: 'M8 3v4m8-4v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1m4 8h3m-3 4h6',
     reports: 'M6 3h9l4 4v14H6zM14 3v5h5m-9 4h6m-6 4h6m-6 4h4',
+    backup: 'M12 3v12m0 0 4-4m-4 4-4-4M5 16v4h14v-4',
   }
   return <svg className="workspace-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>
 }
@@ -488,7 +490,9 @@ export default function App() {
         ? 'Derslikler'
         : activeSection === 'exams'
           ? 'Sınav organizasyonları'
-        : 'Genel Bakış'
+          : activeSection === 'backup'
+            ? 'Yedek ve arşiv'
+            : 'Genel Bakış'
   const principal = schoolProfile.administrators.find((person) => person.role === 'principal')
   const vicePrincipals = schoolProfile.administrators.filter((person) => person.role === 'vice_principal')
   const duplicateAdministrator = schoolProfile.administrators.reduce<string | null>((duplicate, person, index, list) => {
@@ -518,6 +522,7 @@ export default function App() {
           <button className={activeSection === 'students' ? 'active' : ''} type="button" onClick={() => { setActiveSection('students'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="students" /> Öğrenci kayıtları</button>
           <button className={activeSection === 'classrooms' ? 'active' : ''} type="button" onClick={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}><WorkspaceIcon name="classroom" /> Derslikler</button>
           <button className={activeSection === 'exams' ? 'active' : ''} type="button" onClick={() => { setActiveSection('exams'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="exams" /> Sınav organizasyonları</button>
+          <button className={activeSection === 'backup' ? 'active' : ''} type="button" onClick={() => { setActiveSection('backup'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="backup" /> Yedek ve arşiv</button>
           <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><WorkspaceIcon name="reports" /> Raporlar <small>Yakında</small></button>
         </nav>
         <div className="sidebar-footer"><span className={`status-dot ${health}`} /><span>{statusText}</span><small>Veriler bu bilgisayarda</small></div>
@@ -569,7 +574,7 @@ export default function App() {
 
       <section className="welcome-card" aria-labelledby="welcome-title">
         <div className="page-heading">
-          <div><div className="eyebrow">KELEBEK <span>·</span> OKUL YÖNETİMİ</div><h1 id="welcome-title">{sectionTitle}</h1><p>{activeSection === 'school' ? 'Okul kimliği ve yönetici bilgileri.' : activeSection === 'students' ? 'Öğrenci listesini içeri aktarın ve kayıt farklarını inceleyin.' : activeSection === 'classrooms' ? 'Derslikleri ve fiziksel oturma düzenlerini yönetin.' : activeSection === 'exams' ? 'Farklı ders ve sınıf gruplarını tek sınav planında bir araya getirin.' : 'Okulunuzu ve sınav hazırlık sürecinizi tek çalışma alanından yönetin.'}</p></div>
+          <div><div className="eyebrow">KELEBEK <span>·</span> OKUL YÖNETİMİ</div><h1 id="welcome-title">{sectionTitle}</h1><p>{activeSection === 'school' ? 'Okul kimliği ve yönetici bilgileri.' : activeSection === 'students' ? 'Öğrenci listesini içeri aktarın ve kayıt farklarını inceleyin.' : activeSection === 'classrooms' ? 'Derslikleri ve fiziksel oturma düzenlerini yönetin.' : activeSection === 'exams' ? 'Farklı ders ve sınıf gruplarını tek sınav planında bir araya getirin.' : activeSection === 'backup' ? 'Okul verilerini taşınabilir pakette koruyun ve bilgisayarlar arasında aktarın.' : 'Okulunuzu ve sınav hazırlık sürecinizi tek çalışma alanından yönetin.'}</p></div>
           <div className="current-year-pill"><small>ÇALIŞMA YILI</small><strong>{activeYear?.label ?? 'Yıl bilgisi yükleniyor'}</strong></div>
         </div>
 
@@ -622,7 +627,7 @@ export default function App() {
           </>}
         </form>}
 
-        {activeSection !== 'school' && activeSection !== 'classrooms' && activeSection !== 'exams' && <div className="section-heading module-heading"><div><span className="eyebrow">{activeSection === 'students' ? 'ÖĞRENCİ İŞLEMLERİ' : 'MODÜLLER'}</span><h2>{activeSection === 'students' ? 'Liste aktarımı' : 'Yönetim alanları'}</h2></div><span className="module-caption">{activeSection === 'students' ? 'Liste önizlemesi kaydetmeden önce kontrol edilir.' : 'Hazır bölümler kullanılabilir; diğerleri geliştirme aşamasında.'}</span></div>}
+        {activeSection !== 'school' && activeSection !== 'classrooms' && activeSection !== 'exams' && activeSection !== 'backup' && <div className="section-heading module-heading"><div><span className="eyebrow">{activeSection === 'students' ? 'ÖĞRENCİ İŞLEMLERİ' : 'MODÜLLER'}</span><h2>{activeSection === 'students' ? 'Liste aktarımı' : 'Yönetim alanları'}</h2></div><span className="module-caption">{activeSection === 'students' ? 'Liste önizlemesi kaydetmeden önce kontrol edilir.' : 'Hazır bölümler kullanılabilir; diğerleri geliştirme aşamasında.'}</span></div>}
 
         {activeSection !== 'school' && activeSection !== 'classrooms' && activeSection !== 'exams' && <div className={`feature-grid ${activeSection === 'students' ? 'single-module' : ''}`}>
           {(activeSection === 'overview' || activeSection === 'students') && <article className="feature-card">
@@ -679,6 +684,8 @@ export default function App() {
           onStudents={() => setActiveSection('students')}
           onClassrooms={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}
         />}
+
+        {activeSection === 'backup' && <BackupManager />}
 
         {activeSection === 'students' && importPreview && (
           <section className="import-preview" aria-labelledby="import-preview-title">
