@@ -11,6 +11,7 @@ type CourseOption = { id: string; name: string }
 type CourseDraft = { id: number; name: string; groupKeys: string[] }
 type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back'
 type RuleSet = Record<RuleKey, boolean>
+type CandidatePreview = { candidate_id: string; status: string; affected_student_count: number; assignments: { participant_id: string; seat_id: string; seat_number: number; classroom_id: string; classroom_name: string; first_name: string; last_name: string; school_number: string; class_level: string; section: string }[] }
 const ruleLabels: { key: RuleKey; title: string; position: string }[] = [
   { key: 'prevent_same_section_adjacent', title: 'Aynı şubedeki öğrenciler', position: 'Yan yana' },
   { key: 'prevent_same_section_front_back', title: 'Aynı şubedeki öğrenciler', position: 'Önlü arkalı' },
@@ -117,6 +118,10 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
   const [ruleSaving, setRuleSaving] = useState(false)
   const [ruleError, setRuleError] = useState('')
   const [ruleMessage, setRuleMessage] = useState('')
+  const [candidateSavingId, setCandidateSavingId] = useState<string | null>(null)
+  const [candidateError, setCandidateError] = useState('')
+  const [candidateErrorId, setCandidateErrorId] = useState<string | null>(null)
+  const [candidates, setCandidates] = useState<Record<string, CandidatePreview>>({})
 
   useEffect(() => {
     if (!academicYearId) {
@@ -331,6 +336,23 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     }
   }
 
+  async function createCandidate(organizationId: string) {
+    setCandidateSavingId(organizationId)
+    setCandidateError('')
+    setCandidateErrorId(null)
+    try {
+      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/distribution-candidates`, { method: 'POST' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Dağıtım adayı oluşturulamadı.')
+      setCandidates((current) => ({ ...current, [organizationId]: data.candidate as CandidatePreview }))
+    } catch (reason) {
+      setCandidateError(reason instanceof Error ? reason.message : 'Dağıtım adayı oluşturulamadı.')
+      setCandidateErrorId(organizationId)
+    } finally {
+      setCandidateSavingId(null)
+    }
+  }
+
   return <section className="exam-organizer" aria-labelledby="exam-organizer-title">
     <div className="exam-organizer-heading">
       <div>
@@ -406,6 +428,9 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
             <div className="exam-room-footer"><span>Bu seçim taslakta saklanır. Öğrenciler koltuklara henüz dağıtılmaz.</span><button type="button" disabled={roomSaving || !roomOptionsByClassroom.length} onClick={() => saveRoomSelection(organization.id)}>{roomSaving ? 'Kaydediliyor…' : 'Derslik seçimini kaydet'}</button></div>
           </div>}
           <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRuleEditor(organization)}>{activeRuleOrganizationId === organization.id ? 'Kuralları kapat' : 'Dağıtım kuralları'}</button><span>Altı komşuluk kuralı bu sınava özeldir.</span></div>
+          <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft' || candidateSavingId === organization.id || !organization.capacity_sufficient} onClick={() => void createCandidate(organization.id)}>{candidateSavingId === organization.id ? 'Aday hesaplanıyor…' : 'İlk dağıtım adayını oluştur'}</button><span>{organization.capacity_sufficient ? 'Kapasite yeterli' : `${organization.capacity_deficit} kişilik kapasite eksiği var`}</span></div>
+          {candidateError && candidateErrorId === organization.id && <p className="exam-error" role="alert">{candidateError}</p>}
+          {candidates[organization.id] && <div className="exam-candidate-result"><strong>Dağıtım adayı kaydedildi</strong><span>{candidates[organization.id].assignments.length} öğrenci · {candidates[organization.id].affected_student_count} kural ihlalinden etkilenen öğrenci · {candidates[organization.id].status === 'optimal' ? 'Denge açısından en iyi bulundu' : 'Geçerli aday bulundu'}</span><div>{candidates[organization.id].assignments.map((assignment) => <small key={assignment.participant_id}>{assignment.class_level}/{assignment.section} · {assignment.first_name} {assignment.last_name} · {assignment.classroom_name} · Koltuk {assignment.seat_number}</small>)}</div></div>}
           {activeRuleOrganizationId === organization.id && ruleDraft && <div className="exam-rule-panel"><div className="exam-room-panel-heading"><div><strong>Adım 03 · Oturma kuralları</strong><small>Kuralları birbirinden bağımsız açıp kapatabilirsin. Kurallar yalnızca kullanılabilir fiziksel koltuklar arasında değerlendirilir.</small></div></div><div className="exam-rule-list">{ruleLabels.map((rule) => <label key={rule.key}><span><strong>{rule.title}</strong><small>{rule.position}</small></span><input type="checkbox" checked={ruleDraft[rule.key]} onChange={(event) => setRuleDraft((current) => current ? { ...current, [rule.key]: event.target.checked } : current)} /></label>)}</div>{ruleError && <p className="exam-error" role="alert">{ruleError}</p>}{ruleMessage && <p className="exam-room-success" role="status">{ruleMessage}</p>}<div className="exam-room-footer"><span>Dağıtım adayı oluşturulurken bu ayarlar kullanılacak.</span><button type="button" disabled={ruleSaving} onClick={() => saveRules(organization.id)}>{ruleSaving ? 'Kaydediliyor…' : 'Kuralları kaydet'}</button></div></div>}
         </article>
       })}

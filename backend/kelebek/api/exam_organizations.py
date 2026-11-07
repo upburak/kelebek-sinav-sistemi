@@ -1,9 +1,17 @@
 """Sınav organizasyonu taslakları ve ders kataloğu API'si."""
 
 from flask import Blueprint, current_app, jsonify, request
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from kelebek.models import AcademicYear
+from kelebek.db import current_academic_year_start
+from kelebek.models import (
+    AcademicYear, Classroom, ClassroomLayout, Desk, DistributionCandidate,
+    DistributionRun, ExamOrganization, ExamOrganizationClassroom,
+    ExamParticipant, Seat, SeatAssignment,
+)
+from kelebek.distribution.neighbors import build_neighbor_pairs
+from kelebek.distribution.solver import DistributionError, solve_candidate
 from kelebek.services.exam_organizer import (
     ExamOrganizerError,
     create_organization,
@@ -98,3 +106,87 @@ def put_exam_organization_rules(organization_id: str):
     except IntegrityError:
         return jsonify({"error": "Kurallar aynı anda değişti; sayfayı yenileyip tekrar deneyin."}), 409
     return jsonify({"organization": organization})
+
+
+@exam_organizations_api.post("/exam-organizations/<organization_id>/distribution-candidates")
+def create_distribution_candidate(organization_id: str):
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    try:
+        with session_factory.begin() as session:
+            organization = session.get(ExamOrganization, organization_id)
+            if organization is None:
+                return jsonify({"error": "Sınav organizasyonu bulunamadı."}), 404
+            year = session.get(AcademicYear, organization.academic_year_id)
+            if year is None or year.start_year < current_academic_year_start() or organization.status != "draft":
+                return jsonify({"error": "Bu organizasyonda dağıtım adayı oluşturulamaz."}), 403
+            participants = session.scalars(
+                select(ExamParticipant).where(ExamParticipant.organization_id == organization.id)
+                .order_by(ExamParticipant.class_level, ExamParticipant.section, ExamParticipant.school_number)
+            ).all()
+            selections = session.execute(
+                select(ExamOrganizationClassroom, Classroom, ClassroomLayout)
+                .join(Classroom, Classroom.id == ExamOrganizationClassroom.classroom_id)
+                .join(ClassroomLayout, ClassroomLayout.id == ExamOrganizationClassroom.layout_id)
+                .where(ExamOrganizationClassroom.organization_id == organization.id)
+            ).all()
+            if not selections:
+                return jsonify({"error": "Dağıtımdan önce en az bir derslik seçin."}), 409
+            rooms, all_pairs = [], {"adjacent": [], "front_back": []}
+            seat_labels = {}
+            for _selection, classroom, layout in selections:
+                desks = session.scalars(select(Desk).where(Desk.layout_id == layout.id)).all()
+                seats_by_desk = {}
+                for seat in session.scalars(select(Seat).where(Seat.layout_id == layout.id)).all():
+                    seats_by_desk.setdefault(seat.desk_id, []).append(seat)
+                    seat_labels[seat.id] = {"seat_number": seat.seat_number, "classroom_id": classroom.id, "classroom_name": classroom.name}
+                graph = build_neighbor_pairs([{
+                    "id": desk.id, "x": desk.x, "y": desk.y, "block_label": desk.block_label,
+                    "seats": [{"id": seat.id, "seat_index": seat.seat_index, "is_available": seat.is_available} for seat in seats_by_desk.get(desk.id, [])],
+                } for desk in desks])
+                all_pairs["adjacent"].extend(graph["adjacent"])
+                all_pairs["front_back"].extend(graph["front_back"])
+                rooms.append({"id": classroom.id, "seats": [
+                    {"id": seat.id, "classroom_id": classroom.id, "is_available": seat.is_available}
+                    for desk_seats in seats_by_desk.values() for seat in desk_seats
+                ]})
+            rules = {name: getattr(organization, name) for name in (
+                "prevent_same_section_adjacent", "prevent_same_section_front_back",
+                "prevent_different_grade_same_area_adjacent", "prevent_different_grade_same_area_front_back",
+                "prevent_same_grade_area_adjacent", "prevent_same_grade_area_front_back",
+            )}
+            result = solve_candidate([{
+                "id": item.id, "class_level": item.class_level, "section": item.section,
+                "area": item.area, "first_name": item.first_name,
+                "last_name": item.last_name, "school_number": item.school_number,
+            } for item in participants], rooms, all_pairs, rules)
+            run = DistributionRun(organization_id=organization.id, status="completed")
+            session.add(run); session.flush()
+            candidate = DistributionCandidate(
+                run_id=run.id, status=result["status"],
+                affected_student_count=result["affected_student_count"],
+                objective_value=result["objective"],
+            )
+            session.add(candidate); session.flush()
+            for assignment in result["assignments"]:
+                session.add(SeatAssignment(
+                    candidate_id=candidate.id,
+                    participant_id=assignment["participant_id"],
+                    seat_id=assignment["seat_id"],
+                ))
+            result["candidate_id"] = candidate.id
+            result["run_id"] = run.id
+            participant_by_id = {item.id: item for item in participants}
+            result["assignments"] = [{
+                **item,
+                **seat_labels[item["seat_id"]],
+                "first_name": participant_by_id[item["participant_id"]].first_name,
+                "last_name": participant_by_id[item["participant_id"]].last_name,
+                "school_number": participant_by_id[item["participant_id"]].school_number,
+                "class_level": participant_by_id[item["participant_id"]].class_level,
+                "section": participant_by_id[item["participant_id"]].section,
+            } for item in result["assignments"]]
+    except DistributionError as error:
+        return jsonify({"error": str(error)}), 409
+    except IntegrityError:
+        return jsonify({"error": "Aday kaydedilemedi; veriler değişmiş olabilir. Yenileyip tekrar deneyin."}), 409
+    return jsonify({"candidate": result}), 201
