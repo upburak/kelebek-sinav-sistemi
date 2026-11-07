@@ -182,6 +182,38 @@ def _serialize_candidate(session, organization, candidate):
     for room_id, room_name, seat_id, seat_number in room_rows:
         capacities.setdefault(room_id, {"name": room_name, "available_seats": 0})["available_seats"] += 1
         available_seats.append({"seat_id": seat_id, "seat_number": seat_number, "classroom_id": room_id, "classroom_name": room_name})
+    assignment_by_seat = {item["seat_id"]: item for item in assignments if item["seat_id"]}
+    plan = []
+    selections = session.execute(
+        select(ExamOrganizationClassroom, Classroom, ClassroomLayout)
+        .join(Classroom, Classroom.id == ExamOrganizationClassroom.classroom_id)
+        .join(ClassroomLayout, ClassroomLayout.id == ExamOrganizationClassroom.layout_id)
+        .where(ExamOrganizationClassroom.organization_id == organization.id)
+        .order_by(Classroom.name)
+    ).all()
+    for _selection, classroom, layout in selections:
+        desks = session.scalars(
+            select(Desk).where(Desk.layout_id == layout.id).order_by(Desk.y, Desk.x)
+        ).all()
+        desk_payloads = []
+        for desk in desks:
+            seats = session.scalars(
+                select(Seat).where(Seat.desk_id == desk.id).order_by(Seat.seat_index)
+            ).all()
+            desk_payloads.append({
+                "desk_id": desk.id, "label": desk.label, "block_label": desk.block_label,
+                "x": desk.x, "y": desk.y,
+                "seats": [{
+                    "seat_id": seat.id, "seat_number": seat.seat_number,
+                    "seat_index": seat.seat_index, "x": seat.x, "y": seat.y,
+                    "is_available": seat.is_available,
+                    "student": assignment_by_seat.get(seat.id),
+                } for seat in seats],
+            })
+        plan.append({
+            "classroom_id": classroom.id, "classroom_name": classroom.name,
+            "layout_id": layout.id, "layout_name": layout.name, "desks": desk_payloads,
+        })
     return {
         "candidate_id": candidate.id,
         "run_id": candidate.run_id,
@@ -200,6 +232,7 @@ def _serialize_candidate(session, organization, candidate):
         "summary": _candidate_summary(assignments, capacities),
         "available_seats": available_seats,
         "assignments": assignments,
+        "plan": plan,
     }
 
 
