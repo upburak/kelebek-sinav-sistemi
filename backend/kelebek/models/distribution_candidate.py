@@ -13,6 +13,9 @@ class DistributionCandidate(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid4()))
     run_id: Mapped[str] = mapped_column(ForeignKey("distribution_runs.id", ondelete="RESTRICT"), nullable=False)
+    derived_from_candidate_id: Mapped[str | None] = mapped_column(
+        ForeignKey("distribution_candidates.id", ondelete="RESTRICT"), nullable=True
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     affected_student_count: Mapped[int] = mapped_column(Integer, nullable=False)
     objective_value: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from kelebek.db import current_academic_year_start
 from kelebek.models import (
     AcademicYear, Classroom, ClassroomLayout, Desk, DistributionCandidate,
-    DistributionRun, ExamOrganization, ExamOrganizationClassroom,
+    DistributionEvent, DistributionRun, ExamOrganization, ExamOrganizationClassroom,
     ExamParticipant, Seat, SeatAssignment,
 )
 from kelebek.distribution.neighbors import build_neighbor_pairs
@@ -84,10 +84,11 @@ def _candidate_summary(assignments, room_capacities):
     return {"groups": list(groups.values()), "rooms": rooms}
 
 
-def _review_selected_candidate(session, organization):
-    if not organization.selected_candidate_id:
+def _review_selected_candidate(session, organization, candidate_id=None):
+    candidate_id = candidate_id or organization.selected_candidate_id
+    if not candidate_id:
         raise ValueError("Önce incelenecek dağıtım adayını seçin.")
-    candidate = session.get(DistributionCandidate, organization.selected_candidate_id)
+    candidate = session.get(DistributionCandidate, candidate_id)
     run = session.get(DistributionRun, candidate.run_id) if candidate else None
     if candidate is None or run is None or run.organization_id != organization.id or run.config_hash != _distribution_fingerprint(session, organization):
         raise ValueError("Seçili aday güncel değil. Güncel derslik ve kurallarla yeni aday üretin.")
@@ -141,6 +142,59 @@ def _review_selected_candidate(session, organization):
         "rooms": [{**room, "assigned_students": assigned_by_room.get(room["classroom_id"], 0),
                    "empty_seats": room["available_seats"] - assigned_by_room.get(room["classroom_id"], 0)} for room in room_capacities],
         "can_finalize": evaluation["affected_student_count"] <= 5,
+    }
+
+
+def _serialize_candidate(session, organization, candidate):
+    rows = session.execute(
+        select(SeatAssignment, ExamParticipant, Seat, Classroom)
+        .join(ExamParticipant, ExamParticipant.id == SeatAssignment.participant_id)
+        .join(Seat, Seat.id == SeatAssignment.seat_id)
+        .join(Desk, Desk.id == Seat.desk_id)
+        .join(ClassroomLayout, ClassroomLayout.id == Desk.layout_id)
+        .join(Classroom, Classroom.id == ClassroomLayout.classroom_id)
+        .where(SeatAssignment.candidate_id == candidate.id)
+        .order_by(Classroom.name, Seat.seat_number)
+    ).all()
+    assignments = [{
+        "participant_id": assignment.participant_id, "seat_id": seat.id,
+        "seat_number": seat.seat_number, "classroom_id": classroom.id,
+        "classroom_name": classroom.name, "first_name": participant.first_name,
+        "last_name": participant.last_name, "school_number": participant.school_number,
+        "class_level": participant.class_level, "section": participant.section,
+        "area": participant.area,
+    } for assignment, participant, seat, classroom in rows]
+    room_rows = session.execute(
+        select(Classroom.id, Classroom.name, Seat.id, Seat.seat_number)
+        .join(ExamOrganizationClassroom, ExamOrganizationClassroom.classroom_id == Classroom.id)
+        .join(ClassroomLayout, ClassroomLayout.id == ExamOrganizationClassroom.layout_id)
+        .join(Seat, Seat.layout_id == ClassroomLayout.id)
+        .where(ExamOrganizationClassroom.organization_id == organization.id, Seat.is_available.is_(True))
+        .order_by(Classroom.name, Seat.seat_number)
+    ).all()
+    capacities = {}
+    available_seats = []
+    for room_id, room_name, seat_id, seat_number in room_rows:
+        capacities.setdefault(room_id, {"name": room_name, "available_seats": 0})["available_seats"] += 1
+        available_seats.append({"seat_id": seat_id, "seat_number": seat_number, "classroom_id": room_id, "classroom_name": room_name})
+    return {
+        "candidate_id": candidate.id,
+        "run_id": candidate.run_id,
+        "generation_index": candidate.generation_index,
+        "derived_from_candidate_id": candidate.derived_from_candidate_id,
+        "status": candidate.status,
+        "affected_student_count": candidate.affected_student_count,
+        "events": [{
+            "event_type": event.event_type,
+            "participant_id": event.participant_id,
+            "displaced_participant_id": event.displaced_participant_id,
+            "from_seat_id": event.from_seat_id,
+            "to_seat_id": event.to_seat_id,
+            "created_at": event.created_at.isoformat(),
+        } for event in session.scalars(select(DistributionEvent).where(DistributionEvent.candidate_id == candidate.id).order_by(DistributionEvent.created_at)).all()],
+        "summary": _candidate_summary(assignments, capacities),
+        "available_seats": available_seats,
+        "assignments": assignments,
     }
 
 
@@ -315,24 +369,8 @@ def create_distribution_candidate(organization_id: str):
                     participant_id=assignment["participant_id"],
                     seat_id=assignment["seat_id"],
                 ))
-            result["candidate_id"] = candidate.id
-            result["run_id"] = run.id
-            participant_by_id = {item.id: item for item in participants}
-            result["assignments"] = [{
-                **item,
-                **seat_labels[item["seat_id"]],
-                "first_name": participant_by_id[item["participant_id"]].first_name,
-                "last_name": participant_by_id[item["participant_id"]].last_name,
-                "school_number": participant_by_id[item["participant_id"]].school_number,
-                "class_level": participant_by_id[item["participant_id"]].class_level,
-                "section": participant_by_id[item["participant_id"]].section,
-                "area": participant_by_id[item["participant_id"]].area,
-            } for item in result["assignments"]]
-            capacities = {room["id"]: {
-                "name": next(value["classroom_name"] for value in seat_labels.values() if value["classroom_id"] == room["id"]),
-                "available_seats": sum(seat["is_available"] for seat in room["seats"]),
-            } for room in rooms}
-            result["summary"] = _candidate_summary(result["assignments"], capacities)
+            result = _serialize_candidate(session, organization, candidate)
+            result["objective"] = candidate.objective_value
     except DistributionError as error:
         return jsonify({"error": str(error)}), 409
     except IntegrityError:
@@ -360,49 +398,9 @@ def list_distribution_candidates(organization_id: str):
             select(DistributionCandidate).where(DistributionCandidate.run_id == run.id)
             .order_by(DistributionCandidate.generation_index)
         ).all()
-        selected_room_rows = session.execute(
-            select(Classroom.id, Classroom.name, func.count(Seat.id))
-            .join(ExamOrganizationClassroom, ExamOrganizationClassroom.classroom_id == Classroom.id)
-            .join(ClassroomLayout, ClassroomLayout.id == ExamOrganizationClassroom.layout_id)
-            .join(Seat, Seat.layout_id == ClassroomLayout.id)
-            .where(ExamOrganizationClassroom.organization_id == organization.id, Seat.is_available.is_(True))
-            .group_by(Classroom.id, Classroom.name)
-        ).all()
-        capacities = {room_id: {"name": name, "available_seats": capacity} for room_id, name, capacity in selected_room_rows}
         result = []
         for candidate in candidates:
-            rows = session.execute(
-                select(SeatAssignment, ExamParticipant, Seat, Classroom)
-                .join(ExamParticipant, ExamParticipant.id == SeatAssignment.participant_id)
-                .join(Seat, Seat.id == SeatAssignment.seat_id)
-                .join(Desk, Desk.id == Seat.desk_id)
-                .join(ClassroomLayout, ClassroomLayout.id == Desk.layout_id)
-                .join(Classroom, Classroom.id == ClassroomLayout.classroom_id)
-                .where(SeatAssignment.candidate_id == candidate.id)
-                .order_by(Classroom.name, Seat.seat_number)
-            ).all()
-            assignments = [{
-                    "participant_id": assignment.participant_id,
-                    "seat_id": seat.id,
-                    "seat_number": seat.seat_number,
-                    "classroom_id": classroom.id,
-                    "classroom_name": classroom.name,
-                    "first_name": participant.first_name,
-                    "last_name": participant.last_name,
-                    "school_number": participant.school_number,
-                    "class_level": participant.class_level,
-                    "section": participant.section,
-                    "area": participant.area,
-                } for assignment, participant, seat, classroom in rows]
-            result.append({
-                "candidate_id": candidate.id,
-                "run_id": run.id,
-                "generation_index": candidate.generation_index,
-                "status": candidate.status,
-                "affected_student_count": candidate.affected_student_count,
-                "summary": _candidate_summary(assignments, capacities),
-                "assignments": assignments,
-            })
+            result.append(_serialize_candidate(session, organization, candidate))
     return jsonify({"candidates": result})
 
 
@@ -437,6 +435,78 @@ def select_distribution_candidate(organization_id: str):
     except IntegrityError:
         return jsonify({"error": "Aday seçimi kaydedilemedi; sayfayı yenileyip tekrar deneyin."}), 409
     return jsonify({"selected_candidate_id": candidate_id})
+
+
+@exam_organizations_api.post("/exam-organizations/<organization_id>/distribution-candidates/<candidate_id>/moves")
+def move_candidate_participant(organization_id: str, candidate_id: str):
+    payload = request.get_json(silent=True)
+    participant_id = payload.get("participant_id") if isinstance(payload, dict) else None
+    target_seat_id = payload.get("target_seat_id") if isinstance(payload, dict) else None
+    if not isinstance(participant_id, str) or not isinstance(target_seat_id, str):
+        return jsonify({"error": "Öğrenci ve hedef koltuk seçilmelidir."}), 400
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    try:
+        with session_factory.begin() as session:
+            organization = session.get(ExamOrganization, organization_id)
+            candidate = session.get(DistributionCandidate, candidate_id)
+            if organization is None or candidate is None:
+                return jsonify({"error": "Sınav veya aday bulunamadı."}), 404
+            if organization.status != "draft" or organization.selected_candidate_id != candidate.id:
+                return jsonify({"error": "Önce bu adayı incelemeye alın. Kesinleşmiş dağıtım değiştirilemez."}), 409
+            year = session.get(AcademicYear, organization.academic_year_id)
+            run = session.get(DistributionRun, candidate.run_id)
+            if year is None or year.start_year < current_academic_year_start() or run is None or run.config_hash != _distribution_fingerprint(session, organization):
+                return jsonify({"error": "Adayın verileri güncel değil; yeni aday üretin."}), 409
+            try:
+                _review_selected_candidate(session, organization)
+            except ValueError as error:
+                return jsonify({"error": str(error)}), 409
+            assignments = session.scalars(select(SeatAssignment).where(SeatAssignment.candidate_id == candidate.id)).all()
+            by_participant = {item.participant_id: item for item in assignments}
+            moving = by_participant.get(participant_id)
+            target = session.get(Seat, target_seat_id)
+            selected_layout_ids = set(session.scalars(select(ExamOrganizationClassroom.layout_id).where(ExamOrganizationClassroom.organization_id == organization.id)).all())
+            if moving is None or target is None or target.layout_id not in selected_layout_ids or not target.is_available:
+                return jsonify({"error": "Öğrenci veya hedef kullanılabilir koltuk bulunamadı."}), 409
+            if moving.seat_id == target.id:
+                return jsonify({"error": "Öğrenci zaten bu koltukta."}), 400
+            target_assignment = next((item for item in assignments if item.seat_id == target.id), None)
+            displaced_id = target_assignment.participant_id if target_assignment else None
+            source_seat_id = moving.seat_id
+            child = DistributionCandidate(
+                run_id=run.id,
+                derived_from_candidate_id=candidate.id,
+                status="manual",
+                affected_student_count=0,
+                objective_value=candidate.objective_value,
+                generation_index=(session.scalar(select(func.max(DistributionCandidate.generation_index)).where(DistributionCandidate.run_id == run.id)) or 0) + 1,
+            )
+            session.add(child); session.flush()
+            for item in assignments:
+                seat_id = item.seat_id
+                if item.participant_id == participant_id:
+                    seat_id = target.id
+                elif target_assignment and item.participant_id == displaced_id:
+                    seat_id = source_seat_id
+                session.add(SeatAssignment(candidate_id=child.id, participant_id=item.participant_id, seat_id=seat_id))
+            session.add(DistributionEvent(
+                candidate_id=child.id,
+                event_type="seat_swap" if target_assignment else "seat_move",
+                participant_id=participant_id,
+                displaced_participant_id=displaced_id,
+                from_seat_id=source_seat_id,
+                to_seat_id=target.id,
+            ))
+            session.flush()
+            review = _review_selected_candidate(session, organization, candidate_id=child.id)
+            child.affected_student_count = review["affected_student_count"]
+            organization.selected_candidate_id = child.id
+            session.flush()
+            result = _serialize_candidate(session, organization, child)
+            result["review"] = review
+    except IntegrityError:
+        return jsonify({"error": "Taşıma kaydedilemedi; koltuk durumu değişmiş olabilir."}), 409
+    return jsonify({"candidate": result}), 201
 
 
 @exam_organizations_api.get("/exam-organizations/<organization_id>/final-review")
