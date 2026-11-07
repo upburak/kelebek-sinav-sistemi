@@ -4,6 +4,7 @@ from flask import Flask, jsonify
 
 from kelebek.api.academic_years import academic_year_api
 from kelebek.api.classrooms import classrooms_api
+from kelebek.api.exam_organizations import exam_organizations_api
 from kelebek.api.health import health_api
 from kelebek.api.school_profile import school_profile_api
 from kelebek.api.student_import import student_import_api
@@ -24,6 +25,7 @@ def create_app() -> Flask:
     app.register_blueprint(classrooms_api, url_prefix="/api")
     app.register_blueprint(student_import_api, url_prefix="/api")
     app.register_blueprint(students_api, url_prefix="/api")
+    app.register_blueprint(exam_organizations_api, url_prefix="/api")
 
     @app.errorhandler(413)
     def request_too_large(_error):

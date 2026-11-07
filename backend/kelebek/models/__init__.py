@@ -7,9 +7,15 @@ from kelebek.models.desk import Desk
 from kelebek.models.seat import Seat
 from kelebek.models.student import Student
 from kelebek.models.student_year_enrollment import StudentYearEnrollment
+from kelebek.models.course import Course
+from kelebek.models.exam_organization import ExamOrganization
+from kelebek.models.exam_course import ExamCourse
+from kelebek.models.exam_participant import ExamParticipant
+from kelebek.models.exam_course_participant import ExamCourseParticipant
 from kelebek.models.school_profile import SchoolAdministrator, SchoolProfile
 
 __all__ = [
     "AcademicYear", "Classroom", "ClassroomLayout", "Desk", "Seat", "Student",
-    "StudentYearEnrollment", "SchoolAdministrator", "SchoolProfile",
+    "StudentYearEnrollment", "SchoolAdministrator", "SchoolProfile", "Course",
+    "ExamOrganization", "ExamCourse", "ExamParticipant", "ExamCourseParticipant",
 ]

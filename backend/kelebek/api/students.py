@@ -8,6 +8,7 @@ from kelebek.services.student_registry import (
     StudentRegistryError,
     add_student_to_year,
     list_year_students,
+    list_year_student_groups,
 )
 
 
@@ -25,6 +26,19 @@ def get_students():
             return jsonify({"error": "Seçili eğitim-öğretim yılı bulunamadı."}), 404
         students = list_year_students(session, academic_year_id)
     return jsonify({"students": students, "total": len(students)})
+
+
+@students_api.get("/student-groups")
+def get_student_groups():
+    academic_year_id = request.args.get("academic_year_id", "").strip()
+    if not academic_year_id:
+        return jsonify({"error": "Eğitim-öğretim yılı gerekli."}), 400
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory() as session:
+        if session.get(AcademicYear, academic_year_id) is None:
+            return jsonify({"error": "Seçili eğitim-öğretim yılı bulunamadı."}), 404
+        groups = list_year_student_groups(session, academic_year_id)
+    return jsonify({"groups": groups})
 
 
 @students_api.post("/students")

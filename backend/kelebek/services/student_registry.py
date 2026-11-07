@@ -51,6 +51,31 @@ def list_year_students(session: Session, academic_year_id: str) -> list[dict]:
     return [serialize_enrollment(row) for row in rows]
 
 
+def list_year_student_groups(session: Session, academic_year_id: str) -> list[dict]:
+    """Öğrenci adlarını döndürmeden seçilebilir sınıf/şube/alan gruplarını özetle."""
+    rows = session.scalars(
+        select(StudentYearEnrollment).where(
+            StudentYearEnrollment.academic_year_id == academic_year_id,
+            StudentYearEnrollment.is_active.is_(True),
+        )
+    ).all()
+    counts = {}
+    for row in rows:
+        key = (row.class_level, row.section, row.area or "")
+        counts[key] = counts.get(key, 0) + 1
+    return [
+        {"class_level": grade, "section": section, "area": area or None, "student_count": count}
+        for (grade, section, area), count in sorted(
+            counts.items(),
+            key=lambda item: (
+                int(item[0][0]) if item[0][0].isdigit() else 99,
+                item[0][1].casefold(),
+                item[0][2].casefold(),
+            ),
+        )
+    ]
+
+
 def add_student_to_year(session: Session, academic_year_id: str, payload: dict) -> dict:
     academic_year = session.get(AcademicYear, academic_year_id)
     if academic_year is None:

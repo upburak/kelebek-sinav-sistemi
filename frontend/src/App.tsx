@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import ClassroomManager from './ClassroomManager'
+import ExamOrganizer from './ExamOrganizer'
 
 type HealthState = 'checking' | 'online' | 'offline'
 type WorkspaceIconName = 'overview' | 'school' | 'students' | 'classroom' | 'exams' | 'reports'
@@ -485,6 +486,8 @@ export default function App() {
       ? 'Öğrenci kayıtları'
       : activeSection === 'classrooms'
         ? 'Derslikler'
+        : activeSection === 'exams'
+          ? 'Sınav organizasyonları'
         : 'Genel Bakış'
   const principal = schoolProfile.administrators.find((person) => person.role === 'principal')
   const vicePrincipals = schoolProfile.administrators.filter((person) => person.role === 'vice_principal')
@@ -514,7 +517,7 @@ export default function App() {
           <button className={activeSection === 'school' ? 'active' : ''} type="button" onClick={() => { setActiveSection('school'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="school" /> Okul ve yöneticiler</button>
           <button className={activeSection === 'students' ? 'active' : ''} type="button" onClick={() => { setActiveSection('students'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="students" /> Öğrenci kayıtları</button>
           <button className={activeSection === 'classrooms' ? 'active' : ''} type="button" onClick={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}><WorkspaceIcon name="classroom" /> Derslikler</button>
-          <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><WorkspaceIcon name="exams" /> Sınav organizasyonları <small>Yakında</small></button>
+          <button className={activeSection === 'exams' ? 'active' : ''} type="button" onClick={() => { setActiveSection('exams'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="exams" /> Sınav organizasyonları</button>
           <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><WorkspaceIcon name="reports" /> Raporlar <small>Yakında</small></button>
         </nav>
         <div className="sidebar-footer"><span className={`status-dot ${health}`} /><span>{statusText}</span><small>Veriler bu bilgisayarda</small></div>
@@ -566,7 +569,7 @@ export default function App() {
 
       <section className="welcome-card" aria-labelledby="welcome-title">
         <div className="page-heading">
-          <div><div className="eyebrow">KELEBEK <span>·</span> OKUL YÖNETİMİ</div><h1 id="welcome-title">{sectionTitle}</h1><p>{activeSection === 'school' ? 'Okul kimliği ve yönetici bilgileri.' : activeSection === 'students' ? 'Öğrenci listesini içeri aktarın ve kayıt farklarını inceleyin.' : activeSection === 'classrooms' ? 'Derslikleri ve fiziksel oturma düzenlerini yönetin.' : 'Okulunuzu ve sınav hazırlık sürecinizi tek çalışma alanından yönetin.'}</p></div>
+          <div><div className="eyebrow">KELEBEK <span>·</span> OKUL YÖNETİMİ</div><h1 id="welcome-title">{sectionTitle}</h1><p>{activeSection === 'school' ? 'Okul kimliği ve yönetici bilgileri.' : activeSection === 'students' ? 'Öğrenci listesini içeri aktarın ve kayıt farklarını inceleyin.' : activeSection === 'classrooms' ? 'Derslikleri ve fiziksel oturma düzenlerini yönetin.' : activeSection === 'exams' ? 'Farklı ders ve sınıf gruplarını tek sınav planında bir araya getirin.' : 'Okulunuzu ve sınav hazırlık sürecinizi tek çalışma alanından yönetin.'}</p></div>
           <div className="current-year-pill"><small>ÇALIŞMA YILI</small><strong>{activeYear?.label ?? 'Yıl bilgisi yükleniyor'}</strong></div>
         </div>
 
@@ -619,9 +622,9 @@ export default function App() {
           </>}
         </form>}
 
-        {activeSection !== 'school' && activeSection !== 'classrooms' && <div className="section-heading module-heading"><div><span className="eyebrow">{activeSection === 'students' ? 'ÖĞRENCİ İŞLEMLERİ' : 'MODÜLLER'}</span><h2>{activeSection === 'students' ? 'Liste aktarımı' : 'Yönetim alanları'}</h2></div><span className="module-caption">{activeSection === 'students' ? 'Liste önizlemesi kaydetmeden önce kontrol edilir.' : 'Hazır bölümler kullanılabilir; diğerleri geliştirme aşamasında.'}</span></div>}
+        {activeSection !== 'school' && activeSection !== 'classrooms' && activeSection !== 'exams' && <div className="section-heading module-heading"><div><span className="eyebrow">{activeSection === 'students' ? 'ÖĞRENCİ İŞLEMLERİ' : 'MODÜLLER'}</span><h2>{activeSection === 'students' ? 'Liste aktarımı' : 'Yönetim alanları'}</h2></div><span className="module-caption">{activeSection === 'students' ? 'Liste önizlemesi kaydetmeden önce kontrol edilir.' : 'Hazır bölümler kullanılabilir; diğerleri geliştirme aşamasında.'}</span></div>}
 
-        {activeSection !== 'school' && activeSection !== 'classrooms' && <div className={`feature-grid ${activeSection === 'students' ? 'single-module' : ''}`}>
+        {activeSection !== 'school' && activeSection !== 'classrooms' && activeSection !== 'exams' && <div className={`feature-grid ${activeSection === 'students' ? 'single-module' : ''}`}>
           {(activeSection === 'overview' || activeSection === 'students') && <article className="feature-card">
             <span className="feature-number">01</span>
             <h2>Öğrenci kayıtları</h2>
@@ -655,8 +658,8 @@ export default function App() {
           {activeSection === 'overview' && <article className="feature-card muted-card">
             <span className="feature-number">03</span>
             <h2>Sınav dağıtımı</h2>
-            <p>Öğrenci gruplarını seçilen dersliklere dengeli yerleştirme.</p>
-            <span className="feature-state">Hazırlanıyor</span>
+            <p>Dersleri ve öğrenci gruplarını seçerek sınav organizasyonu taslağı oluştur.</p>
+            <button className="manager-open" type="button" onClick={() => setActiveSection('exams')}>Organizasyonları aç</button>
           </article>}
         </div>}
 
@@ -668,6 +671,13 @@ export default function App() {
             onClose={() => { setClassroomPanelOpen(false); setActiveSection('overview') }}
           />
         )}
+
+        {activeSection === 'exams' && <ExamOrganizer
+          academicYearId={activeYearId}
+          academicYearLabel={activeYear?.label ?? ''}
+          readOnly={activeYear?.is_archive ?? false}
+          onStudents={() => setActiveSection('students')}
+        />}
 
         {activeSection === 'students' && importPreview && (
           <section className="import-preview" aria-labelledby="import-preview-title">
