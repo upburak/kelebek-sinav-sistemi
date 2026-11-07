@@ -15,4 +15,5 @@ class DistributionRun(Base):
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid4()))
     organization_id: Mapped[str] = mapped_column(ForeignKey("exam_organizations.id", ondelete="RESTRICT"), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="completed")
+    config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

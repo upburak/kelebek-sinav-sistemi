@@ -1,5 +1,8 @@
 """Sınav organizasyonu taslakları ve ders kataloğu API'si."""
 
+import hashlib
+import json
+
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -24,6 +27,43 @@ from kelebek.services.exam_organizer import (
 
 
 exam_organizations_api = Blueprint("exam_organizations", __name__)
+
+RULE_NAMES = (
+    "prevent_same_section_adjacent", "prevent_same_section_front_back",
+    "prevent_different_grade_same_area_adjacent", "prevent_different_grade_same_area_front_back",
+    "prevent_same_grade_area_adjacent", "prevent_same_grade_area_front_back",
+)
+
+
+def _distribution_fingerprint(session, organization):
+    participant_rows = session.execute(
+        select(ExamParticipant.id, ExamParticipant.class_level, ExamParticipant.section, ExamParticipant.area)
+        .where(ExamParticipant.organization_id == organization.id)
+        .order_by(ExamParticipant.id)
+    ).all()
+    layout_ids = session.scalars(
+        select(ExamOrganizationClassroom.layout_id)
+        .where(ExamOrganizationClassroom.organization_id == organization.id)
+        .order_by(ExamOrganizationClassroom.layout_id)
+    ).all()
+    physical_layouts = []
+    for layout_id in layout_ids:
+        desks = session.execute(
+            select(Desk.id, Desk.x, Desk.y, Desk.block_label)
+            .where(Desk.layout_id == layout_id).order_by(Desk.id)
+        ).all()
+        seats = session.execute(
+            select(Seat.id, Seat.desk_id, Seat.seat_index, Seat.is_available)
+            .where(Seat.layout_id == layout_id).order_by(Seat.id)
+        ).all()
+        physical_layouts.append({"desks": [list(row) for row in desks], "seats": [list(row) for row in seats]})
+    snapshot = {
+        "participants": [list(row) for row in participant_rows],
+        "layouts": layout_ids,
+        "physical_layouts": physical_layouts,
+        "rules": [bool(getattr(organization, name)) for name in RULE_NAMES],
+    }
+    return hashlib.sha256(json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 @exam_organizations_api.get("/courses")
@@ -110,6 +150,10 @@ def put_exam_organization_rules(organization_id: str):
 
 @exam_organizations_api.post("/exam-organizations/<organization_id>/distribution-candidates")
 def create_distribution_candidate(organization_id: str):
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Aday bilgileri geçersiz."}), 400
+    requested_run_id = payload.get("run_id")
     session_factory = current_app.extensions["kelebek_session_factory"]
     try:
         with session_factory.begin() as session:
@@ -154,17 +198,37 @@ def create_distribution_candidate(organization_id: str):
                 "prevent_different_grade_same_area_adjacent", "prevent_different_grade_same_area_front_back",
                 "prevent_same_grade_area_adjacent", "prevent_same_grade_area_front_back",
             )}
+            config_hash = _distribution_fingerprint(session, organization)
+            previous_assignments = []
+            if requested_run_id:
+                run = session.get(DistributionRun, requested_run_id)
+                if run is None or run.organization_id != organization.id or run.config_hash != config_hash:
+                    return jsonify({"error": "Sınav, derslikler veya kurallar değişti. Yeni bir dağıtım çalışması başlatın."}), 409
+                previous_candidates = session.scalars(
+                    select(DistributionCandidate).where(DistributionCandidate.run_id == run.id)
+                    .order_by(DistributionCandidate.generation_index)
+                ).all()
+                for previous_candidate in previous_candidates:
+                    previous_assignments.append([{
+                        "participant_id": row.participant_id, "seat_id": row.seat_id,
+                    } for row in session.scalars(
+                        select(SeatAssignment).where(SeatAssignment.candidate_id == previous_candidate.id)
+                    ).all()])
+                generation_index = len(previous_candidates) + 1
+            else:
+                run = DistributionRun(organization_id=organization.id, status="completed", config_hash=config_hash)
+                session.add(run); session.flush()
+                generation_index = 1
             result = solve_candidate([{
                 "id": item.id, "class_level": item.class_level, "section": item.section,
                 "area": item.area, "first_name": item.first_name,
                 "last_name": item.last_name, "school_number": item.school_number,
-            } for item in participants], rooms, all_pairs, rules)
-            run = DistributionRun(organization_id=organization.id, status="completed")
-            session.add(run); session.flush()
+            } for item in participants], rooms, all_pairs, rules, previous_assignments=previous_assignments)
             candidate = DistributionCandidate(
                 run_id=run.id, status=result["status"],
                 affected_student_count=result["affected_student_count"],
                 objective_value=result["objective"],
+                generation_index=generation_index,
             )
             session.add(candidate); session.flush()
             for assignment in result["assignments"]:
@@ -190,3 +254,57 @@ def create_distribution_candidate(organization_id: str):
     except IntegrityError:
         return jsonify({"error": "Aday kaydedilemedi; veriler değişmiş olabilir. Yenileyip tekrar deneyin."}), 409
     return jsonify({"candidate": result}), 201
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/distribution-candidates")
+def list_distribution_candidates(organization_id: str):
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory() as session:
+        organization = session.get(ExamOrganization, organization_id)
+        if organization is None:
+            return jsonify({"error": "Sınav organizasyonu bulunamadı."}), 404
+        fingerprint = _distribution_fingerprint(session, organization)
+        run = session.scalar(
+            select(DistributionRun).where(
+                DistributionRun.organization_id == organization.id,
+                DistributionRun.config_hash == fingerprint,
+            ).order_by(DistributionRun.created_at.desc())
+        )
+        if run is None:
+            return jsonify({"candidates": []})
+        candidates = session.scalars(
+            select(DistributionCandidate).where(DistributionCandidate.run_id == run.id)
+            .order_by(DistributionCandidate.generation_index)
+        ).all()
+        result = []
+        for candidate in candidates:
+            rows = session.execute(
+                select(SeatAssignment, ExamParticipant, Seat, Classroom)
+                .join(ExamParticipant, ExamParticipant.id == SeatAssignment.participant_id)
+                .join(Seat, Seat.id == SeatAssignment.seat_id)
+                .join(Desk, Desk.id == Seat.desk_id)
+                .join(ClassroomLayout, ClassroomLayout.id == Desk.layout_id)
+                .join(Classroom, Classroom.id == ClassroomLayout.classroom_id)
+                .where(SeatAssignment.candidate_id == candidate.id)
+                .order_by(Classroom.name, Seat.seat_number)
+            ).all()
+            result.append({
+                "candidate_id": candidate.id,
+                "run_id": run.id,
+                "generation_index": candidate.generation_index,
+                "status": candidate.status,
+                "affected_student_count": candidate.affected_student_count,
+                "assignments": [{
+                    "participant_id": assignment.participant_id,
+                    "seat_id": seat.id,
+                    "seat_number": seat.seat_number,
+                    "classroom_id": classroom.id,
+                    "classroom_name": classroom.name,
+                    "first_name": participant.first_name,
+                    "last_name": participant.last_name,
+                    "school_number": participant.school_number,
+                    "class_level": participant.class_level,
+                    "section": participant.section,
+                } for assignment, participant, seat, classroom in rows],
+            })
+    return jsonify({"candidates": result})

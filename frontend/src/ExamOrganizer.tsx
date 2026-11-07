@@ -11,7 +11,7 @@ type CourseOption = { id: string; name: string }
 type CourseDraft = { id: number; name: string; groupKeys: string[] }
 type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back'
 type RuleSet = Record<RuleKey, boolean>
-type CandidatePreview = { candidate_id: string; status: string; affected_student_count: number; assignments: { participant_id: string; seat_id: string; seat_number: number; classroom_id: string; classroom_name: string; first_name: string; last_name: string; school_number: string; class_level: string; section: string }[] }
+type CandidatePreview = { candidate_id: string; run_id: string; generation_index: number; status: string; affected_student_count: number; assignments: { participant_id: string; seat_id: string; seat_number: number; classroom_id: string; classroom_name: string; first_name: string; last_name: string; school_number: string; class_level: string; section: string }[] }
 const ruleLabels: { key: RuleKey; title: string; position: string }[] = [
   { key: 'prevent_same_section_adjacent', title: 'Aynı şubedeki öğrenciler', position: 'Yan yana' },
   { key: 'prevent_same_section_front_back', title: 'Aynı şubedeki öğrenciler', position: 'Önlü arkalı' },
@@ -121,7 +121,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
   const [candidateSavingId, setCandidateSavingId] = useState<string | null>(null)
   const [candidateError, setCandidateError] = useState('')
   const [candidateErrorId, setCandidateErrorId] = useState<string | null>(null)
-  const [candidates, setCandidates] = useState<Record<string, CandidatePreview>>({})
+  const [candidates, setCandidates] = useState<Record<string, CandidatePreview[]>>({})
 
   useEffect(() => {
     if (!academicYearId) {
@@ -147,10 +147,18 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
         if (!groupResponse.ok) throw new Error(groupData.error ?? 'Öğrenci grupları yüklenemedi.')
         if (!courseResponse.ok) throw new Error(courseData.error ?? 'Ders listesi yüklenemedi.')
         if (!roomResponse.ok) throw new Error(roomData.error ?? 'Derslik düzenleri yüklenemedi.')
-        setOrganizations(organizationData.organizations as ExamOrganization[])
+        const loadedOrganizations = organizationData.organizations as ExamOrganization[]
+        setOrganizations(loadedOrganizations)
         setGroups(groupData.groups as GroupOption[])
         setCourseCatalog(courseData.courses as CourseOption[])
         setRoomOptions(roomData.rooms as RoomOption[])
+        const candidateLists = await Promise.all(loadedOrganizations.map(async (organization) => {
+          const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organization.id)}/distribution-candidates`, { signal: controller.signal })
+          const data = await response.json()
+          if (!response.ok) throw new Error(data.error ?? 'Kayıtlı dağıtım adayları yüklenemedi.')
+          return [organization.id, data.candidates as CandidatePreview[]] as const
+        }))
+        setCandidates(Object.fromEntries(candidateLists.filter(([, items]) => items.length)))
       })
       .catch((reason: unknown) => {
         if (reason instanceof Error && reason.name === 'AbortError') return
@@ -291,6 +299,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       if (!response.ok) throw new Error(data.error ?? 'Derslik seçimi kaydedilemedi.')
       const updated = data.organization as ExamOrganization
       setOrganizations((items) => items.map((item) => item.id === updated.id ? updated : item))
+      setCandidates((current) => { const next = { ...current }; delete next[organizationId]; return next })
       setSelectedLayoutByClassroom(Object.fromEntries(
         updated.room_selections.map((room) => [room.classroom_id, room.layout_id]),
       ))
@@ -327,6 +336,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       if (!response.ok) throw new Error(data.error ?? 'Dağıtım kuralları kaydedilemedi.')
       const updated = data.organization as ExamOrganization
       setOrganizations((items) => items.map((item) => item.id === updated.id ? updated : item))
+      setCandidates((current) => { const next = { ...current }; delete next[organizationId]; return next })
       setRuleDraft({ ...updated.rules })
       setRuleMessage('Dağıtım kuralları kaydedildi.')
     } catch (reason) {
@@ -341,10 +351,14 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     setCandidateError('')
     setCandidateErrorId(null)
     try {
-      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/distribution-candidates`, { method: 'POST' })
+      const existing = candidates[organizationId] ?? []
+      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/distribution-candidates`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(existing.length ? { run_id: existing[0].run_id } : {}),
+      })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Dağıtım adayı oluşturulamadı.')
-      setCandidates((current) => ({ ...current, [organizationId]: data.candidate as CandidatePreview }))
+      setCandidates((current) => ({ ...current, [organizationId]: [...(current[organizationId] ?? []), data.candidate as CandidatePreview] }))
     } catch (reason) {
       setCandidateError(reason instanceof Error ? reason.message : 'Dağıtım adayı oluşturulamadı.')
       setCandidateErrorId(organizationId)
@@ -428,9 +442,9 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
             <div className="exam-room-footer"><span>Bu seçim taslakta saklanır. Öğrenciler koltuklara henüz dağıtılmaz.</span><button type="button" disabled={roomSaving || !roomOptionsByClassroom.length} onClick={() => saveRoomSelection(organization.id)}>{roomSaving ? 'Kaydediliyor…' : 'Derslik seçimini kaydet'}</button></div>
           </div>}
           <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRuleEditor(organization)}>{activeRuleOrganizationId === organization.id ? 'Kuralları kapat' : 'Dağıtım kuralları'}</button><span>Altı komşuluk kuralı bu sınava özeldir.</span></div>
-          <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft' || candidateSavingId === organization.id || !organization.capacity_sufficient} onClick={() => void createCandidate(organization.id)}>{candidateSavingId === organization.id ? 'Aday hesaplanıyor…' : 'İlk dağıtım adayını oluştur'}</button><span>{organization.capacity_sufficient ? 'Kapasite yeterli' : `${organization.capacity_deficit} kişilik kapasite eksiği var`}</span></div>
+          <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft' || candidateSavingId === organization.id || !organization.capacity_sufficient} onClick={() => void createCandidate(organization.id)}>{candidateSavingId === organization.id ? 'Aday hesaplanıyor…' : (candidates[organization.id]?.length ? 'Yeni alternatif üret' : 'İlk dağıtım adayını oluştur')}</button><span>{organization.capacity_sufficient ? `${candidates[organization.id]?.length ?? 0} kayıtlı aday · kapasite yeterli` : `${organization.capacity_deficit} kişilik kapasite eksiği var`}</span></div>
           {candidateError && candidateErrorId === organization.id && <p className="exam-error" role="alert">{candidateError}</p>}
-          {candidates[organization.id] && <div className="exam-candidate-result"><strong>Dağıtım adayı kaydedildi</strong><span>{candidates[organization.id].assignments.length} öğrenci · {candidates[organization.id].affected_student_count} kural ihlalinden etkilenen öğrenci · {candidates[organization.id].status === 'optimal' ? 'Denge açısından en iyi bulundu' : 'Geçerli aday bulundu'}</span><div>{candidates[organization.id].assignments.map((assignment) => <small key={assignment.participant_id}>{assignment.class_level}/{assignment.section} · {assignment.first_name} {assignment.last_name} · {assignment.classroom_name} · Koltuk {assignment.seat_number}</small>)}</div></div>}
+          {(candidates[organization.id] ?? []).map((candidate, candidateIndex) => <div className="exam-candidate-result" key={candidate.candidate_id}><strong>Aday {candidateIndex + 1}{candidateIndex === 0 ? ' · İlk dağıtım' : ' · Alternatif'}</strong><span>{candidate.assignments.length} öğrenci · {candidate.affected_student_count} kural ihlalinden etkilenen öğrenci · {candidate.status === 'optimal' ? 'Denge açısından en iyi bulundu' : 'Geçerli aday bulundu'}</span><div>{candidate.assignments.map((assignment) => <small key={assignment.participant_id}>{assignment.class_level}/{assignment.section} · {assignment.first_name} {assignment.last_name} · {assignment.classroom_name} · Koltuk {assignment.seat_number}</small>)}</div></div>)}
           {activeRuleOrganizationId === organization.id && ruleDraft && <div className="exam-rule-panel"><div className="exam-room-panel-heading"><div><strong>Adım 03 · Oturma kuralları</strong><small>Kuralları birbirinden bağımsız açıp kapatabilirsin. Kurallar yalnızca kullanılabilir fiziksel koltuklar arasında değerlendirilir.</small></div></div><div className="exam-rule-list">{ruleLabels.map((rule) => <label key={rule.key}><span><strong>{rule.title}</strong><small>{rule.position}</small></span><input type="checkbox" checked={ruleDraft[rule.key]} onChange={(event) => setRuleDraft((current) => current ? { ...current, [rule.key]: event.target.checked } : current)} /></label>)}</div>{ruleError && <p className="exam-error" role="alert">{ruleError}</p>}{ruleMessage && <p className="exam-room-success" role="status">{ruleMessage}</p>}<div className="exam-room-footer"><span>Dağıtım adayı oluşturulurken bu ayarlar kullanılacak.</span><button type="button" disabled={ruleSaving} onClick={() => saveRules(organization.id)}>{ruleSaving ? 'Kaydediliyor…' : 'Kuralları kaydet'}</button></div></div>}
         </article>
       })}

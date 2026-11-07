@@ -1,6 +1,7 @@
 """CP-SAT engine for a first, capacity-safe seating candidate."""
 
 from itertools import combinations
+from math import ceil
 
 from ortools.sat.python import cp_model
 
@@ -15,7 +16,7 @@ class DistributionError(ValueError):
     pass
 
 
-def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dict, rules: dict, time_limit: float = 12.0) -> dict:
+def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dict, rules: dict, time_limit: float = 12.0, previous_assignments: list[dict] | None = None) -> dict:
     """Assign every participant uniquely, balancing room use and limiting conflicts to five people."""
     if not participants:
         raise DistributionError("Dağıtılacak öğrenci bulunamadı.")
@@ -34,6 +35,16 @@ def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dic
         model.add_exactly_one(choices[student_index, seat_id] for seat_id in seat_by_id)
     for seat_id in seat_by_id:
         model.add_at_most_one(choices[student_index, seat_id] for student_index in range(len(participants)))
+
+    participant_index = {item["id"]: index for index, item in enumerate(participants)}
+    for prior in previous_assignments or []:
+        retained = [
+            choices[participant_index[item["participant_id"]], item["seat_id"]]
+            for item in prior
+            if item["participant_id"] in participant_index and item["seat_id"] in seat_by_id
+        ]
+        if retained:
+            model.add(sum(retained) <= len(participants) - max(1, ceil(len(participants) * 0.2)))
 
     room_counts = {}
     for room_index, room in enumerate(rooms):
@@ -98,7 +109,11 @@ def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dic
     solver.parameters.num_search_workers = 8
     status = solver.solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        raise DistributionError("Kapasiteye sığan ve en fazla beş öğrenciyi etkileyen bir aday bulunamadı.")
+        if status == cp_model.INFEASIBLE:
+            raise DistributionError("Bu derslik ve kural birleşimiyle beş veya daha az öğrencinin etkilendiği bir aday mümkün görünmüyor.")
+        if status == cp_model.MODEL_INVALID:
+            raise DistributionError("Dağıtım modeli doğrulanamadı; derslik düzeni ve kural verilerini kontrol edin.")
+        raise DistributionError("Arama süresi içinde geçerli aday bulunamadı. Bu sonuç, adayın matematiksel olarak imkânsız olduğunu kanıtlamaz; süre artırılarak yeniden denenebilir.")
     assignments = []
     for student_index, participant in enumerate(participants):
         seat_id = next(seat_id for seat_id in seat_by_id if solver.boolean_value(choices[student_index, seat_id]))

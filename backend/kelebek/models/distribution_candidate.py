@@ -16,3 +16,4 @@ class DistributionCandidate(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     affected_student_count: Mapped[int] = mapped_column(Integer, nullable=False)
     objective_value: Mapped[int] = mapped_column(Integer, nullable=False)
+    generation_index: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
