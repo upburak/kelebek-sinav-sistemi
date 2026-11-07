@@ -18,4 +18,4 @@ class SeatAssignment(Base):
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid4()))
     candidate_id: Mapped[str] = mapped_column(ForeignKey("distribution_candidates.id", ondelete="RESTRICT"), nullable=False)
     participant_id: Mapped[str] = mapped_column(ForeignKey("exam_participants.id", ondelete="RESTRICT"), nullable=False)
-    seat_id: Mapped[str] = mapped_column(ForeignKey("seats.id", ondelete="RESTRICT"), nullable=False)
+    seat_id: Mapped[str | None] = mapped_column(ForeignKey("seats.id", ondelete="RESTRICT"), nullable=True)

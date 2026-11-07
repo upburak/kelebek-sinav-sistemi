@@ -17,6 +17,6 @@ class DistributionEvent(Base):
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
     participant_id: Mapped[str] = mapped_column(ForeignKey("exam_participants.id", ondelete="RESTRICT"), nullable=False)
     displaced_participant_id: Mapped[str | None] = mapped_column(ForeignKey("exam_participants.id", ondelete="RESTRICT"), nullable=True)
-    from_seat_id: Mapped[str] = mapped_column(ForeignKey("seats.id", ondelete="RESTRICT"), nullable=False)
-    to_seat_id: Mapped[str] = mapped_column(ForeignKey("seats.id", ondelete="RESTRICT"), nullable=False)
+    from_seat_id: Mapped[str | None] = mapped_column(ForeignKey("seats.id", ondelete="RESTRICT"), nullable=True)
+    to_seat_id: Mapped[str | None] = mapped_column(ForeignKey("seats.id", ondelete="RESTRICT"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
