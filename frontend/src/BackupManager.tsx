@@ -63,6 +63,6 @@ export default function BackupManager() {
       {error && <p className="backup-feedback error" role="alert">{error}</p>}
       {backup && <div className="backup-feedback success" role="status"><strong>Yedek paketi oluşturuldu.</strong><span>{new Date(backup.createdAt).toLocaleString('tr-TR')} · {backup.fileCount} dosya · Şema {backup.schemaRevision}</span><small>ZIP dosyası tarayıcının indirme konumuna kaydedildi.</small></div>}
     </article>
-    <aside className="backup-side-note"><span className="eyebrow">GERİ YÜKLEME</span><h3>Bir sonraki adım</h3><p>Geri yüklemeden önce paket bütünlüğü ve sürüm uyumluluğu kontrol edilecek, mevcut veriler güvenlik yedeğine alınacak ve son işlem için açık onay istenecek.</p></aside>
+    <aside className="backup-side-note"><span className="eyebrow">OTOMATİK KORUMA</span><h3>Günde bir kez yerel yedek</h3><p>Uygulama açıldığında ve yeni günün ilk kullanımında otomatik yedek alınır. Son 30 günlük otomatik paket tutulur. Öğrenci listesi aktarılmadan önce ayrıca güvenlik kopyası oluşturulur.</p><div className="backup-note-divider" /><span className="eyebrow">GERİ YÜKLEME</span><h3>Bir sonraki adım</h3><p>Geri yüklemeden önce paket bütünlüğü ve sürüm uyumluluğu kontrol edilecek, mevcut veriler güvenlik yedeğine alınacak ve son işlem için açık onay istenecek.</p></aside>
   </section>
 }

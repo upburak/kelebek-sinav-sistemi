@@ -12,3 +12,4 @@
 - Kesinleşmiş dağıtım düzenlemesi: güncel eğitim yılında koltuk taşıma ve takasları aynı aday üzerinde, geri al/yinele geçmişiyle kaydetme; arşiv dağıtımlarını salt okunur tutma.
 - PDF durumu: dağıtım değiştiğinde mevcut oturma planını eski olarak işaretleme, yenilenince içerik parmak iziyle güncelliğini doğrulama.
 - Faz I başlangıcı: SQLite tutarlı anlık görüntüsü ve mevcut PDF raporlarını sürümlü, manifestli ve SHA-256 özetli ZIP paketi olarak elle oluşturup indirme; geri yükleme güvenlik kontrolleri ayrı adımda.
+- Otomatik koruma: uygulama açılışında ve yeni günün ilk kullanımında günlük paket; en yeni 30 otomatik yedeği tutma ve öğrenci listesi aktarımından hemen önce ayrı güvenlik paketi.

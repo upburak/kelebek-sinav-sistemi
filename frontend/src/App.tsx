@@ -72,6 +72,7 @@ type StudentImportCommitResult = {
   unchanged: number
   deactivated: number
   reassigned_school_numbers: number
+  safety_backup: string
   classes: { class_level: string; section: string; student_count: number }[]
 }
 
@@ -870,7 +871,7 @@ export default function App() {
             )}
             {importCommitResult && (
               <p className="commit-success" role="status">
-                Aktarım tamamlandı: {importCommitResult.created} yeni öğrenci, {importCommitResult.updated} değişen, {importCommitResult.unchanged} aynı kalan, {importCommitResult.deactivated} pasif kayıt.
+                Aktarım tamamlandı: {importCommitResult.created} yeni öğrenci, {importCommitResult.updated} değişen, {importCommitResult.unchanged} aynı kalan, {importCommitResult.deactivated} pasif kayıt. İşlem öncesi güvenlik yedeği de alındı.
               </p>
             )}
             <p className="privacy-note">Dosya bu adımda veritabanına kaydedilmez.</p>

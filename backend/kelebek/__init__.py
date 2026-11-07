@@ -1,6 +1,6 @@
 """Kelebek Sınav Sistemi Flask uygulaması."""
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 from kelebek.api.academic_years import academic_year_api
 from kelebek.api.backups import backups_api
@@ -12,6 +12,7 @@ from kelebek.api.student_import import student_import_api
 from kelebek.api.students import students_api
 from kelebek.config import configure_logging
 from kelebek.db import initialize_database
+from kelebek.services.backup import ensure_daily_backup
 
 
 def create_app() -> Flask:
@@ -20,6 +21,19 @@ def create_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
     configure_logging(app.logger)
     initialize_database(app)
+    try:
+        ensure_daily_backup()
+    except Exception:
+        app.logger.exception("Günlük otomatik yedek alınamadı; uygulama açılmaya devam ediyor.")
+
+    @app.before_request
+    def ensure_daily_backup_for_active_day():
+        if request.path.startswith("/api/"):
+            try:
+                ensure_daily_backup()
+            except Exception:
+                app.logger.exception("Günlük otomatik yedek alınamadı.")
+
     app.register_blueprint(health_api, url_prefix="/api")
     app.register_blueprint(school_profile_api, url_prefix="/api")
     app.register_blueprint(academic_year_api, url_prefix="/api")

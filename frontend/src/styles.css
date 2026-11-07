@@ -852,6 +852,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .backup-feedback small { color: #688477; font-size: 10px; }
 .backup-side-note { align-self: start; border-top: 3px solid #8170c5; background: #fcfbff; }
 .backup-side-note h3 { margin: 9px 0 0; color: #403b68; font-size: 15px; }
+.backup-note-divider { margin: 19px 0 15px; border-top: 1px solid #e8e4f3; }
 @media (max-width: 700px) { .backup-workspace { grid-template-columns: 1fr; } .backup-card, .backup-side-note { padding: 17px; } }
 
 @media (max-width: 980px) {

@@ -5,9 +5,12 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import json
+import logging
+import os
 import shutil
 import sqlite3
 import tempfile
+import threading
 import zipfile
 from contextlib import closing
 from datetime import datetime, timezone
@@ -21,6 +24,9 @@ from kelebek.config import get_data_dir, get_database_path
 BACKUP_FORMAT = "kelebek-portable-backup"
 BACKUP_FORMAT_VERSION = 1
 SPOOL_MEMORY_LIMIT = 8 * 1024 * 1024
+BACKUP_RETENTION_COUNT = 30
+_backup_lock = threading.Lock()
+logger = logging.getLogger(__name__)
 
 
 def _sha256(path: Path) -> str:
@@ -45,7 +51,7 @@ def build_backup_package() -> tuple[BinaryIO, str, dict]:
     if not database_path.is_file():
         raise FileNotFoundError("Uygulama veritabanı bulunamadı.")
 
-    created_at = datetime.now(timezone.utc).replace(microsecond=0)
+    created_at = datetime.now(timezone.utc)
     stamp = created_at.strftime("%Y%m%d-%H%M%S-%f-UTC")
     stream = SpooledTemporaryFile(max_size=SPOOL_MEMORY_LIMIT, mode="w+b")
 
@@ -101,3 +107,67 @@ def build_backup_package() -> tuple[BinaryIO, str, dict]:
     except Exception:
         stream.close()
         raise
+
+
+def _store_package(target: Path) -> None:
+    """Write a complete backup atomically so interrupted writes are ignored."""
+    stream, _download_name, _manifest = build_backup_package()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", prefix=".kelebek-backup-", suffix=".tmp",
+            dir=target.parent, delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            shutil.copyfileobj(stream, temporary)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        try:
+            os.chmod(temporary_path, 0o600)
+        except OSError:
+            logger.warning("Yedek dosyası erişim izinleri ayarlanamadı.")
+        os.replace(temporary_path, target)
+    finally:
+        stream.close()
+        if temporary_path and temporary_path.exists():
+            temporary_path.unlink()
+
+
+def _prune_backups(pattern: str, keep: int) -> None:
+    backup_dir = get_data_dir() / "backups"
+    candidates = sorted(
+        (path for path in backup_dir.glob(pattern) if path.is_file() and not path.is_symlink()),
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
+        reverse=True,
+    )
+    for old_path in candidates[keep:]:
+        try:
+            old_path.unlink()
+        except OSError:
+            logger.warning("Eski otomatik yedek temizlenemedi: %s", old_path.name)
+
+
+def ensure_daily_backup(now: datetime | None = None) -> Path | None:
+    """Create one automatic package per local calendar day; keep the latest 30."""
+    now = now or datetime.now().astimezone()
+    target = get_data_dir() / "backups" / f"automatic-daily-{now.date().isoformat()}.zip"
+    with _backup_lock:
+        if target.is_file():
+            return None
+        _store_package(target)
+        _prune_backups("automatic-daily-*.zip", BACKUP_RETENTION_COUNT)
+        return target
+
+
+def create_safety_backup(reason: str) -> Path:
+    """Create a named pre-operation package for a supported critical action."""
+    if reason != "student-import":
+        raise ValueError("Güvenlik yedeği nedeni desteklenmiyor.")
+    backup_dir = get_data_dir() / "backups"
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f-UTC")
+    target = backup_dir / f"safety-{reason}-{stamp}.zip"
+    with _backup_lock:
+        _store_package(target)
+        _prune_backups(f"safety-{reason}-*.zip", BACKUP_RETENTION_COUNT)
+    return target

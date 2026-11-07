@@ -13,6 +13,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 from sqlalchemy import select
 
 from kelebek.db import current_academic_year_start
+from kelebek.services.backup import create_safety_backup
 
 
 student_import_api = Blueprint("student_import", __name__)
@@ -571,6 +572,11 @@ def commit_student_workbook():
             ).all()
             old_by_number = {row.school_number: row for row in old_rows}
             diff = _build_diff_report(session, academic_year_id, records, area_mapped)
+            try:
+                safety_backup = create_safety_backup("student-import")
+            except Exception:
+                current_app.logger.exception("Öğrenci aktarımı öncesi güvenlik yedeği alınamadı.")
+                return jsonify({"error": "İşlem öncesi güvenlik yedeği alınamadığı için liste aktarılmadı."}), 500
             created = updated = unchanged = reassigned = deactivated = 0
 
             for school_number, incoming in incoming_by_number.items():
@@ -639,6 +645,7 @@ def commit_student_workbook():
                 "unchanged": unchanged,
                 "deactivated": deactivated,
                 "reassigned_school_numbers": reassigned,
+                "safety_backup": safety_backup.name,
                 "classes": result["validation"]["classes"],
                 "review": {
                     "new": len(diff["new_students"]),
