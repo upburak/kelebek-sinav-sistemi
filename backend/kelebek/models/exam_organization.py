@@ -3,7 +3,7 @@
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, String
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from kelebek.db import Base
@@ -23,6 +23,12 @@ class ExamOrganization(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     exam_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    prevent_same_section_adjacent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    prevent_same_section_front_back: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    prevent_different_grade_same_area_adjacent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    prevent_different_grade_same_area_front_back: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    prevent_same_grade_area_adjacent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    prevent_same_grade_area_front_back: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

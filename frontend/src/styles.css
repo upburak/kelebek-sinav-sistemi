@@ -720,6 +720,18 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .exam-organization-copy p { white-space: normal; }
 }
 
+.exam-rule-toolbar { display: flex; align-items: center; gap: 12px; padding: 0 20px 14px; color: #718693; font-size: 11px; }
+.exam-rule-toolbar button { padding: 0; border: 0; background: transparent; color: #5148c8; font: inherit; font-weight: 750; cursor: pointer; }
+.exam-rule-toolbar button:disabled { color: #9aa1ad; cursor: not-allowed; }
+.exam-rule-panel { display: grid; gap: 13px; margin: -3px 8px 8px; padding: 18px; border: 1px solid #dddaf4; border-radius: 0 0 12px 12px; background: #faf9ff; }
+.exam-rule-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.exam-rule-list label { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 58px; padding: 11px 13px; border: 1px solid #e6e4f0; border-radius: 10px; background: #fff; }
+.exam-rule-list label span { display: grid; gap: 4px; }
+.exam-rule-list label strong { color: #303648; font-size: 11px; }
+.exam-rule-list label small { color: #777f8c; font-size: 10px; }
+.exam-rule-list input { width: 18px; height: 18px; flex: none; accent-color: #564bd2; }
+@media (max-width: 700px) { .exam-rule-list { grid-template-columns: 1fr; } .exam-rule-toolbar { padding-right: 14px; padding-left: 14px; } }
+
 @media (max-width: 980px) {
   .app-shell { grid-template-columns: 218px minmax(0, 1fr); }
   .app-sidebar { padding-right: 11px; padding-left: 11px; }

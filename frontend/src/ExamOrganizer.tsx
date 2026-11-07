@@ -9,6 +9,16 @@ type GroupOption = {
 
 type CourseOption = { id: string; name: string }
 type CourseDraft = { id: number; name: string; groupKeys: string[] }
+type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back'
+type RuleSet = Record<RuleKey, boolean>
+const ruleLabels: { key: RuleKey; title: string; position: string }[] = [
+  { key: 'prevent_same_section_adjacent', title: 'Aynı şubedeki öğrenciler', position: 'Yan yana' },
+  { key: 'prevent_same_section_front_back', title: 'Aynı şubedeki öğrenciler', position: 'Önlü arkalı' },
+  { key: 'prevent_different_grade_same_area_adjacent', title: 'Farklı sınıf seviyelerinde aynı alan öğrencileri', position: 'Yan yana' },
+  { key: 'prevent_different_grade_same_area_front_back', title: 'Farklı sınıf seviyelerinde aynı alan öğrencileri', position: 'Önlü arkalı' },
+  { key: 'prevent_same_grade_area_adjacent', title: 'Aynı sınıf seviyesi ve alandaki öğrenciler', position: 'Yan yana' },
+  { key: 'prevent_same_grade_area_front_back', title: 'Aynı sınıf seviyesi ve alandaki öğrenciler', position: 'Önlü arkalı' },
+]
 type RoomOption = {
   classroom_id: string
   classroom_name: string
@@ -32,6 +42,7 @@ type ExamOrganization = {
   available_capacity: number
   capacity_sufficient: boolean
   capacity_deficit: number
+  rules: RuleSet
 }
 
 type Props = {
@@ -101,6 +112,11 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
   const [roomSaving, setRoomSaving] = useState(false)
   const [roomError, setRoomError] = useState('')
   const [roomMessage, setRoomMessage] = useState('')
+  const [activeRuleOrganizationId, setActiveRuleOrganizationId] = useState<string | null>(null)
+  const [ruleDraft, setRuleDraft] = useState<RuleSet | null>(null)
+  const [ruleSaving, setRuleSaving] = useState(false)
+  const [ruleError, setRuleError] = useState('')
+  const [ruleMessage, setRuleMessage] = useState('')
 
   useEffect(() => {
     if (!academicYearId) {
@@ -281,6 +297,40 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     }
   }
 
+  function toggleRuleEditor(organization: ExamOrganization) {
+    if (activeRuleOrganizationId === organization.id) {
+      setActiveRuleOrganizationId(null)
+      setRuleError('')
+      return
+    }
+    setActiveRuleOrganizationId(organization.id)
+    setRuleDraft({ ...organization.rules })
+    setRuleError('')
+    setRuleMessage('')
+  }
+
+  async function saveRules(organizationId: string) {
+    if (!ruleDraft) return
+    setRuleSaving(true)
+    setRuleError('')
+    setRuleMessage('')
+    try {
+      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/rules`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rules: ruleDraft }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Dağıtım kuralları kaydedilemedi.')
+      const updated = data.organization as ExamOrganization
+      setOrganizations((items) => items.map((item) => item.id === updated.id ? updated : item))
+      setRuleDraft({ ...updated.rules })
+      setRuleMessage('Dağıtım kuralları kaydedildi.')
+    } catch (reason) {
+      setRuleError(reason instanceof Error ? reason.message : 'Dağıtım kuralları kaydedilemedi.')
+    } finally {
+      setRuleSaving(false)
+    }
+  }
+
   return <section className="exam-organizer" aria-labelledby="exam-organizer-title">
     <div className="exam-organizer-heading">
       <div>
@@ -355,6 +405,8 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
             {roomError && <p className="exam-error" role="alert">{roomError}</p>}{roomMessage && <p className="exam-room-success" role="status">{roomMessage}</p>}
             <div className="exam-room-footer"><span>Bu seçim taslakta saklanır. Öğrenciler koltuklara henüz dağıtılmaz.</span><button type="button" disabled={roomSaving || !roomOptionsByClassroom.length} onClick={() => saveRoomSelection(organization.id)}>{roomSaving ? 'Kaydediliyor…' : 'Derslik seçimini kaydet'}</button></div>
           </div>}
+          <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRuleEditor(organization)}>{activeRuleOrganizationId === organization.id ? 'Kuralları kapat' : 'Dağıtım kuralları'}</button><span>Altı komşuluk kuralı bu sınava özeldir.</span></div>
+          {activeRuleOrganizationId === organization.id && ruleDraft && <div className="exam-rule-panel"><div className="exam-room-panel-heading"><div><strong>Adım 03 · Oturma kuralları</strong><small>Kuralları birbirinden bağımsız açıp kapatabilirsin. Kurallar yalnızca kullanılabilir fiziksel koltuklar arasında değerlendirilir.</small></div></div><div className="exam-rule-list">{ruleLabels.map((rule) => <label key={rule.key}><span><strong>{rule.title}</strong><small>{rule.position}</small></span><input type="checkbox" checked={ruleDraft[rule.key]} onChange={(event) => setRuleDraft((current) => current ? { ...current, [rule.key]: event.target.checked } : current)} /></label>)}</div>{ruleError && <p className="exam-error" role="alert">{ruleError}</p>}{ruleMessage && <p className="exam-room-success" role="status">{ruleMessage}</p>}<div className="exam-room-footer"><span>Dağıtım adayı oluşturulurken bu ayarlar kullanılacak.</span><button type="button" disabled={ruleSaving} onClick={() => saveRules(organization.id)}>{ruleSaving ? 'Kaydediliyor…' : 'Kuralları kaydet'}</button></div></div>}
         </article>
       })}
     </div>}

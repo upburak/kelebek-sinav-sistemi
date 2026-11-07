@@ -10,6 +10,7 @@ from kelebek.services.exam_organizer import (
     list_courses,
     list_organizations,
     list_room_options,
+    update_organization_rules,
     update_organization_rooms,
 )
 
@@ -80,4 +81,20 @@ def put_exam_organization_classrooms(organization_id: str):
         return jsonify({"error": str(error)}), error.status_code
     except IntegrityError:
         return jsonify({"error": "Derslik seçimi aynı anda değişti; sayfayı yenileyip tekrar deneyin."}), 409
+    return jsonify({"organization": organization})
+
+
+@exam_organizations_api.put("/exam-organizations/<organization_id>/rules")
+def put_exam_organization_rules(organization_id: str):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Dağıtım kuralları JSON biçiminde gönderilmelidir."}), 400
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    try:
+        with session_factory.begin() as session:
+            organization = update_organization_rules(session, organization_id, payload)
+    except ExamOrganizerError as error:
+        return jsonify({"error": str(error)}), error.status_code
+    except IntegrityError:
+        return jsonify({"error": "Kurallar aynı anda değişti; sayfayı yenileyip tekrar deneyin."}), 409
     return jsonify({"organization": organization})

@@ -27,6 +27,20 @@ class ExamOrganizerError(ValueError):
         self.status_code = status_code
 
 
+RULE_FIELDS = (
+    "prevent_same_section_adjacent",
+    "prevent_same_section_front_back",
+    "prevent_different_grade_same_area_adjacent",
+    "prevent_different_grade_same_area_front_back",
+    "prevent_same_grade_area_adjacent",
+    "prevent_same_grade_area_front_back",
+)
+
+
+def _serialize_rules(organization: ExamOrganization) -> dict[str, bool]:
+    return {field: bool(getattr(organization, field)) for field in RULE_FIELDS}
+
+
 def list_courses(session: Session) -> list[dict]:
     return [
         {"id": course.id, "name": course.name}
@@ -151,6 +165,7 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
                     room["available_seats"] for room in room_selections_by_org.get(item.id, [])
                 ),
             ),
+            "rules": _serialize_rules(item),
         }
         for item in organizations
     ]
@@ -195,6 +210,29 @@ def update_organization_rooms(session: Session, organization_id: str, payload: d
             layout_id=layout.id,
             display_order=order,
         ))
+    session.flush()
+    return next(
+        item for item in list_organizations(session, organization.academic_year_id)
+        if item["id"] == organization.id
+    )
+
+
+def update_organization_rules(session: Session, organization_id: str, payload: dict) -> dict:
+    organization = session.get(ExamOrganization, organization_id)
+    if organization is None:
+        raise ExamOrganizerError("Sınav organizasyonu bulunamadı.", 404)
+    year = session.get(AcademicYear, organization.academic_year_id)
+    if year is None:
+        raise ExamOrganizerError("Organizasyonun eğitim-öğretim yılı bulunamadı.", 404)
+    if year.start_year < current_academic_year_start() or organization.status != "draft":
+        raise ExamOrganizerError("Bu organizasyon salt okunur; dağıtım kuralları değiştirilemez.", 403)
+    rules = payload.get("rules")
+    if not isinstance(rules, dict) or set(rules) != set(RULE_FIELDS):
+        raise ExamOrganizerError("Altı dağıtım kuralının tamamı gönderilmelidir.")
+    if any(type(value) is not bool for value in rules.values()):
+        raise ExamOrganizerError("Dağıtım kuralları yalnızca açık veya kapalı olabilir.")
+    for field in RULE_FIELDS:
+        setattr(organization, field, rules[field])
     session.flush()
     return next(
         item for item in list_organizations(session, organization.academic_year_id)
@@ -358,4 +396,5 @@ def create_organization(session: Session, payload: dict) -> dict:
         "available_capacity": 0,
         "capacity_sufficient": False,
         "capacity_deficit": len(participants_by_enrollment),
+        "rules": {field: True for field in RULE_FIELDS},
     }
