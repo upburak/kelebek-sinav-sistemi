@@ -53,3 +53,6 @@ build/
 .DS_Store
 Thumbs.db
 Desktop.ini
+*.env
+credentials.json
+.credentials
