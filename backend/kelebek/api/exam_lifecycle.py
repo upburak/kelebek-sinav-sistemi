@@ -9,7 +9,10 @@ from flask import Blueprint, current_app, jsonify, request
 from kelebek.api.exam_organizations import _distribution_fingerprint
 from kelebek.models import ExamOrganization
 from kelebek.services.exam_lifecycle import (
-    apply_student_changes, archive_organization, copy_organization, student_changes,
+    apply_student_changes,
+    archive_organization,
+    copy_organization,
+    student_changes,
 )
 from kelebek.services.exam_organizer import ExamOrganizerError
 

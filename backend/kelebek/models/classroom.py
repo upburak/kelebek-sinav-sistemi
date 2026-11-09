@@ -1,6 +1,6 @@
 """Okulda sınavlarda kullanılabilecek fiziksel derslik."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import DateTime, String
@@ -19,5 +19,5 @@ class Classroom(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
     )

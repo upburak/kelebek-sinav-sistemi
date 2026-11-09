@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import json
@@ -13,7 +14,7 @@ import threading
 import time
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from secrets import token_urlsafe
 
@@ -32,7 +33,6 @@ from kelebek.services.backup import (
     _prune_backups,
     _store_package,
 )
-
 
 MAX_BACKUP_BYTES = 512 * 1024 * 1024
 MAX_BACKUP_FILES = 4096
@@ -161,10 +161,9 @@ def recover_interrupted_restore(data_dir: Path | None = None) -> bool:
         _remove_path(old_reports)
         if stage_dir.is_dir() and not stage_dir.is_symlink():
             _clean_staging_tree(stage_dir)
-            try:
+            # Klasör boşalmadıysa sonraki açılışta temizlenir; geri yükleme bozulmaz.
+            with contextlib.suppress(OSError):
                 stage_dir.rmdir()
-            except OSError:
-                pass
         journal_path.unlink(missing_ok=True)
         return True
     except OSError as error:
@@ -354,7 +353,7 @@ def _validate_and_stage(archive_path: Path, stage_dir: Path) -> dict:
         if backup_version > current_version:
             raise ValueError("Yedek daha yeni bir uygulama sürümünde oluşturulmuş.")
         return {
-            "created_at": created_at.astimezone(timezone.utc).isoformat(),
+            "created_at": created_at.astimezone(UTC).isoformat(),
             "application_version": app_version,
             "schema_revision": original_revision,
             "target_schema_revision": target_revision,
@@ -458,7 +457,7 @@ def apply_confirmed_restore(token: str, confirmed: bool, engine) -> dict:
     pdf_dir = data_dir / "Exports" / "PDF"
     restore_backup_dir = data_dir / "backups"
     restore_backup_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     safety_path = restore_backup_dir / f"safety-restore-{stamp}.zip"
     transaction_id = pending.token
     journal = {

@@ -3,9 +3,8 @@
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from kelebek.db import Base
 from kelebek import models  # noqa: F401 — migration metadata'sını yükler
-
+from kelebek.db import Base
 
 config = context.config
 target_metadata = Base.metadata

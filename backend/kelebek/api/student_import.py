@@ -1,9 +1,10 @@
 """Öğrenci Excel/PDF listelerini önizleme, doğrulama ve onaylı aktarım."""
 
-from datetime import date, datetime, time
-from io import BytesIO
 import json
 import re
+from datetime import date, datetime, time
+from io import BytesIO
+
 from flask import Blueprint, current_app, jsonify, request, send_file
 from sqlalchemy import func, select
 
@@ -14,7 +15,6 @@ from kelebek.services.student_registry import (
     deactivate_student_in_year,
     sync_draft_exam_snapshots,
 )
-
 
 student_import_api = Blueprint("student_import", __name__)
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
@@ -539,7 +539,11 @@ def _ensure_classrooms_for_groups(session, academic_year_id, groups):
     from math import ceil, sqrt
 
     from kelebek.models import (
-        AcademicYear, Classroom, ClassroomLayout, Desk, Seat,
+        AcademicYear,
+        Classroom,
+        ClassroomLayout,
+        Desk,
+        Seat,
     )
 
     year = session.get(AcademicYear, academic_year_id)

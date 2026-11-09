@@ -6,7 +6,7 @@ teknik seçimler için [teknik mimariye](docs/Kelebek_Sinav_Sistemi_Teknik_Mimar
 
 ## Geliştirme ortamı
 
-Gereksinimler: Python 3.12, Node.js 22.12 veya üzeri ve npm.
+Gereksinimler: Python 3.12 veya üzeri, Node.js 22.12 veya üzeri ve npm. Kurulum betikleri bilgisayarda bulunan 3.12+ Python sürümünü kendisi seçer.
 
 ### macOS
 
@@ -24,11 +24,29 @@ Gereksinimler: Python 3.12, Node.js 22.12 veya üzeri ve npm.
 
 Vite arayüzü varsayılan olarak `http://127.0.0.1:5173` adresinde açılır. Geliştirme başlatıcısı Flask API'si için önce `127.0.0.1:5000` portunu dener, doluysa `5001–5100` aralığındaki ilk boş porta geçer; seçilen porta Vite API proxy'sini kendisi yönlendirir. Her iki adres de yalnızca yerel bilgisayarda dinler. Arayüz portu gerekirse `KELEBEK_UI_PORT` ile değiştirilebilir. Geliştirme sunucusu API sağlık kontrolünü `/api/health` üzerinden sağlar.
 
+## Testler
+
+```bash
+PYTHONPATH=backend .venv/bin/python -m unittest discover -s backend/tests   # birim testleri
+PYTHONPATH=backend .venv/bin/python -m pytest tests/e2e                     # uçtan uca API testleri
+.venv/bin/ruff check backend scripts packaging tests                        # lint
+npm --prefix frontend run build                                             # arayüz derlemesi
+```
+
+(Windows'ta `.venv\Scripts\python.exe` kullanın; `PYTHONPATH` için `$env:PYTHONPATH = "backend"`.)
+
+Uçtan uca testler hazırlık istemez: geçici bir veri klasöründe yerel servisi kendileri
+açar ve sentetik okul verisini kurar. Gerçek öğrenci verisi hiçbir teste girmez. Hazır bir
+ortama bağlanmak isterseniz `KELEBEK_PUBLIC_URL` verin; o zaman yerel servis açılmaz.
+
+Her gönderimde ve birleştirme isteğinde GitHub Actions *Testler* iş akışı Ubuntu, macOS ve
+Windows'ta lint ile birim testlerini, ayrıca arayüz derlemesini ve uçtan uca testleri çalıştırır.
+
 ## Kurulum paketleri (macOS ve Windows)
 
 Paketler her işletim sisteminin kendisinde üretilir (Mac'te Windows paketi, Windows'ta Mac paketi üretilmez).
 
-- **macOS (Apple Silicon):** `./scripts/build-macos.sh` → `dist/KelebekSinavSistemi-<sürüm>-macos-arm64.dmg`. DMG'yi açıp uygulamayı *Uygulamalar* klasörüne sürükleyin. İmzasız paket ilk açılışta Finder'da sağ tık → *Aç* ile onaylanır.
+- **macOS (Apple Silicon):** `./scripts/build-macos.sh` → `dist/KelebekSinavSistemi-<sürüm>-macos-arm64.dmg`. DMG'yi açıp uygulamayı *Uygulamalar* klasörüne sürükleyin. Paket ad-hoc imzalanır (Apple Silicon imzasız ikili dosyayı çalıştırmaz); Apple geliştirici kimliğiyle imzalanmadığı için ilk açılışta Finder'da sağ tık → *Aç* ile onaylanır.
 - **Windows (x64):** PowerShell'de `./scripts/build-windows.ps1` → `dist\KelebekSinavSistemi-<sürüm>-windows-x64.zip` ve Inno Setup kuruluysa `...-kurulum.exe`. Kurulum yönetici yetkisi istemez, masaüstü kısayolu oluşturur.
 - **Bilgisayar kurmadan:** Depo GitHub'a gönderildiğinde *Actions → Paketleri oluştur → Run workflow* iki platform paketini birlikte üretir; çıktılar iş akışı sonuçlarından indirilir.
 

@@ -253,12 +253,11 @@ class BackupRestoreTests(unittest.TestCase):
         with patch(
             "kelebek.services.backup_restore._integrity_check",
             side_effect=RuntimeError("synthetic failure"),
-        ):
-            with self.assertLogs("kelebek", level="ERROR"):
-                restored = self.client.post(
-                    "/api/backups/restore/confirm",
-                    json={"token": token, "confirmed": True},
-                )
+        ), self.assertLogs("kelebek", level="ERROR"):
+            restored = self.client.post(
+                "/api/backups/restore/confirm",
+                json={"token": token, "confirmed": True},
+            )
         self.assertEqual(restored.status_code, 500)
         self.assertEqual(self._school_name(), "SENTETİK KORUNACAK OKULU")
         self.assertEqual(self._synthetic_student_name(), "SENTETİK KORUNACAK AD")

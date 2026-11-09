@@ -1,10 +1,9 @@
 """Loopback-only API port selection checks using synthetic sockets."""
 
 import importlib.util
-from pathlib import Path
 import socket
 import unittest
-
+from pathlib import Path
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "choose_api_port.py"
 SPEC = importlib.util.spec_from_file_location("choose_api_port", SCRIPT_PATH)

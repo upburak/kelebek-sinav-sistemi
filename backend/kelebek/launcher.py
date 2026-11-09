@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -105,10 +106,9 @@ def main() -> None:
     if not os.environ.get("KELEBEK_NO_BROWSER"):
         threading.Timer(0.8, webbrowser.open, args=(url,)).start()
     if sys.stdout is not None:
-        try:
+        # Windows konsolunda kod sayfası Türkçe harfleri basamazsa uygulama durmasın.
+        with contextlib.suppress(UnicodeEncodeError, OSError):
             print(f"Kelebek Sınav Sistemi çalışıyor: {url}  (kapatmak için bu pencereyi kapatın)", flush=True)
-        except (UnicodeEncodeError, OSError):
-            pass
     try:
         server.run()
     except (KeyboardInterrupt, OSError):

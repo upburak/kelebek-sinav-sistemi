@@ -1,11 +1,10 @@
 """CP-SAT engine for a first, capacity-safe seating candidate."""
 
+import threading
 from itertools import combinations
 from math import ceil
-import threading
 
 from ortools.sat.python import cp_model
-
 
 RULES = {
     "adjacent": ("prevent_same_section_adjacent", "prevent_different_grade_same_area_adjacent", "prevent_same_grade_area_adjacent"),
@@ -133,7 +132,7 @@ def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dic
     choices = {}
     seat_by_id = {seat["id"]: seat for seat in seats}
     for student_index, _student in enumerate(participants):
-        for seat_id, seat in seat_by_id.items():
+        for seat_id in seat_by_id:
             choices[student_index, seat_id] = model.new_bool_var(f"x_{student_index}_{seat_id}")
         model.add_exactly_one(choices[student_index, seat_id] for seat_id in seat_by_id)
     for seat_id in seat_by_id:

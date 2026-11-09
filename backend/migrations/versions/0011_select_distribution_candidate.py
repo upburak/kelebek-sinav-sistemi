@@ -5,9 +5,8 @@ Revises: 0010_distribution_alternatives
 Create Date: 2026-11-07
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0011_select_distribution_candidate"
 down_revision = "0010_distribution_alternatives"

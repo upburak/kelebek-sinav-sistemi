@@ -2,10 +2,12 @@
 # violation details on candidates (ihlal krokisi), app update API (status/inspect/apply).
 import io
 import os
+import sys
 import threading
 import time
 import uuid
 import zipfile
+from pathlib import Path
 
 import pytest
 import requests
@@ -14,6 +16,8 @@ BASE_URL = os.environ.get("KELEBEK_PUBLIC_URL", "").rstrip("/")
 if not BASE_URL:
     pytest.skip("KELEBEK_PUBLIC_URL not set", allow_module_level=True)
 API = f"{BASE_URL}/api"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+from kelebek.version import APP_VERSION  # noqa: E402,I001
 state: dict = {}
 
 
@@ -169,7 +173,8 @@ class TestViolations:
 class TestUpdates:
     def test_status(self):
         d = requests.get(f"{API}/updates/status", timeout=10).json()
-        assert d["current_version"] == "0.2.0" and d["can_apply"] is False and d["last_result"] is None
+        # Sürüm numarası tek kaynaktan (kelebek/version.py) okunur; her yayında elle güncellenmez.
+        assert d["current_version"] == APP_VERSION and d["can_apply"] is False and d["last_result"] is None
         assert isinstance(d["platform"], str) and d["platform"]
 
     def test_inspect_no_file(self):

@@ -1,6 +1,6 @@
 """Bir eğitim-öğretim yılı içinde yürütülen sınav organizasyonu."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, String
@@ -35,5 +35,5 @@ class ExamOrganization(Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     copied_from_organization_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )

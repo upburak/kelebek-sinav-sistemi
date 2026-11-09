@@ -6,7 +6,6 @@ from sqlalchemy import select, update
 from kelebek.db import current_academic_year_start
 from kelebek.models import AcademicYear
 
-
 academic_year_api = Blueprint("academic_years", __name__)
 
 

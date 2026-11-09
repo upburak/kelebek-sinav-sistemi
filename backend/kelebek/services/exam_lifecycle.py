@@ -1,15 +1,25 @@
 """Karar 39, 68–70: güncel öğrenci karşılaştırması, arşivleme ve çalışma kopyası."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from kelebek.db import current_academic_year_start
 from kelebek.models import (
-    AcademicYear, ClassroomLayout, DistributionCandidate, DistributionEvent, DistributionRun,
-    ExamCourse, ExamCourseParticipant, ExamOrganization, ExamOrganizationClassroom,
-    ExamParticipant, Seat, SeatAssignment, StudentYearEnrollment,
+    AcademicYear,
+    ClassroomLayout,
+    DistributionCandidate,
+    DistributionEvent,
+    DistributionRun,
+    ExamCourse,
+    ExamCourseParticipant,
+    ExamOrganization,
+    ExamOrganizationClassroom,
+    ExamParticipant,
+    Seat,
+    SeatAssignment,
+    StudentYearEnrollment,
 )
 from kelebek.services.exam_organizer import RULE_FIELDS, ExamOrganizerError, list_organizations
 
@@ -122,7 +132,7 @@ def archive_organization(session: Session, organization: ExamOrganization) -> di
         raise ExamOrganizerError("Yalnızca kesinleşmiş sınav tamamlanıp arşivlenebilir.", 409)
     if organization.archived_at:
         raise ExamOrganizerError("Bu sınav zaten tamamlandı olarak arşivde.", 409)
-    organization.archived_at = datetime.now(timezone.utc)
+    organization.archived_at = datetime.now(UTC)
     session.flush()
     return next(item for item in list_organizations(session, organization.academic_year_id)
                 if item["id"] == organization.id)

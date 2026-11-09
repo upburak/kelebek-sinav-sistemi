@@ -27,6 +27,9 @@ jobs:
           ./scripts/setup-macos.sh
           ./scripts/build-macos.sh
 
+      - name: macOS Duman Testi
+        run: .venv/bin/python packaging/smoke_test.py
+
       - name: macOS Artifact Yükle
         uses: actions/upload-artifact@v4
         with:
@@ -55,6 +58,10 @@ jobs:
         run: |
           Set-ExecutionPolicy -Scope Process Bypass
           .\scripts\build-windows.ps1
+
+      - name: Windows Duman Testi
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe packaging\smoke_test.py
 
       - name: Windows Artifact Yükle
         uses: actions/upload-artifact@v4

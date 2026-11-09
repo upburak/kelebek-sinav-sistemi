@@ -1,22 +1,25 @@
 """Kesinleşmiş sınavlar için yerel rapor üretimi."""
 
-import os
-import re
 import hashlib
 import json
+import logging
+import os
+import re
+import sys
+from datetime import UTC, datetime
 from io import BytesIO
+from itertools import pairwise
 from pathlib import Path
-from datetime import datetime, timezone
 
-from reportlab.lib.pagesizes import A3, A4, A5, LEGAL, LETTER, landscape, portrait
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
 from reportlab.lib.colors import HexColor
+from reportlab.lib.pagesizes import A3, A4, A5, LEGAL, LETTER, landscape, portrait
 from reportlab.lib.utils import simpleSplit
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
-from openpyxl.utils import get_column_letter
 from sqlalchemy import func, select
 
 from kelebek.config import get_data_dir
@@ -35,9 +38,10 @@ from kelebek.models import (
     SeatAssignment,
 )
 
-
 PAGE_SIZE = landscape(A4)
 PAGE_WIDTH, PAGE_HEIGHT = PAGE_SIZE
+logger = logging.getLogger("kelebek.reporting")
+
 FONT_REGULAR = "KelebekSans"
 FONT_BOLD = "KelebekSansBold"
 SEATING_PLAN_REPORT_TYPE = "seating_plan_pdf"
@@ -131,7 +135,6 @@ def resolve_report_fields(params, report_type: str) -> tuple[str, ...]:
 
 
 def resolve_report_labels(params, report_type: str, fields: tuple[str, ...]) -> dict[str, str]:
-    allowed = set(REPORT_FIELDS.get(report_type, ()))
     raw = params.get("labels")
     if raw is None:
         return {}
@@ -154,31 +157,118 @@ def resolve_report_labels(params, report_type: str, fields: tuple[str, ...]) -> 
     return {key: labels[key] for key in fields if key in labels}
 
 
+# Raporlarda görünmesi gereken Türkçe harfler. Standart PDF yazı tipleri (Helvetica)
+# WinAnsi kodlamasıyla sınırlı olduğundan bu harfleri bozar; bu yüzden yazı tipi
+# seçilirken harflerin gerçekten bulunduğu doğrulanır.
+TURKISH_LETTERS = "ışğİŞĞçÇöÖüÜâîû"
+
+# Sadeleştirme, hiçbir Türkçe destekli yazı tipi bulunamadığında kullanılır: ad
+# soyadın yanlış harfle yazılması yerine okunabilir ASCII karşılığı yazılır.
+ASCII_FALLBACK = str.maketrans({
+    "ı": "i", "İ": "I", "ş": "s", "Ş": "S", "ğ": "g", "Ğ": "G",
+    "ç": "c", "Ç": "C", "ö": "o", "Ö": "O", "ü": "u", "Ü": "U",
+    "â": "a", "Â": "A", "î": "i", "Î": "I", "û": "u", "Û": "U",
+})
+
+
+def _font_candidates() -> list[tuple[str, str]]:
+    """İşletim sistemine göre Türkçe destekleyen yazı tipi çiftlerini sırala."""
+    if os.name == "nt":
+        fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
+        return [
+            (str(fonts / "arial.ttf"), str(fonts / "arialbd.ttf")),
+            (str(fonts / "calibri.ttf"), str(fonts / "calibrib.ttf")),
+            (str(fonts / "tahoma.ttf"), str(fonts / "tahomabd.ttf")),
+            (str(fonts / "segoeui.ttf"), str(fonts / "segoeuib.ttf")),
+            (str(fonts / "verdana.ttf"), str(fonts / "verdanab.ttf")),
+        ]
+    if sys.platform == "darwin":
+        supplemental = Path("/System/Library/Fonts/Supplemental")
+        return [
+            (str(supplemental / "Arial.ttf"), str(supplemental / "Arial Bold.ttf")),
+            (str(supplemental / "Verdana.ttf"), str(supplemental / "Verdana Bold.ttf")),
+            (str(supplemental / "Tahoma.ttf"), str(supplemental / "Tahoma Bold.ttf")),
+            (str(supplemental / "Arial Unicode.ttf"), str(supplemental / "Arial Unicode.ttf")),
+            ("/Library/Fonts/Arial.ttf", "/Library/Fonts/Arial Bold.ttf"),
+        ]
+    base = Path("/usr/share/fonts")
+    pairs = [
+        ("truetype/dejavu/DejaVuSans.ttf", "truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ("truetype/liberation/LiberationSans-Regular.ttf", "truetype/liberation/LiberationSans-Bold.ttf"),
+        ("truetype/liberation2/LiberationSans-Regular.ttf", "truetype/liberation2/LiberationSans-Bold.ttf"),
+        ("truetype/noto/NotoSans-Regular.ttf", "truetype/noto/NotoSans-Bold.ttf"),
+        ("truetype/freefont/FreeSans.ttf", "truetype/freefont/FreeSansBold.ttf"),
+    ]
+    return [(str(base / regular), str(base / bold)) for regular, bold in pairs]
+
+
+def _supports_turkish(font_path: str) -> bool:
+    """Yazı tipinde Türkçe harflerin karşılığı var mı diye bak."""
+    try:
+        face = TTFont("KelebekProbe", font_path).face
+    except Exception:
+        return False
+    try:
+        return all(face.charToGlyph.get(ord(letter)) for letter in TURKISH_LETTERS)
+    except Exception:
+        return False
+
+
 def _register_fonts() -> tuple[str, str]:
-    """Use a Turkish-capable system font when available; otherwise use Helvetica."""
+    """Türkçe harfleri doğru basan bir sistem yazı tipi kaydet.
+
+    Hiçbiri bulunamazsa Helvetica'ya dönülür; Helvetica Türkçe harfleri bozduğu için
+    o durumda metinler ASCII karşılıklarına sadeleştirilir (bkz. ``pdf_text``).
+    """
     if FONT_REGULAR in pdfmetrics.getRegisteredFontNames():
         return FONT_REGULAR, FONT_BOLD
 
-    if os.name == "nt":
-        candidates = [(r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\arialbd.ttf")]
-    elif os.name == "posix" and os.uname().sysname == "Darwin":
-        candidates = [
-            ("/System/Library/Fonts/Supplemental/Arial.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
-            ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf", "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
-        ]
-    else:
-        candidates = [
-            ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-            ("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"),
-            ("/usr/share/fonts/truetype/freefont/FreeSans.ttf", "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"),
-        ]
-
-    for regular_path, bold_path in candidates:
-        if Path(regular_path).is_file() and Path(bold_path).is_file():
+    for regular_path, bold_path in _font_candidates():
+        if not (Path(regular_path).is_file() and Path(bold_path).is_file()):
+            continue
+        if not _supports_turkish(regular_path):
+            continue
+        try:
             pdfmetrics.registerFont(TTFont(FONT_REGULAR, regular_path))
             pdfmetrics.registerFont(TTFont(FONT_BOLD, bold_path))
-            return FONT_REGULAR, FONT_BOLD
+        except Exception:
+            logger.warning("Yazı tipi kaydedilemedi: %s", regular_path)
+            continue
+        return FONT_REGULAR, FONT_BOLD
+
+    logger.warning(
+        "Türkçe harfleri destekleyen bir sistem yazı tipi bulunamadı; "
+        "rapor metinleri ASCII karşılıklarıyla yazılacak."
+    )
     return "Helvetica", "Helvetica-Bold"
+
+
+def pdf_text(value: object) -> str:
+    """Seçili yazı tipi Türkçe harfleri basamıyorsa metni okunabilir biçimde sadeleştir."""
+    text = "" if value is None else str(value)
+    if FONT_REGULAR in pdfmetrics.getRegisteredFontNames():
+        return text
+    return text.translate(ASCII_FALLBACK)
+
+
+class ReportCanvas(canvas.Canvas):
+    """Her metin çizimini ``pdf_text`` üzerinden geçiren tuval.
+
+    Böylece Türkçe destekli yazı tipi bulunamadığında raporda yanlış harf yerine
+    okunabilir ASCII karşılığı basılır; tek tek çağrıların düzeltilmesi gerekmez.
+    """
+
+    def drawString(self, x, y, text, *args, **kwargs):
+        return super().drawString(x, y, pdf_text(text), *args, **kwargs)
+
+    def drawRightString(self, x, y, text, *args, **kwargs):
+        return super().drawRightString(x, y, pdf_text(text), *args, **kwargs)
+
+    def drawCentredString(self, x, y, text, *args, **kwargs):
+        return super().drawCentredString(x, y, pdf_text(text), *args, **kwargs)
+
+    def drawAlignedString(self, x, y, text, *args, **kwargs):
+        return super().drawAlignedString(x, y, pdf_text(text), *args, **kwargs)
 
 
 def _fit_name(first_name: str, last_name: str, width: float, font: str) -> tuple[list[str], float]:
@@ -352,7 +442,7 @@ def record_report(session, organization: ExamOrganization, candidate_id: str,
         report.data_fingerprint = report_data_fingerprint(session, organization, candidate_id)
         report.file_sha256 = file_sha256
         report.file_name = file_name
-        report.created_at = datetime.now(timezone.utc)
+        report.created_at = datetime.now(UTC)
 
 
 def _report_context(session, organization: ExamOrganization, candidate_id: str):
@@ -514,7 +604,7 @@ def _build_room_report_pdf(session, organization, candidate_id, report_type, opt
         for page_index in range(page_count):
             pages.append((classroom, layout, rows, page_index + 1, page_count))
     output = BytesIO()
-    pdf = canvas.Canvas(output, pagesize=page_size, pageCompression=1)
+    pdf = ReportCanvas(output, pagesize=page_size, pageCompression=1)
     report_title = ("YOKLAMA ÇİZELGESİ" if attendance else "GENEL SINAV DAĞITIM LİSTESİ"
                     if general else "DERSLİK BAZLI ÖĞRENCİ LİSTESİ")
     pdf.setTitle(f"{organization.name} - {report_title.title()}")
@@ -586,7 +676,7 @@ def build_class_student_list_pdf(session, organization, candidate_id: str, optio
         for page_index in range(page_count):
             pages.append((class_group, rows, page_index + 1, page_count))
     output = BytesIO()
-    pdf = canvas.Canvas(output, pagesize=page_size, pageCompression=1)
+    pdf = ReportCanvas(output, pagesize=page_size, pageCompression=1)
     pdf.setTitle(f"{organization.name} - Sınıf Öğrenci Listesi")
     pdf.setAuthor(school_name)
     for (class_level, section), rows, page_index, page_count in pages:
@@ -827,7 +917,7 @@ def _draw_room_page(pdf, school_name: str, organization: ExamOrganization, cours
     pdf.drawCentredString(page_width / 2, plan_top + 12, "TAHTA / ÖĞRETMEN MASASI")
 
     column_positions = sorted({round((desk.x - min_x) / grid_step) for desk in desks})
-    for left_column, right_column in zip(column_positions, column_positions[1:]):
+    for left_column, right_column in pairwise(column_positions):
         if right_column - left_column > 1:
             aisle_x = plan_left + ((left_column + right_column) / 2 + 0.5) * cell_width
             pdf.saveState()
@@ -902,7 +992,7 @@ def build_seating_plan_pdf(session, organization: ExamOrganization, candidate_id
 
     regular, bold = _register_fonts()
     output = BytesIO()
-    pdf = canvas.Canvas(output, pagesize=page_size, pageCompression=1)
+    pdf = ReportCanvas(output, pagesize=page_size, pageCompression=1)
     pdf.setTitle(f"{organization.name} - Oturma Planı")
     pdf.setAuthor(school_name)
     for page_index, (classroom, layout) in enumerate(selections, start=1):

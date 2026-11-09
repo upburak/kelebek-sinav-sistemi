@@ -1,6 +1,6 @@
 """Latest generated report snapshot for an exam organization."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
@@ -25,5 +25,5 @@ class DistributionReport(Base):
     file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC),
     )

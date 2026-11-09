@@ -5,9 +5,8 @@ Revises: 0004_classroom_layouts
 Create Date: 2026-11-07
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0005_school_profile"
 down_revision = "0004_classroom_layouts"

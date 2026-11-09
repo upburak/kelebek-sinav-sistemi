@@ -12,14 +12,13 @@ import tempfile
 import threading
 import zipfile
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import SpooledTemporaryFile
 from typing import BinaryIO
 
 from kelebek.config import get_data_dir, get_database_path
 from kelebek.version import APP_VERSION
-
 
 BACKUP_FORMAT = "kelebek-portable-backup"
 BACKUP_FORMAT_VERSION = 1
@@ -48,9 +47,11 @@ def build_backup_package() -> tuple[BinaryIO, str, dict]:
     if not database_path.is_file():
         raise FileNotFoundError("Uygulama veritabanı bulunamadı.")
 
-    created_at = datetime.now(timezone.utc)
+    created_at = datetime.now(UTC)
     stamp = created_at.strftime("%Y%m%d-%H%M%S-%f-UTC")
-    stream = SpooledTemporaryFile(max_size=SPOOL_MEMORY_LIMIT, mode="w+b")
+    # Akış çağırana (Flask yanıtı) döndürülür; kapatma sorumluluğu orada olduğu için
+    # burada bağlam yöneticisi kullanılamaz.
+    stream = SpooledTemporaryFile(max_size=SPOOL_MEMORY_LIMIT, mode="w+b")  # noqa: SIM115
 
     try:
         with tempfile.TemporaryDirectory(prefix="kelebek-backup-") as temporary_dir:
@@ -164,7 +165,7 @@ def create_safety_backup(reason: str) -> Path:
     if reason not in {"student-import", "app-update"}:
         raise ValueError("Güvenlik yedeği nedeni desteklenmiyor.")
     backup_dir = get_data_dir() / "backups"
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f-UTC")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f-UTC")
     target = backup_dir / f"safety-{reason}-{stamp}.zip"
     with _backup_lock:
         _store_package(target)

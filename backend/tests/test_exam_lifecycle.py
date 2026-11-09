@@ -3,9 +3,9 @@
 import unittest
 
 from sqlalchemy import select
+from test_exam_flow import ExamFlowTests
 
 from kelebek.models import Classroom, ClassroomLayout, Desk, Seat, StudentYearEnrollment
-from test_exam_flow import ExamFlowTests
 
 
 class ExamLifecycleTests(unittest.TestCase):
@@ -133,6 +133,7 @@ class ExamLifecycleTests(unittest.TestCase):
         first = self.client.get("/api/app/whats-new").get_json()
         self.assertFalse(first["show"])
         import json
+
         from kelebek.config import get_data_dir
         (get_data_dir() / "ui_state.json").write_text(json.dumps({"last_seen_version": "0.1.0"}))
         after_update = self.client.get("/api/app/whats-new").get_json()

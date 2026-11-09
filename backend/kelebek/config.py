@@ -6,7 +6,6 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-
 APP_NAME = "Kelebek Sinav Sistemi"
 
 

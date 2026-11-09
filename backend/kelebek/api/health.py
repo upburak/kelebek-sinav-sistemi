@@ -2,7 +2,6 @@
 
 from flask import Blueprint, current_app, jsonify
 
-
 health_api = Blueprint("health", __name__)
 
 

@@ -1,16 +1,20 @@
 """Derslik ve düzen kayıtlarını yöneten yerel API."""
 
-from flask import Blueprint, current_app, jsonify, request
 from math import isfinite
+
+from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, select
 
 from kelebek.db import current_academic_year_start
-from kelebek.models import (
-    AcademicYear, Classroom, ClassroomLayout, Desk,
-    ExamOrganizationClassroom, Seat,
-)
 from kelebek.distribution.neighbors import build_neighbor_pairs
-
+from kelebek.models import (
+    AcademicYear,
+    Classroom,
+    ClassroomLayout,
+    Desk,
+    ExamOrganizationClassroom,
+    Seat,
+)
 
 classrooms_api = Blueprint("classrooms", __name__)
 

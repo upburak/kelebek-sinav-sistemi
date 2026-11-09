@@ -1,5 +1,53 @@
 # Değişiklik günlüğü
 
+## 0.3.0
+
+Bu sürüm yeni özellik eklemez; projeyi macOS ve Windows'ta güvenle çalıştırmak için
+yapılan testlerde bulunan hataları giderir ve doğrulamayı sürekli hale getirir.
+
+### Düzeltmeler
+
+- **Arayüz açılmıyordu (macOS):** Kurulum yolu bir sembolik bağ içerdiğinde (bağlı
+  *Applications* klasörleri, taşınmış kullanıcı klasörleri, `/var` gibi yollar)
+  JavaScript, CSS ve Excel indirme istekleri dosya yerine `index.html` döndürüyordu;
+  uygulama boş ekranla açılıyordu. Yol karşılaştırması artık iki tarafı da çözümlüyor;
+  klasör dışına çıkan istekler yine reddediliyor.
+- **Raporlarda Türkçe harfler bozuluyordu:** Türkçe destekleyen sistem yazı tipi
+  bulunamadığında raporlar sessizce Helvetica'ya dönüyor ve `Çağrı Işık Şükrü İpek`
+  çıktıya `Çanrn Innk nükrü npek` olarak düşüyordu. Yazı tipi adayları her iki
+  platform için genişletildi, seçilen yazı tipinde Türkçe harflerin gerçekten
+  bulunduğu doğrulanıyor; hiçbiri yoksa metin yanlış harf yerine okunabilir ASCII
+  karşılığına sadeleştiriliyor ve günlüğe uyarı yazılıyor.
+- **macOS'ta artımlı güncelleme uygulamayı çalışmaz hale getiriyordu:** `.app`
+  paketinin içindeki dosyalar değişince paketin imzası geçersiz kalıyor, Apple
+  Silicon çekirdeği de imzası bozuk ikili dosyayı hiç çalıştırmıyordu; güncelleme
+  her seferinde geri dönüşe düşüyordu. Güncelleyici dosyaları yerleştirdikten ve
+  geri aldıktan sonra karantinayı temizleyip paketi yeniden ad-hoc imzalıyor;
+  `build-macos.sh` de ürettiği paketi açıkça imzalayıp doğruluyor.
+- **Kurulum yalnızca Python 3.12 ile çalışıyordu:** `pyproject.toml` 3.12 ve üzerini
+  desteklemesine karşın kurulum betikleri tam olarak `python3.12` ya da Windows
+  Python Launcher'ı arıyor, bulamayınca duruyordu. Her iki betik artık 3.12 ve üzeri
+  herhangi bir sürümü buluyor; Windows derlemesi de aynı kurulum yolunu kullanıyor.
+- Raporlarda ölü değişken ve kod temizliği; tüm depoda `ruff` uyarısı kalmadı.
+
+### Test ve doğrulama
+
+- **Otomatik test iş akışı eklendi** (`.github/workflows/tests.yml`): her gönderimde
+  ve birleştirme isteğinde Ubuntu, macOS ve Windows'ta lint + birim testleri, ayrıca
+  arayüz derlemesi ve uçtan uca API testleri çalışır. Önceden hiçbir test kendiliğinden
+  çalışmıyordu.
+- **Paket iş akışına duman testi eklendi:** README'nin söz verdiği
+  `packaging/smoke_test.py` adımı iş akışında yoktu; artık her iki platformun paketi
+  üretildikten sonra çalışır.
+- **Uçtan uca testler kendi kendine çalışıyor:** `tests/e2e/conftest.py` geçici veri
+  klasöründe yerel servisi açıp sentetik okul verisini kuruyor. Testler eskiden elle
+  hazırlanmış bir ortam ve `KELEBEK_PUBLIC_URL` olmadan hiç çalışmıyordu.
+- "Yenilikler" testi Linux'a özel sabit bir yol (`/root/.local/share/...`) ve sabit
+  sürüm numarası kullanıyordu; artık platformdan ve sürümden bağımsız.
+- Düzeltilen iki hata için gerileme testleri: `test_frontend_serving.py` ve
+  `test_report_fonts.py`.
+- `ruff` kural kümesi `pyproject.toml` içinde sabitlendi; sonuçlar sürümden sürüme kaymaz.
+
 ## Geliştirme sürümü
 
 - Faz A başlangıç iskeleti: Flask sağlık API'si, React/TypeScript arayüzü, platforma uygun veri dizini ve geliştirme betikleri.

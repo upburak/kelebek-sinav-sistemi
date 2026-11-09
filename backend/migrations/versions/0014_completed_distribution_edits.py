@@ -5,9 +5,8 @@ Revises: 0013_candidate_waiting_pool
 Create Date: 2026-11-07
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0014_completed_distribution_edits"
 down_revision = "0013_candidate_waiting_pool"

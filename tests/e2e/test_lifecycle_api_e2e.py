@@ -1,7 +1,6 @@
 # E2E API regression (public URL) for: pinned redistribution, finalize, edit locks (Karar 40),
 # student changes (Karar 39), report header/title/scale, complete/archive + copy (Karar 68-70).
 import os
-import time
 import uuid
 
 import pytest

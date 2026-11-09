@@ -1,7 +1,7 @@
 """Synthetic acceptance tests for creating and completing an exam seating plan."""
 
-import os
 import json
+import os
 import re
 import tempfile
 import unittest
@@ -17,8 +17,8 @@ from kelebek.models import (
     AcademicYear,
     Classroom,
     ClassroomLayout,
-    ExamParticipant,
     Desk,
+    ExamParticipant,
     SchoolProfile,
     Seat,
     Student,

@@ -13,11 +13,11 @@ import json
 import re
 import sys
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import update_signing  # noqa: E402
+import update_signing
 
 FORMAT = "kelebek-update/1"
 
@@ -58,7 +58,7 @@ def build(old: Path, new: Path, platform: str, from_version: str, to_version: st
     from_revision, to_revision = head_revision(old), head_revision(new)
     manifest = {
         "format": FORMAT, "from_version": from_version, "to_version": to_version, "platform": platform,
-        "created_at": datetime.now(timezone.utc).isoformat(), "notes": notes,
+        "created_at": datetime.now(UTC).isoformat(), "notes": notes,
         "min_app_version": from_version,
         "migrations": {"required": from_revision != to_revision, "from_revision": from_revision, "to_revision": to_revision},
         "files": [{"path": rel, "size": new_files[rel].stat().st_size, "sha256": sha256(new_files[rel]),
