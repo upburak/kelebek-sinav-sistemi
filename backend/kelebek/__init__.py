@@ -1,5 +1,6 @@
 """Kelebek Sınav Sistemi Flask uygulaması."""
 
+import re
 import threading
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from kelebek.api.backups import backups_api
 from kelebek.api.classrooms import classrooms_api
 from kelebek.api.exam_lifecycle import exam_lifecycle_api, guard_exam_writes
 from kelebek.api.exam_organizations import exam_organizations_api
+from kelebek.api.updates import updates_api
 from kelebek.api.health import health_api
 from kelebek.api.school_profile import school_profile_api
 from kelebek.api.student_import import student_import_api
@@ -24,6 +26,8 @@ from kelebek.services.backup_restore import (
 
 
 _api_request_lock = threading.RLock()
+# Uzun dağıtım sürerken ilerleme, durdurma ve sekme kilidi istekleri beklememeli.
+_LOCK_FREE_PATH = re.compile(r"/distribution-progress(/stop)?$|^/api/edit-locks|^/api/health$")
 
 
 def _register_frontend(app: Flask, frontend_dist: Path) -> None:
@@ -66,7 +70,7 @@ def create_app(frontend_dist: Path | None = None, allowed_hosts: set[str] | None
 
     @app.before_request
     def ensure_daily_backup_for_active_day():
-        if request.path.startswith("/api/"):
+        if request.path.startswith("/api/") and not _LOCK_FREE_PATH.search(request.path):
             _api_request_lock.acquire()
             g._kelebek_api_lock_acquired = True
             try:
@@ -89,6 +93,7 @@ def create_app(frontend_dist: Path | None = None, allowed_hosts: set[str] | None
     app.register_blueprint(students_api, url_prefix="/api")
     app.register_blueprint(exam_organizations_api, url_prefix="/api")
     app.register_blueprint(exam_lifecycle_api, url_prefix="/api")
+    app.register_blueprint(updates_api, url_prefix="/api")
     app.before_request(guard_exam_writes)
     if frontend_dist and (frontend_dist / "index.html").is_file():
         _register_frontend(app, frontend_dist)

@@ -15,6 +15,7 @@ from kelebek.models import (
     ExamParticipant, Seat, SeatAssignment,
 )
 from kelebek.distribution.neighbors import build_neighbor_pairs
+from kelebek.distribution import progress as distribution_progress
 from kelebek.distribution.solver import DistributionError, evaluate_assignments, solve_candidate
 from kelebek.services.exam_organizer import (
     ExamOrganizerError,
@@ -136,6 +137,9 @@ def _candidate_summary(assignments, room_capacities):
         "empty_seats": room["available_seats"] - used_by_room.get(room_id, 0),
     } for room_id, room in room_capacities.items()]
     return {"groups": list(groups.values()), "rooms": rooms, "waiting_count": sum(not item.get("seat_id") for item in assignments)}
+
+
+SOLVER_TIME_LIMIT_SECONDS = 12.0
 
 
 def _review_selected_candidate(session, organization, candidate_id=None):
@@ -309,7 +313,18 @@ def _serialize_candidate(session, organization, candidate):
         "available_seats": available_seats,
         "assignments": assignments,
         "plan": plan,
+        "violations": _candidate_violations(session, organization, candidate),
     }
+
+
+def _candidate_violations(session, organization, candidate):
+    run = session.get(DistributionRun, candidate.run_id)
+    if run is None or run.config_hash != _distribution_fingerprint(session, organization):
+        return []
+    try:
+        return _review_selected_candidate(session, organization, candidate.id)["violations"]
+    except ValueError:
+        return []
 
 
 @exam_organizations_api.get("/courses")
@@ -407,6 +422,11 @@ def create_distribution_candidate(organization_id: str):
     if pinned_classroom_ids and (not isinstance(base_candidate_id, str) or not requested_run_id):
         return jsonify({"error": "Derslik sabitlemek için önce mevcut bir adayı seçin."}), 400
     session_factory = current_app.extensions["kelebek_session_factory"]
+    existing = distribution_progress.get(organization_id)
+    if existing and not existing.finished:
+        return jsonify({"error": "Bu sınav için dağıtım zaten hesaplanıyor."}), 409
+    progress = distribution_progress.start(organization_id, SOLVER_TIME_LIMIT_SECONDS)
+    outcome = "error"
     try:
         with session_factory.begin() as session:
             organization = session.get(ExamOrganization, organization_id)
@@ -494,12 +514,15 @@ def create_distribution_candidate(organization_id: str):
                         room["seats"] = [{**seat, "is_available": seat["is_available"] and seat["id"] in fixed_seats} for seat in room["seats"]]
                         if not room["seats"] or not any(seat["is_available"] for seat in room["seats"]):
                             rooms = [item for item in rooms if item["id"] != room["id"]]
+            progress.set_stage("model")
             result = solve_candidate([{
                 "id": item.id, "class_level": item.class_level, "section": item.section,
                 "area": item.area, "first_name": item.first_name,
                 "last_name": item.last_name, "school_number": item.school_number,
             } for item in participants], rooms, all_pairs, rules, previous_assignments=previous_assignments,
-               fixed_assignments=fixed_assignments)
+               fixed_assignments=fixed_assignments, time_limit=SOLVER_TIME_LIMIT_SECONDS, progress=progress)
+            progress.set_stage("save")
+            stopped_early = result["stopped"]
             candidate = DistributionCandidate(
                 run_id=run.id, status=result["status"],
                 affected_student_count=result["affected_student_count"],
@@ -517,11 +540,30 @@ def create_distribution_candidate(organization_id: str):
                 ))
             result = _serialize_candidate(session, organization, candidate)
             result["objective"] = candidate.objective_value
+            result["stopped_early"] = stopped_early
+        outcome = "stopped" if stopped_early else "created"
     except DistributionError as error:
         return jsonify({"error": str(error)}), 409
     except IntegrityError:
         return jsonify({"error": "Aday kaydedilemedi; veriler değişmiş olabilir. Yenileyip tekrar deneyin."}), 409
+    finally:
+        distribution_progress.finish(progress, outcome)
     return jsonify({"candidate": result}), 201
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/distribution-progress")
+def get_distribution_progress(organization_id: str):
+    progress = distribution_progress.get(organization_id)
+    return jsonify({"progress": progress.snapshot() if progress else None})
+
+
+@exam_organizations_api.post("/exam-organizations/<organization_id>/distribution-progress/stop")
+def stop_distribution_progress(organization_id: str):
+    progress = distribution_progress.get(organization_id)
+    if progress is None or progress.finished:
+        return jsonify({"error": "Çalışan bir dağıtım yok."}), 409
+    progress.stop_event.set()
+    return jsonify({"progress": progress.snapshot()})
 
 
 @exam_organizations_api.get("/exam-organizations/<organization_id>/distribution-candidates")

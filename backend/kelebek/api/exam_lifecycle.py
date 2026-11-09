@@ -18,7 +18,7 @@ exam_lifecycle_api = Blueprint("exam_lifecycle", __name__)
 LOCK_TTL_SECONDS = 30
 TAB_HEADER = "X-Kelebek-Tab"
 _ORG_PATH = re.compile(r"^/api/exam-organizations/([^/]+)(/.*)?$")
-_LOCK_FREE_SUFFIXES = ("/edit-lock", "/copy")
+_LOCK_FREE_SUFFIXES = ("/edit-lock", "/copy", "/distribution-progress/stop")
 _locks: dict[str, dict] = {}
 _locks_guard = threading.Lock()
 

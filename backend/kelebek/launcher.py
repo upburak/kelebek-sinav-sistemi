@@ -77,6 +77,12 @@ def main() -> None:
         state["last_request"] = time.monotonic()
 
     server = create_server(app, host="127.0.0.1", port=port, threads=4)
+    app.extensions["kelebek_shutdown"] = server.close
+    verify_file = os.environ.pop("KELEBEK_UPDATE_VERIFY", None)
+    if verify_file:
+        from kelebek.services.app_update import write_verification
+
+        write_verification(verify_file)
 
     @app.post("/api/app/shutdown")
     def _shutdown():

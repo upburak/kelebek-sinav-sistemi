@@ -6,6 +6,9 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 ROOT = Path(SPECPATH).parent
+sys.path.insert(0, str(ROOT / "backend"))
+from kelebek.version import APP_VERSION  # noqa: E402
+
 datas = [
     (str(ROOT / "backend" / "migrations"), "migrations"),
     (str(ROOT / "frontend" / "dist"), "frontend_dist"),
@@ -43,6 +46,6 @@ if sys.platform == "darwin":
         name="Kelebek Sınav Sistemi.app",
         icon=icon,
         bundle_identifier="tr.kelebek.sinavsistemi",
-        info_plist={"CFBundleShortVersionString": "0.2.0", "LSUIElement": False,
+        info_plist={"CFBundleShortVersionString": APP_VERSION, "LSUIElement": False,
                     "NSHighResolutionCapable": True},
     )

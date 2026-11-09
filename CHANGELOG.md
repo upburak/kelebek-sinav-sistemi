@@ -30,6 +30,12 @@
 
 ## 0.2.0
 
+- İhlal krokisi (Karar 55): kural ihlalinden etkilenen öğrenciler aday kartında bir kez listelenir, ihlal nedeni ve komşu öğrenci gösterilir; öğrenciye dokununca krokide yeri ve ihlale neden olan komşu yerler vurgulanır.
+- Dağıtım ilerlemesi (Karar 58): hesaplama sırasında aşamalar, geçen süre, en fazla kalan süre, bulunan çözüm sayısı ve en iyi çözümde etkilenen öğrenci sayısı gösterilir; "Durdur ve en iyi çözümü kullan" o ana kadarki en iyi geçerli çözümü aday olarak kaydeder. İlerleme ve durdurma istekleri uzun hesaplama sırasında beklemez.
+- Çözücüde grup dengesinin yanlış dersliğin koltuklarıyla hesaplanması düzeltildi.
+- Artımlı güncelleme (Faz J): `scripts/make_update_package.py`, uygulama içi paket doğrulama/özet, güvenlik yedeği, dış güncelleyici (macOS bash / Windows PowerShell), açılış doğrulaması ve başarısızlıkta dosya + veritabanı geri dönüşü. Tek sürüm kaynağı `kelebek/version.py`.
+- CI duman testi: paketlenmiş uygulama açılıp sağlık, arayüz ve veritabanı doğrulanır.
+
 - Rapor seçenekleri: liste/yoklama PDF'lerinde üst bilgi alanlarını (okul, başlık, sınav, tarih, ders, derslik) göster/gizle, özel rapor başlığı ve %80–%130 yazı ölçeği. Rapor öncesi "düzenlemeler tamamlandı" onayı (Karar 49), ihlal varsa ayrı kabul (Karar 50), bekleyen öğrenci varken rapor engeli.
 - Derslik sabitleyerek yeniden dağıtım (Karar 25): seçilen adaydaki derslik yerleşimleri aynen korunur, kalan derslikler CP-SAT ile yeniden optimize edilir; yeni aday kaynak adaydan türetilmiş ve sabitlenen derslikleri kayıtlı bağımsız alternatif olarak saklanır.
 - Güncel öğrenci listesiyle karşılaştırma (Karar 39/47/48): kesinleşmiş dağıtımda okul numarası + ad-soyad eşleştirmesiyle değişen ve ayrılan öğrenciler listelenir; kullanıcı onayıyla güncel bilgiye geçirilip bekleyen havuza alınır, işlem geçmişe yazılır.

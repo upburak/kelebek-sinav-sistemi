@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import ExamLifecyclePanel from './ExamLifecyclePanel'
+import DistributionProgressOverlay from './DistributionProgressOverlay'
 import { subscribeLocks, takeOverEditing, type EditLocks } from './editSession'
 
 type GroupOption = {
@@ -14,7 +15,8 @@ type CourseDraft = { id: number; name: string; groupKeys: string[] }
 type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back'
 type RuleSet = Record<RuleKey, boolean>
 type CandidateAssignment = { participant_id: string; seat_id: string | null; seat_number: number | null; classroom_id: string | null; classroom_name: string | null; first_name: string; last_name: string; school_number: string; class_level: string; section: string; area: string | null }
-type CandidatePreview = { candidate_id: string; run_id: string; generation_index: number; derived_from_candidate_id: string | null; pinned_classroom_ids?: string[]; status: string; affected_student_count: number; events: { id: string; event_type: string; participant_id: string; participant_name: string; school_number: string; displaced_participant_id: string | null; from_seat_id: string | null; to_seat_id: string | null; related_event_id: string | null; created_at: string }[]; history: { can_undo: boolean; can_redo: boolean; undo_count: number; redo_count: number; undo_event_id: string | null; redo_event_id: string | null }; report_status?: 'not_generated' | 'current' | 'stale'; report_statuses?: Partial<Record<ReportKind, { report_status: ReportStatus; report_updated_at: string | null }>>; available_seats: { seat_id: string; seat_number: number; classroom_id: string; classroom_name: string }[]; summary: { groups: { class_level: string; section: string; area: string | null; student_count: number }[]; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[]; waiting_count: number }; assignments: CandidateAssignment[]; plan: { classroom_id: string; classroom_name: string; layout_id: string; layout_name: string; desks: { desk_id: string; label: string; block_label: string; x: number; y: number; seats: { seat_id: string; seat_number: number; seat_index: number; x: number | null; y: number | null; is_available: boolean; student: CandidateAssignment | null }[] }[] }[] }
+type Violation = { first_participant_id: string; second_participant_id: string; first_seat_id: string; second_seat_id: string; relation: string; reason: string }
+type CandidatePreview = { violations?: Violation[]; candidate_id: string; run_id: string; generation_index: number; derived_from_candidate_id: string | null; pinned_classroom_ids?: string[]; status: string; affected_student_count: number; events: { id: string; event_type: string; participant_id: string; participant_name: string; school_number: string; displaced_participant_id: string | null; from_seat_id: string | null; to_seat_id: string | null; related_event_id: string | null; created_at: string }[]; history: { can_undo: boolean; can_redo: boolean; undo_count: number; redo_count: number; undo_event_id: string | null; redo_event_id: string | null }; report_status?: 'not_generated' | 'current' | 'stale'; report_statuses?: Partial<Record<ReportKind, { report_status: ReportStatus; report_updated_at: string | null }>>; available_seats: { seat_id: string; seat_number: number; classroom_id: string; classroom_name: string }[]; summary: { groups: { class_level: string; section: string; area: string | null; student_count: number }[]; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[]; waiting_count: number }; assignments: CandidateAssignment[]; plan: { classroom_id: string; classroom_name: string; layout_id: string; layout_name: string; desks: { desk_id: string; label: string; block_label: string; x: number; y: number; seats: { seat_id: string; seat_number: number; seat_index: number; x: number | null; y: number | null; is_available: boolean; student: CandidateAssignment | null }[] }[] }[] }
 type ReportStatus = 'not_generated' | 'current' | 'stale'
 type ReportKind = 'seating_plan_pdf' | 'attendance_pdf' | 'room_student_list_pdf'
 type FinalReview = { candidate_id: string; participant_count: number; seated_count: number; unassigned_count: number; available_capacity: number; empty_seats: number; affected_student_count: number; violation_count: number; can_finalize: boolean; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[] }
@@ -151,6 +153,13 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
   const [candidateErrorId, setCandidateErrorId] = useState<string | null>(null)
   const [candidates, setCandidates] = useState<Record<string, CandidatePreview[]>>({})
   const [selectedPlanStudentByCandidate, setSelectedPlanStudentByCandidate] = useState<Record<string, string>>({})
+  const [focusedViolation, setFocusedViolation] = useState<Record<string, string>>({})
+  function focusViolation(candidateId: string, participantId: string, seatId: string | null) {
+    setFocusedViolation((current) => ({ ...current, [candidateId]: current[candidateId] === participantId ? '' : participantId }))
+    const details = document.getElementById(`plan-details-${candidateId}`) as HTMLDetailsElement | null
+    if (details) details.open = true
+    if (seatId) window.setTimeout(() => document.querySelector(`[data-seat-id="${seatId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }), 60)
+  }
   const [movingCandidateId, setMovingCandidateId] = useState<string | null>(null)
   const [finalReviews, setFinalReviews] = useState<Record<string, FinalReview>>({})
   const [reviewLoadingId, setReviewLoadingId] = useState<string | null>(null)
@@ -704,9 +713,22 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
           <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRuleEditor(organization)}>{activeRuleOrganizationId === organization.id ? 'Kuralları kapat' : 'Dağıtım kuralları'}</button><span>Altı komşuluk kuralı bu sınava özeldir.</span></div>
           <div className="exam-rule-toolbar"><button type="button" data-testid={`candidate-create-${organization.id}`} disabled={readOnly || organization.status !== 'draft' || candidateSavingId === organization.id || !organization.capacity_sufficient} onClick={() => void createCandidate(organization.id)}>{candidateSavingId === organization.id ? 'Aday hesaplanıyor…' : (candidates[organization.id]?.length ? 'Yeni alternatif üret' : 'İlk dağıtım adayını oluştur')}</button><span>{organization.capacity_sufficient ? `${candidates[organization.id]?.length ?? 0} kayıtlı aday · kapasite yeterli` : `${organization.capacity_deficit} kişilik kapasite eksiği var`}</span></div>
           {candidateError && candidateErrorId === organization.id && <p className="exam-error" role="alert">{candidateError}</p>}
+          <DistributionProgressOverlay organizationId={organization.id} active={candidateSavingId === organization.id} />
           {(candidates[organization.id] ?? []).map((candidate, candidateIndex) => {
             const selectedPlanParticipantId = selectedPlanStudentByCandidate[candidate.candidate_id] || null
             const selectedPlanStudent = candidate.assignments.find((assignment) => assignment.participant_id === selectedPlanParticipantId) ?? null
+            const violations = candidate.violations ?? []
+            const focusedId = focusedViolation[candidate.candidate_id] || ''
+            const violationSeatIds = new Set(violations.flatMap((item) => [item.first_seat_id, item.second_seat_id]))
+            const focusedNeighborSeats = new Set(violations.filter((item) => item.first_participant_id === focusedId || item.second_participant_id === focusedId).map((item) => item.first_participant_id === focusedId ? item.second_seat_id : item.first_seat_id))
+            const violatingStudents = [...new Set(violations.flatMap((item) => [item.first_participant_id, item.second_participant_id]))].map((participantId) => ({
+              assignment: candidate.assignments.find((item) => item.participant_id === participantId),
+              details: violations.filter((item) => item.first_participant_id === participantId || item.second_participant_id === participantId).map((item) => {
+                const otherId = item.first_participant_id === participantId ? item.second_participant_id : item.first_participant_id
+                const other = candidate.assignments.find((entry) => entry.participant_id === otherId)
+                return `${item.reason}: ${other ? `${other.first_name} ${other.last_name} (K${other.seat_number})` : 'komşu öğrenci'}`
+              }),
+            })).filter((item) => item.assignment)
             const planEditingEnabled = !readOnly
               && (organization.status === 'draft' || organization.status === 'completed')
               && organization.selected_candidate_id === candidate.candidate_id
@@ -715,7 +737,12 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
             <span>{candidate.assignments.length} öğrenci · {candidate.summary.waiting_count} bekleyen · {candidate.affected_student_count} kural ihlalinden etkilenen öğrenci · {candidate.status === 'optimal' ? 'Denge açısından en iyi bulundu' : candidate.status === 'manual' ? 'Manuel değişiklik' : 'Geçerli aday'}</span>
             <div className="candidate-room-summary">{candidate.summary.rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students} öğrenci / {room.available_seats} yer · {room.empty_seats} boş</small>)}</div>
             <div className="candidate-group-summary">{candidate.summary.groups.map((group) => <small key={`${group.class_level}-${group.section}-${group.area ?? ''}`}>{group.class_level}/{group.section}{group.area ? ` · ${group.area}` : ''}: {group.student_count} öğrenci</small>)}</div>
-            <details>
+            {violatingStudents.length > 0 && <div className="candidate-violations" data-testid={`candidate-violations-${candidate.candidate_id}`}>
+              <strong>Kural ihlalinden etkilenen öğrenciler · {violatingStudents.length}</strong>
+              <small>Öğrenciye dokun: krokide yeri ve ihlale neden olan komşu yerler vurgulanır.</small>
+              <div>{violatingStudents.map(({ assignment, details }) => <button type="button" key={assignment!.participant_id} data-testid={`violation-student-${assignment!.participant_id}`} className={focusedId === assignment!.participant_id ? 'active' : ''} aria-pressed={focusedId === assignment!.participant_id} onClick={() => focusViolation(candidate.candidate_id, assignment!.participant_id, assignment!.seat_id)}><b>{assignment!.class_level}/{assignment!.section} · {assignment!.first_name} {assignment!.last_name}</b><span>{assignment!.classroom_name} · Koltuk {assignment!.seat_number}</span>{details.map((detail) => <small key={detail}>{detail}</small>)}</button>)}</div>
+            </div>}
+            <details id={`plan-details-${candidate.candidate_id}`}>
               <summary>Oturma planı ve öğrenci havuzu{candidate.events.length ? ` · ${candidate.events.length} işlem` : ''}</summary>
               <div className={`candidate-plan-instructions ${selectedPlanStudent ? 'has-selection' : ''}`} aria-live="polite">
                 {selectedPlanStudent ? <><span><strong>{selectedPlanStudent.first_name} {selectedPlanStudent.last_name}</strong> seçildi. {selectedPlanStudent.seat_id ? 'Hedef koltuğa tıklayın; dolu koltukta öğrenciler yer değiştirir.' : 'Boş koltuğa tıklayın; dolu bir hedef seçerseniz oradaki öğrenci bekleyen havuza geçer.'}</span><button type="button" disabled={movingCandidateId === candidate.candidate_id} onClick={() => selectPlanStudent(candidate.candidate_id, selectedPlanStudent.participant_id)}>Seçimi kaldır</button></> : <span>{planEditingEnabled ? 'Dolu koltuğa dokunarak öğrenciyi seçin; sonra boş veya dolu hedef koltuğa dokunun.' : 'Düzenlemek için bu adayı önce incelemeye alın.'}</span>}
@@ -734,9 +761,9 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
                         const seatStudent = seat.student
                         const isSelectedStudent = seatStudent?.participant_id === selectedPlanParticipantId
                         const seatIsTarget = Boolean(selectedPlanParticipantId && seat.is_available && seatStudent?.participant_id !== selectedPlanParticipantId)
-                        const seatClassName = `candidate-plan-seat ${!seat.is_available ? 'unavailable' : seatStudent ? 'occupied' : 'empty'} ${isSelectedStudent ? 'selected-student' : ''} ${seatIsTarget ? 'target-seat' : ''}`
+                        const seatClassName = `candidate-plan-seat ${!seat.is_available ? 'unavailable' : seatStudent ? 'occupied' : 'empty'} ${isSelectedStudent ? 'selected-student' : ''} ${seatIsTarget ? 'target-seat' : ''} ${violationSeatIds.has(seat.seat_id) ? 'has-violation' : ''} ${focusedId && seatStudent?.participant_id === focusedId ? 'violation-focus' : ''} ${focusedNeighborSeats.has(seat.seat_id) ? 'violation-neighbor' : ''}`
                         const seatDescription = seatStudent ? `${seatStudent.class_level}/${seatStudent.section} · ${seatStudent.first_name} ${seatStudent.last_name} · ${seatStudent.school_number}` : seat.is_available ? 'Boş kullanılabilir koltuk' : 'Kullanım dışı koltuk'
-                        return <button className={seatClassName} type="button" key={seat.seat_id} disabled={!planEditingEnabled || movingCandidateId === candidate.candidate_id || !seat.is_available} aria-pressed={isSelectedStudent} aria-label={`Koltuk ${seat.seat_number}: ${seatDescription}`} title={`Koltuk ${seat.seat_number} · ${seatDescription}`} onClick={() => {
+                        return <button className={seatClassName} type="button" key={seat.seat_id} data-seat-id={seat.seat_id} disabled={!planEditingEnabled || movingCandidateId === candidate.candidate_id || !seat.is_available} aria-pressed={isSelectedStudent} aria-label={`Koltuk ${seat.seat_number}: ${seatDescription}`} title={`Koltuk ${seat.seat_number} · ${seatDescription}`} onClick={() => {
                           if (selectedPlanParticipantId) {
                             if (seatStudent?.participant_id === selectedPlanParticipantId) selectPlanStudent(candidate.candidate_id, selectedPlanParticipantId)
                             else void moveCandidateStudent(organization.id, candidate.candidate_id, selectedPlanParticipantId, seat.seat_id)
@@ -748,7 +775,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
                   </div></div>
                 </section>
               })}
-              <div className="candidate-plan-legend"><span><i className="occupied" /> Dolu</span><span><i className="empty" /> Boş kullanılabilir</span><span><i className="unavailable" /> Kullanım dışı</span></div>
+              <div className="candidate-plan-legend"><span><i className="occupied" /> Dolu</span><span><i className="empty" /> Boş kullanılabilir</span><span><i className="unavailable" /> Kullanım dışı</span>{violations.length > 0 && <><span><i className="has-violation" /> İhlalli yer</span><span><i className="violation-focus" /> Seçilen öğrenci</span><span><i className="violation-neighbor" /> İhlale neden olan komşu</span></>}</div>
               <div className="candidate-waiting-pool"><strong>Bekleyen öğrenci havuzu · {candidate.summary.waiting_count}</strong>
                 {candidate.assignments.filter((assignment) => !assignment.seat_id).length ? candidate.assignments.filter((assignment) => !assignment.seat_id).map((assignment) => <div className={`candidate-waiting-student ${selectedPlanParticipantId === assignment.participant_id ? 'selected' : ''}`} key={assignment.participant_id}><span>{assignment.class_level}/{assignment.section} · {assignment.first_name} {assignment.last_name} · {assignment.school_number}<small>Henüz koltuğa yerleşmedi</small></span><button type="button" disabled={!planEditingEnabled || movingCandidateId === candidate.candidate_id} aria-pressed={selectedPlanParticipantId === assignment.participant_id} onClick={() => selectPlanStudent(candidate.candidate_id, assignment.participant_id)}>{selectedPlanParticipantId === assignment.participant_id ? 'Seçildi' : 'Öğrenciyi seç'}</button><label><span className="sr-only">Boş koltuk seç</span><select value="" disabled={!planEditingEnabled || movingCandidateId === candidate.candidate_id} onChange={(event) => { if (event.target.value) void moveCandidateStudent(organization.id,candidate.candidate_id,assignment.participant_id,event.target.value) }}><option value="">Boş koltuğa yerleştir…</option>{candidate.available_seats.filter((seat) => !candidate.assignments.some((assigned) => assigned.seat_id === seat.seat_id)).map((seat) => <option key={seat.seat_id} value={seat.seat_id}>{seat.classroom_name} · Koltuk {seat.seat_number}</option>)}</select></label></div>) : <span className="candidate-pool-empty">Bekleyen öğrenci yok.</span>}
               </div>

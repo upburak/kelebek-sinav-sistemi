@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import ClassroomManager from './ClassroomManager'
 import BackupManager from './BackupManager'
+import UpdateManager from './UpdateManager'
 import ExamOrganizer from './ExamOrganizer'
 import ReportCenter from './ReportCenter'
 
@@ -776,7 +777,7 @@ export default function App() {
           onClassrooms={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}
         />}
 
-        {activeSection === 'backup' && <BackupManager />}
+        {activeSection === 'backup' && <><BackupManager /><UpdateManager /></>}
 
         {activeSection === 'reports' && <ReportCenter
           academicYearId={activeYearId}

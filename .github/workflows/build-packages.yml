@@ -32,6 +32,8 @@ jobs:
       - name: Paketle
         shell: ${{ matrix.shell }}
         run: ${{ matrix.script }}
+      - name: Paketlenmiş uygulamayı aç ve doğrula
+        run: python packaging/smoke_test.py
       - uses: actions/upload-artifact@v4
         with:
           name: kelebek-${{ runner.os }}

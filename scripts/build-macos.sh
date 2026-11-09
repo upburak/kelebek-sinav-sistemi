@@ -12,7 +12,7 @@ npm --prefix frontend run build
 PYTHONPATH=backend .venv/bin/python -m unittest discover -s backend/tests
 .venv/bin/python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging/kelebek.spec
 
-VERSION="$(.venv/bin/python -c 'import tomllib;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')"
+VERSION="$(PYTHONPATH=backend .venv/bin/python -c 'from kelebek.version import APP_VERSION;print(APP_VERSION)')"
 DMG="dist/KelebekSinavSistemi-${VERSION}-macos-arm64.dmg"
 rm -f "$DMG"
 STAGE="$(mktemp -d)"

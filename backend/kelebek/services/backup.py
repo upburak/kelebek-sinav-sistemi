@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.metadata
 import json
 import logging
 import os
@@ -19,6 +18,7 @@ from tempfile import SpooledTemporaryFile
 from typing import BinaryIO
 
 from kelebek.config import get_data_dir, get_database_path
+from kelebek.version import APP_VERSION
 
 
 BACKUP_FORMAT = "kelebek-portable-backup"
@@ -38,10 +38,7 @@ def _sha256(path: Path) -> str:
 
 
 def _app_version() -> str:
-    try:
-        return importlib.metadata.version("kelebek-sinav-sistemi")
-    except importlib.metadata.PackageNotFoundError:
-        return "0.2.0"
+    return APP_VERSION
 
 
 def build_backup_package() -> tuple[BinaryIO, str, dict]:
@@ -164,7 +161,7 @@ def ensure_daily_backup(now: datetime | None = None) -> Path | None:
 
 def create_safety_backup(reason: str) -> Path:
     """Create a named pre-operation package for a supported critical action."""
-    if reason != "student-import":
+    if reason not in {"student-import", "app-update"}:
         raise ValueError("Güvenlik yedeği nedeni desteklenmiyor.")
     backup_dir = get_data_dir() / "backups"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f-UTC")

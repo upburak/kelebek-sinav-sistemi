@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import DistributionProgressOverlay from './DistributionProgressOverlay'
 
 type Room = { classroom_id: string; classroom_name: string }
 type Candidate = { candidate_id: string; run_id: string; pinned_classroom_ids?: string[] }
@@ -39,6 +40,7 @@ function PinnedRedistribution({ organization, candidates, onReload }: Props) {
     <div className="lifecycle-chips">{organization.room_selections.map((room) => <label key={room.classroom_id} className={pinned.includes(room.classroom_id) ? 'selected' : ''}><input type="checkbox" data-testid={`pin-room-${room.classroom_id}`} checked={pinned.includes(room.classroom_id)} onChange={(event) => setPinned((current) => event.target.checked ? [...current, room.classroom_id] : current.filter((id) => id !== room.classroom_id))} />{room.classroom_name}</label>)}</div>
     {error && <p className="exam-error" role="alert">{error}</p>}
     <button type="button" data-testid={`pinned-redistribute-btn-${organization.id}`} disabled={busy || !pinned.length || pinned.length === organization.room_selections.length} onClick={() => void run()}>{busy ? 'Hesaplanıyor…' : `${pinned.length} dersliği sabitle · kalanları yeniden dağıt`}</button>
+    <DistributionProgressOverlay organizationId={organization.id} active={busy} />
   </div>
 }
 

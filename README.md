@@ -34,6 +34,21 @@ Paketler her işletim sisteminin kendisinde üretilir (Mac'te Windows paketi, Wi
 
 Uygulama açıldığında yerel servis `127.0.0.1` üzerinde boş bir portta başlar ve varsayılan tarayıcı açılır. Uygulama zaten çalışıyorsa yeni servis açılmaz, mevcut adres açılır. Kapatmak için üst çubuktaki **Uygulamayı kapat** düğmesini kullanın (Windows'ta konsol penceresini kapatmak da yeterlidir); tüm sekmeler kapandıktan 10 dakika sonra servis kendiliğinden kapanır. Kullanıcı verileri paket klasöründe değil, aşağıdaki veri konumunda kalır; güncelleme veya yeniden kurulum verileri silmez.
 
+CI'da her paket üretildikten sonra `packaging/smoke_test.py` paketlenmiş uygulamayı geçici veri klasörüyle açar; sağlık kontrolü, arayüz, veritabanı oluşturma ve kapatma doğrulanmadan iş akışı başarılı sayılmaz. Aynı testi paketi ürettiğiniz bilgisayarda `python packaging/smoke_test.py` ile de çalıştırabilirsiniz.
+
+## Artımlı güncelleme
+
+Yeni sürümün tam paketi üretildikten sonra yalnızca değişen dosyaları içeren güncelleme paketi hazırlanır:
+
+```bash
+python scripts/make_update_package.py --old "<eski sürüm>/Kelebek Sınav Sistemi.app" --new "dist/Kelebek Sınav Sistemi.app" \
+  --platform macos-arm64 --from-version 0.2.0 --to-version 0.3.0 --out dist
+```
+
+Windows için `--old`/`--new` olarak `KelebekSinavSistemi` klasörlerini ve `--platform windows-x64` verin. Paket `manifest.json` (sürümler, platform, değişen/kaldırılan dosyalar, SHA-256, migration aralığı) ve yanında `.sha256` özet dosyası içerir.
+
+Uygulamada **Yedek ve arşiv → Uygulama güncellemesi** bölümünde paket seçilir: sürüm ve platform kontrol edilir, tüm dosyalar geçici klasörde hash ile doğrulanır ve özet gösterilir. Onaydan sonra güvenlik yedeği alınır, uygulama kapanır; dış güncelleyici değişen dosyaların ve veritabanının kopyasını ayırıp yeni dosyaları yerleştirir. Yeni sürüm migration'ları uygulayıp açılış kontrolünü geçerse etkin kalır; geçemezse önceki dosyalar ve veritabanı otomatik geri yüklenir ve eski sürüm açılır. Sonuç aynı bölümde gösterilir. Uygulama klasör yapısı değiştiren büyük sürümlerde tam kurulum paketi kullanın.
+
 ## Veri güvenliği
 
 Öğrenci verileri ve SQLite veritabanı kaynak kod klasöründe tutulmaz. Uygulama verileri macOS kullanıcı hesabında `~/Library/Application Support/Kelebek Sinav Sistemi`, Windows kullanıcı hesabında `%APPDATA%\Kelebek Sinav Sistemi` altında saklanır. Geliştirme betikleri de bu işletim sistemi veri konumlarını kullanır; uygulama verileri proje klasörünün dışında kalır. `KELEBEK_DATA_DIR` yalnızca özel, yerel denemelerde geçici bir veri dizini seçmek için kullanılabilir.

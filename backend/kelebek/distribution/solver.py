@@ -2,6 +2,7 @@
 
 from itertools import combinations
 from math import ceil
+import threading
 
 from ortools.sat.python import cp_model
 
@@ -12,8 +13,39 @@ RULES = {
 }
 
 
+REASONS = {
+    "prevent_same_section": "Aynı şube",
+    "prevent_same_grade_area": "Aynı sınıf seviyesi ve alan",
+    "prevent_different_grade_same_area": "Farklı sınıf seviyesi, aynı alan",
+}
+RELATION_LABELS = {"adjacent": "yan yana", "front_back": "önlü-arkalı"}
+
+
 class DistributionError(ValueError):
     pass
+
+
+class _ProgressCallback(cp_model.CpSolverSolutionCallback):
+    def __init__(self, progress, affected):
+        super().__init__()
+        self._progress = progress
+        self._affected = affected
+
+    def on_solution_callback(self):
+        self._progress.record_solution(self.objective_value, sum(self.boolean_value(item) for item in self._affected))
+
+
+def _conflict_reason(first: dict, second: dict, rules: dict, relation: str) -> str | None:
+    same_section = first["class_level"] == second["class_level"] and first["section"].casefold() == second["section"].casefold()
+    same_area = bool(first.get("area")) and (first.get("area") or "").casefold() == (second.get("area") or "").casefold()
+    suffix = "_adjacent" if relation == "adjacent" else "_front_back"
+    if same_section and rules["prevent_same_section" + suffix]:
+        return "prevent_same_section"
+    if same_area and first["class_level"] == second["class_level"] and rules["prevent_same_grade_area" + suffix]:
+        return "prevent_same_grade_area"
+    if same_area and first["class_level"] != second["class_level"] and rules["prevent_different_grade_same_area" + suffix]:
+        return "prevent_different_grade_same_area"
+    return None
 
 
 def _participants_conflict(first: dict, second: dict, rules: dict, relation: str) -> bool:
@@ -33,19 +65,26 @@ def evaluate_assignments(participants: list[dict], seat_pairs: dict, rules: dict
     by_seat = {seat_id: participant_id for participant_id, seat_id in assignments.items()}
     by_participant = {item["id"]: item for item in participants}
     affected = set()
-    violations = set()
+    violations = {}
     for relation in ("adjacent", "front_back"):
         for first_seat, second_seat in seat_pairs[relation]:
             first_id, second_id = by_seat.get(first_seat), by_seat.get(second_seat)
             if not first_id or not second_id:
                 continue
-            if _participants_conflict(by_participant[first_id], by_participant[second_id], rules, relation):
-                violations.add((min(first_id, second_id), max(first_id, second_id), relation))
+            reason = _conflict_reason(by_participant[first_id], by_participant[second_id], rules, relation)
+            if reason:
+                key = (min(first_id, second_id), max(first_id, second_id), relation)
+                violations.setdefault(key, {
+                    "first_participant_id": first_id, "second_participant_id": second_id,
+                    "first_seat_id": first_seat, "second_seat_id": second_seat, "relation": relation,
+                    "reason": f"{REASONS[reason]} · {RELATION_LABELS[relation]}",
+                })
                 affected.update((first_id, second_id))
-    return {"affected_student_count": len(affected), "violation_count": len(violations)}
+    return {"affected_student_count": len(affected), "violation_count": len(violations),
+            "violations": list(violations.values())}
 
 
-def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dict, rules: dict, time_limit: float = 12.0, previous_assignments: list[dict] | None = None, fixed_assignments: dict[str, str] | None = None) -> dict:
+def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dict, rules: dict, time_limit: float = 12.0, previous_assignments: list[dict] | None = None, fixed_assignments: dict[str, str] | None = None, progress=None) -> dict:
     """Assign every participant uniquely, balancing room use and limiting conflicts to five people."""
     if not participants:
         raise DistributionError("Dağıtılacak öğrenci bulunamadı.")
@@ -123,6 +162,7 @@ def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dic
     balance_terms = []
     for room_index, room in enumerate(rooms):
         capacity = len([seat for seat in room["seats"] if seat["is_available"]])
+        room_seat_ids = [seat["id"] for seat in room["seats"] if seat["is_available"]]
         delta = model.new_int_var(0, len(participants) * max(1, total_capacity), f"balance_{room_index}")
         model.add_abs_equality(delta, room_counts[room_index] * total_capacity - len(participants) * capacity)
         balance_terms.append(delta)
@@ -139,8 +179,25 @@ def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dic
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit
     solver.parameters.num_search_workers = 8
-    status = solver.solve(model)
+    if progress is not None:
+        progress.set_stage("search")
+    callback = _ProgressCallback(progress, affected) if progress is not None else None
+    done = threading.Event()
+    if progress is not None:
+        def _watch_stop():
+            while not done.wait(0.2):
+                if progress.stop_event.is_set():
+                    solver.stop_search()
+                    return
+        threading.Thread(target=_watch_stop, daemon=True).start()
+    try:
+        status = solver.solve(model, callback) if callback else solver.solve(model)
+    finally:
+        done.set()
+    stopped = progress is not None and progress.stop_event.is_set()
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        if stopped:
+            raise DistributionError("Dağıtım durduruldu; henüz geçerli bir çözüm bulunmamıştı. Yeniden başlatabilirsiniz.")
         if status == cp_model.INFEASIBLE:
             raise DistributionError("Bu derslik ve kural birleşimiyle beş veya daha az öğrencinin etkilendiği bir aday mümkün görünmüyor.")
         if status == cp_model.MODEL_INVALID:
@@ -155,4 +212,5 @@ def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dic
         "affected_student_count": sum(solver.boolean_value(item) for item in affected),
         "status": "optimal" if status == cp_model.OPTIMAL else "feasible",
         "objective": int(solver.objective_value),
+        "stopped": stopped,
     }

@@ -15,7 +15,7 @@ if ($LASTEXITCODE -ne 0) { throw "Testler başarısız." }
 & $Python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging/kelebek.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller başarısız." }
 
-$Version = & $Python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+$Version = & $Python -c "from kelebek.version import APP_VERSION;print(APP_VERSION)"
 $Zip = "dist\KelebekSinavSistemi-$Version-windows-x64.zip"
 if (Test-Path $Zip) { Remove-Item $Zip }
 Compress-Archive -Path "dist\KelebekSinavSistemi\*" -DestinationPath $Zip

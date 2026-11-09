@@ -115,6 +115,16 @@ class ExamLifecycleTests(unittest.TestCase):
         })
         self.assertEqual(everything.status_code, 409)
 
+    def test_progress_snapshot_and_violation_details(self):
+        org_id, candidate = self._finalized()
+        self.assertIsInstance(candidate["violations"], list)
+        progress = self.client.get(f"/api/exam-organizations/{org_id}/distribution-progress").get_json()["progress"]
+        self.assertFalse(progress["active"])
+        self.assertEqual(progress["outcome"], "created")
+        self.assertGreaterEqual(progress["solutions_found"], 1)
+        self.assertEqual([step["key"] for step in progress["steps"]], ["prepare", "model", "search", "save"])
+        self.assertEqual(self.client.post(f"/api/exam-organizations/{org_id}/distribution-progress/stop").status_code, 409)
+
     def test_report_header_title_and_scale_options(self):
         org_id, _candidate = self._finalized()
         self._finalize(org_id)
