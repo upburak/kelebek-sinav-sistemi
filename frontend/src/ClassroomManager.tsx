@@ -34,6 +34,8 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   const [layouts, setLayouts] = useState<ClassroomLayout[]>([])
   const [selectedLayout, setSelectedLayout] = useState<LayoutDetail | null>(null)
   const [classroomName, setClassroomName] = useState('')
+  const [renamingClassroom, setRenamingClassroom] = useState(false)
+  const [classroomNameDraft, setClassroomNameDraft] = useState('')
   const [layoutName, setLayoutName] = useState('Ana düzen')
   const [columnCount, setColumnCount] = useState('3')
   const [columnLengths, setColumnLengths] = useState<string[]>(['5', '6', '6'])
@@ -150,6 +152,50 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       await loadLayouts(classroomId)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Derslik düzenleri yüklenemedi.')
+    }
+  }
+
+  async function saveClassroomName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedClassroomId) return
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/classrooms/${selectedClassroomId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: classroomNameDraft }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Derslik adı değiştirilemedi.')
+      setRenamingClassroom(false)
+      await loadClassrooms()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Derslik adı değiştirilemedi.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteClassroom(classroom: Classroom) {
+    if (classroom.layout_count > 0) return
+    if (!window.confirm(`“${classroom.name}” boş dersliği silinsin mi?`)) return
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/classrooms/${classroom.id}`, { method: 'DELETE' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Derslik silinemedi.')
+      if (selectedClassroomId === classroom.id) {
+        setSelectedClassroomId(null)
+        setSelectedLayout(null)
+        setLayouts([])
+      }
+      await loadClassrooms()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Derslik silinemedi.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -350,22 +396,35 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       ) : (
         <div className="classroom-list">
           {classrooms.map((classroom) => (
-            <button
-              className={`classroom-list-item ${selectedClassroomId === classroom.id ? 'selected' : ''}`}
-              type="button"
-              key={classroom.id}
-              onClick={() => selectClassroom(classroom.id)}
-            >
-              <span>{classroom.name}</span>
-              <small>{classroom.layout_count} düzen</small>
-            </button>
+            <div className={`classroom-list-item ${selectedClassroomId === classroom.id ? 'selected' : ''}`} key={classroom.id}>
+              <button type="button" className="classroom-list-select" onClick={() => void selectClassroom(classroom.id)}>
+                <span>{classroom.name}</span>
+                <small>{classroom.layout_count} düzen</small>
+              </button>
+              {!readOnly && <span className="classroom-list-actions">
+                <button type="button" disabled={saving} onClick={() => {
+                  void selectClassroom(classroom.id)
+                  setClassroomNameDraft(classroom.name)
+                  setRenamingClassroom(true)
+                }}>Adını düzenle</button>
+                {classroom.layout_count === 0 && <button type="button" disabled={saving} onClick={() => void deleteClassroom(classroom)}>Sil</button>}
+              </span>}
+            </div>
           ))}
         </div>
       )}
 
       {selectedClassroom && (
         <div className="classroom-layout-panel">
-          <h3>{selectedClassroom.name} · Düzenler</h3>
+          <div className="classroom-panel-title"><h3>{selectedClassroom.name} · Düzenler</h3>{!readOnly && <button type="button" onClick={() => {
+            setClassroomNameDraft(selectedClassroom.name)
+            setRenamingClassroom((open) => !open)
+          }}>{renamingClassroom ? 'Ad düzenlemesini kapat' : 'Adı düzenle'}</button>}</div>
+          {renamingClassroom && !readOnly && <form className="layout-create-form" onSubmit={saveClassroomName}>
+            <label htmlFor="classroom-name-edit">Derslik adı</label>
+            <input id="classroom-name-edit" value={classroomNameDraft} onChange={(event) => setClassroomNameDraft(event.target.value)} maxLength={120} required disabled={saving} />
+            <button type="submit" disabled={saving}>{saving ? 'Kaydediliyor…' : 'Adı kaydet'}</button>
+          </form>}
           {!readOnly && (
             <form className="layout-create-form" onSubmit={addLayout}>
               <label htmlFor="layout-name">Düzen adı</label>

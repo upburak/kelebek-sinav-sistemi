@@ -1,6 +1,8 @@
 """Kelebek Sınav Sistemi Flask uygulaması."""
 
-from flask import Flask, jsonify, request
+import threading
+
+from flask import Flask, g, jsonify, request
 
 from kelebek.api.academic_years import academic_year_api
 from kelebek.api.backups import backups_api
@@ -13,13 +15,23 @@ from kelebek.api.students import students_api
 from kelebek.config import configure_logging
 from kelebek.db import initialize_database
 from kelebek.services.backup import ensure_daily_backup
+from kelebek.services.backup_restore import (
+    cleanup_stale_restore_staging,
+    recover_interrupted_restore,
+)
+
+
+_api_request_lock = threading.RLock()
 
 
 def create_app() -> Flask:
     """Uygulamayı oluştur, veritabanını güncelle ve API uç noktalarını kaydet."""
     app = Flask(__name__)
-    app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
+    app.config["MAX_CONTENT_LENGTH"] = 513 * 1024 * 1024
     configure_logging(app.logger)
+    if recover_interrupted_restore():
+        app.logger.warning("Kesintiye uğrayan geri yükleme eski verilerden geri alındı.")
+    cleanup_stale_restore_staging()
     initialize_database(app)
     try:
         ensure_daily_backup()
@@ -29,10 +41,18 @@ def create_app() -> Flask:
     @app.before_request
     def ensure_daily_backup_for_active_day():
         if request.path.startswith("/api/"):
+            _api_request_lock.acquire()
+            g._kelebek_api_lock_acquired = True
             try:
                 ensure_daily_backup()
             except Exception:
                 app.logger.exception("Günlük otomatik yedek alınamadı.")
+
+    @app.teardown_request
+    def release_api_request_lock(_error=None):
+        if getattr(g, "_kelebek_api_lock_acquired", False):
+            g._kelebek_api_lock_acquired = False
+            _api_request_lock.release()
 
     app.register_blueprint(health_api, url_prefix="/api")
     app.register_blueprint(school_profile_api, url_prefix="/api")
@@ -45,6 +65,6 @@ def create_app() -> Flask:
 
     @app.errorhandler(413)
     def request_too_large(_error):
-        return jsonify({"error": "Dosya boyutu 12 MB sınırını aşıyor."}), 413
+        return jsonify({"error": "İstek boyutu 513 MB sınırını aşıyor."}), 413
 
     return app

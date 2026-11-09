@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from kelebek.db import Base
@@ -25,3 +25,4 @@ class ExamParticipant(Base):
     class_level: Mapped[str] = mapped_column(String(32), nullable=False)
     section: Mapped[str] = mapped_column(String(32), nullable=False)
     area: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

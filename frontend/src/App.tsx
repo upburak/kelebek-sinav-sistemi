@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import ClassroomManager from './ClassroomManager'
 import BackupManager from './BackupManager'
 import ExamOrganizer from './ExamOrganizer'
+import ReportCenter from './ReportCenter'
 
 type HealthState = 'checking' | 'online' | 'offline'
 type WorkspaceIconName = 'overview' | 'school' | 'students' | 'classroom' | 'exams' | 'reports' | 'backup'
@@ -39,10 +40,11 @@ type StudentImportPreview = {
   filename: string
   sheet_name: string
   sheet_names: string[]
+  sources?: { name: string; header_row: number; class_level: string | null; section: string | null; auto_mapping: Record<string, number | string> }[]
   header_row: number
   headers: (string | number | boolean | null)[]
   preview_rows: (string | number | boolean | null)[][]
-  auto_mapping: Record<string, number>
+  auto_mapping: Record<string, number | string>
   saved: false
 }
 
@@ -50,7 +52,7 @@ type StudentImportValidation = {
   total_rows: number
   valid: boolean
   issue_count: number
-  issues: { row: number; fields: string[]; issue: string }[]
+  issues: { row: number; source?: string; fields: string[]; issue: string }[]
   issues_truncated: boolean
   upper_grade_missing_area: number
   missing_area_by_class: { class_level: string; section: string; student_count: number }[]
@@ -74,6 +76,7 @@ type StudentImportCommitResult = {
   reassigned_school_numbers: number
   safety_backup: string
   classes: { class_level: string; section: string; student_count: number }[]
+  classrooms?: { name: string; class_level: string; section: string; requested_capacity: number; capacity?: number; created: boolean; layout_created?: boolean; needs_review: boolean; message: string }[]
 }
 
 type StudentRecord = {
@@ -84,6 +87,16 @@ type StudentRecord = {
   class_level: string
   section: string
   area: string | null
+  is_active?: boolean
+}
+
+function sortStudentRecords(items: StudentRecord[]) {
+  return [...items].sort((a, b) =>
+    Number(a.class_level) - Number(b.class_level)
+    || a.section.localeCompare(b.section, 'tr')
+    || a.last_name.localeCompare(b.last_name, 'tr')
+    || a.first_name.localeCompare(b.first_name, 'tr'),
+  )
 }
 
 type StudentDraft = Omit<StudentRecord, 'id' | 'area'> & { area: string }
@@ -135,12 +148,15 @@ export default function App() {
   const [importLoading, setImportLoading] = useState(false)
   const [workbookDownload, setWorkbookDownload] = useState<'template' | 'sample' | null>(null)
   const [students, setStudents] = useState<StudentRecord[]>([])
+  const [showInactiveStudents, setShowInactiveStudents] = useState(false)
   const [studentsLoading, setStudentsLoading] = useState(false)
   const [studentsError, setStudentsError] = useState('')
   const [studentFormOpen, setStudentFormOpen] = useState(false)
   const [studentSaving, setStudentSaving] = useState(false)
   const [studentMessage, setStudentMessage] = useState('')
   const [studentDraft, setStudentDraft] = useState<StudentDraft>({ school_number: '', first_name: '', last_name: '', class_level: '9', section: 'A', area: '' })
+  const [editingStudentId, setEditingStudentId] = useState<string | null>(null)
+  const [studentEditDraft, setStudentEditDraft] = useState<StudentDraft | null>(null)
   const [classroomPanelOpen, setClassroomPanelOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('overview')
   const [schoolProfile, setSchoolProfile] = useState<SchoolProfile>(blankSchoolProfile)
@@ -199,7 +215,7 @@ export default function App() {
     const controller = new AbortController()
     setStudentsLoading(true)
     setStudentsError('')
-    fetch(`/api/students?academic_year_id=${encodeURIComponent(activeYearId)}`, { signal: controller.signal })
+    fetch(`/api/students?academic_year_id=${encodeURIComponent(activeYearId)}${showInactiveStudents ? '&include_inactive=true' : ''}`, { signal: controller.signal })
       .then(async (response) => {
         const data = await response.json()
         if (!response.ok) throw new Error(data.error ?? 'Öğrenci listesi alınamadı.')
@@ -211,7 +227,7 @@ export default function App() {
       })
       .finally(() => setStudentsLoading(false))
     return () => controller.abort()
-  }, [activeSection, activeYearId])
+  }, [activeSection, activeYearId, showInactiveStudents])
 
   const activeYear = academicYears.find((year) => year.id === activeYearId)
   const hasDraftChange = Boolean(draftYearId && draftYearId !== activeYearId)
@@ -335,14 +351,83 @@ export default function App() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Öğrenci eklenemedi.')
-      setStudents((current) => [...current, data.student as StudentRecord].sort((a, b) =>
-        Number(a.class_level) - Number(b.class_level) || a.section.localeCompare(b.section, 'tr') || a.last_name.localeCompare(b.last_name, 'tr'),
-      ))
+      setStudents((current) => sortStudentRecords([...current, data.student as StudentRecord]))
       setStudentDraft({ school_number: '', first_name: '', last_name: '', class_level: studentDraft.class_level, section: studentDraft.section, area: studentDraft.area })
       setStudentMessage('Öğrenci seçili eğitim yılına eklendi.')
       setStudentFormOpen(false)
     } catch (error) {
       setStudentsError(error instanceof Error ? error.message : 'Öğrenci eklenemedi.')
+    } finally {
+      setStudentSaving(false)
+    }
+  }
+
+  function startStudentEdit(student: StudentRecord) {
+    setEditingStudentId(student.id)
+    setStudentEditDraft({
+      school_number: student.school_number,
+      first_name: student.first_name,
+      last_name: student.last_name,
+      class_level: student.class_level,
+      section: student.section,
+      area: student.area ?? '',
+    })
+    setStudentsError('')
+    setStudentMessage('')
+  }
+
+  async function saveStudentEdit(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault()
+    if (!editingStudentId || !studentEditDraft || !activeYearId || activeYear?.is_archive) return
+    setStudentSaving(true)
+    setStudentsError('')
+    try {
+      const response = await fetch(`/api/students/${encodeURIComponent(editingStudentId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...studentEditDraft, academic_year_id: activeYearId }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Öğrenci bilgileri kaydedilemedi.')
+      setStudents((items) => sortStudentRecords(items.map((item) => item.id === editingStudentId ? data.student as StudentRecord : item)))
+      setEditingStudentId(null)
+      setStudentEditDraft(null)
+      setStudentMessage('Öğrenci bilgileri güncellendi. Açık sınav taslakları yeniden dağıtım isteyecek; tamamlanmış kayıtlar korunur.')
+    } catch (error) {
+      setStudentsError(error instanceof Error ? error.message : 'Öğrenci bilgileri kaydedilemedi.')
+    } finally {
+      setStudentSaving(false)
+    }
+  }
+
+  async function changeStudentActive(student: StudentRecord, activate: boolean) {
+    if (!activeYearId || activeYear?.is_archive) return
+    if (!window.confirm(activate
+      ? 'Öğrenci yeniden etkinleştirilecek ve yeni dağıtımlarda seçilebilir olacak. Devam edilsin mi?'
+      : 'Öğrenci silinmeden pasife alınacak. Açık sınav taslaklarından çıkarılacak; tamamlanmış sınav geçmişi korunacak. Devam edilsin mi?')) return
+    setStudentSaving(true)
+    setStudentsError('')
+    setStudentMessage('')
+    try {
+      const response = await fetch(`/api/students/${encodeURIComponent(student.id)}/${activate ? 'reactivate' : 'deactivate'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ academic_year_id: activeYearId, confirmed: true }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Öğrenci durumu değiştirilemedi.')
+      if (showInactiveStudents) {
+        const listResponse = await fetch(`/api/students?academic_year_id=${encodeURIComponent(activeYearId)}&include_inactive=true`)
+        const listData = await listResponse.json()
+        if (listResponse.ok) setStudents(listData.students as StudentRecord[])
+      } else {
+        setStudents((items) => items.filter((item) => item.id !== student.id))
+      }
+      setEditingStudentId(null)
+      setStudentEditDraft(null)
+      setStudentMessage(activate ? 'Öğrenci yeniden etkinleştirildi.' : 'Öğrenci pasife alındı; geçmiş kayıtları korundu.')
+    } catch (error) {
+      setStudentsError(error instanceof Error ? error.message : 'Öğrenci durumu değiştirilemedi.')
     } finally {
       setStudentSaving(false)
     }
@@ -374,7 +459,7 @@ export default function App() {
   async function commitStudentFile() {
     if (!selectedStudentFile || !activeYearId || activeYear?.is_archive || !importValidation?.valid || !importValidation.diff) return
     const confirmed = window.confirm(
-      'Bu liste seçili eğitim yılına kaydedilecek. Dosyada bulunmayan öğrenciler silinmeden pasif yapılacak. Devam edilsin mi?',
+      'Öğrenci listesi seçili yıla kaydedilecek; dosyada bulunmayanlar geçmiş kayıtları korunarak pasife alınacak. Yeni sınıf/şubeler için öğrenci sayısına göre başlangıç kapasiteli derslik planı oluşturulacak. Fiziksel sıra düzenini daha sonra kontrol edip düzenleyebilirsiniz. Devam edilsin mi?',
     )
     if (!confirmed) return
 
@@ -491,9 +576,11 @@ export default function App() {
         ? 'Derslikler'
         : activeSection === 'exams'
           ? 'Sınav organizasyonları'
-          : activeSection === 'backup'
-            ? 'Yedek ve arşiv'
-            : 'Genel Bakış'
+          : activeSection === 'reports'
+            ? 'Raporlar'
+            : activeSection === 'backup'
+              ? 'Yedek ve arşiv'
+              : 'Genel Bakış'
   const principal = schoolProfile.administrators.find((person) => person.role === 'principal')
   const vicePrincipals = schoolProfile.administrators.filter((person) => person.role === 'vice_principal')
   const duplicateAdministrator = schoolProfile.administrators.reduce<string | null>((duplicate, person, index, list) => {
@@ -524,7 +611,7 @@ export default function App() {
           <button className={activeSection === 'classrooms' ? 'active' : ''} type="button" onClick={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}><WorkspaceIcon name="classroom" /> Derslikler</button>
           <button className={activeSection === 'exams' ? 'active' : ''} type="button" onClick={() => { setActiveSection('exams'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="exams" /> Sınav organizasyonları</button>
           <button className={activeSection === 'backup' ? 'active' : ''} type="button" onClick={() => { setActiveSection('backup'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="backup" /> Yedek ve arşiv</button>
-          <button type="button" disabled title="Bu bölüm geliştirme aşamasında"><WorkspaceIcon name="reports" /> Raporlar <small>Yakında</small></button>
+          <button className={activeSection === 'reports' ? 'active' : ''} type="button" onClick={() => { setActiveSection('reports'); setClassroomPanelOpen(false) }}><WorkspaceIcon name="reports" /> Raporlar</button>
         </nav>
         <div className="sidebar-footer"><span className={`status-dot ${health}`} /><span>{statusText}</span><small>Veriler bu bilgisayarda</small></div>
       </aside>
@@ -603,12 +690,12 @@ export default function App() {
           <div className="form-card-heading"><span className="form-icon"><WorkspaceIcon name="school" size={19} /></span><div><span className="eyebrow">OKUL PROFİLİ</span><h2>Genel bilgiler</h2><p>Bu bilgiler uygulamanın kendi bilgisayarınızda saklanır ve okul belgelerinde kullanılır.</p></div></div>
           {schoolLoading ? <p className="school-loading">Okul profili yükleniyor…</p> : <>
             <div className="school-fields-grid">
-              <label className="field-wide"><span>Okulun adı <b>*</b></span><input required maxLength={160} value={schoolProfile.school_name} onChange={(event) => updateSchoolField('school_name', event.target.value)} placeholder="Örn. Anadolu Lisesi" /></label>
+              <label className="field-wide"><span>Okulun adı <b>*</b></span><input required maxLength={160} value={schoolProfile.school_name} onChange={(event) => updateSchoolField('school_name', event.target.value)} placeholder="Okulun resmi adını girin" /></label>
               <label><span>İl</span><input maxLength={100} value={schoolProfile.province} onChange={(event) => updateSchoolField('province', event.target.value)} placeholder="İl adı" /></label>
               <label><span>İlçe</span><input maxLength={100} value={schoolProfile.district} onChange={(event) => updateSchoolField('district', event.target.value)} placeholder="İlçe adı" /></label>
               <label className="field-wide"><span>Adres</span><textarea maxLength={500} rows={2} value={schoolProfile.address} onChange={(event) => updateSchoolField('address', event.target.value)} placeholder="Okulun açık adresi" /></label>
               <label><span>Telefon</span><input type="tel" maxLength={40} value={schoolProfile.phone} onChange={(event) => updateSchoolField('phone', event.target.value)} placeholder="(0___) ___ __ __" /></label>
-              <label><span>E-posta</span><input type="email" maxLength={254} value={schoolProfile.email} onChange={(event) => updateSchoolField('email', event.target.value)} placeholder="okul@meb.k12.tr" /></label>
+              <label><span>E-posta</span><input type="email" maxLength={254} value={schoolProfile.email} onChange={(event) => updateSchoolField('email', event.target.value)} placeholder="Kurumsal e-posta adresi" /></label>
             </div>
             <div className="administrator-section">
               <div className="section-heading"><div><span className="eyebrow">İMZA VE YÖNETİM</span><h3>Yönetici bilgileri</h3></div><div className="admin-add-actions"><button type="button" onClick={() => addSchoolAdministrator('principal')} disabled={schoolProfile.administrators.some((item) => item.role === 'principal')}>+ Okul müdürü</button><button type="button" onClick={() => addSchoolAdministrator('vice_principal')} disabled={schoolProfile.administrators.length >= 21}>+ Müdür yardımcısı</button></div></div>
@@ -616,7 +703,7 @@ export default function App() {
               {schoolProfile.administrators.length === 0 && <div className="empty-admins">Henüz yönetici eklenmedi. Müdür veya müdür yardımcısı ekleyebilirsiniz.</div>}
               <div className="administrator-list">{schoolProfile.administrators.map((person, index) => <div className="administrator-row" key={person.id || `${person.role}-${index}`}>
                 <label><span>Görev</span><select value={person.role} onChange={(event) => updateSchoolAdministrator(index, 'role', event.target.value)}><option value="principal">Okul müdürü · tek kayıt</option><option value="vice_principal">Müdür yardımcısı · çoklu</option></select></label>
-                <label><span>Adı soyadı</span><input required maxLength={160} value={person.full_name} onChange={(event) => updateSchoolAdministrator(index, 'full_name', event.target.value)} placeholder="Adı Soyadı" /></label>
+                <label><span>Adı soyadı</span><input required maxLength={160} value={person.full_name} onChange={(event) => updateSchoolAdministrator(index, 'full_name', event.target.value)} placeholder="Yöneticinin gerçek adını girin" /></label>
                 <label><span>Belge imza unvanı</span><input maxLength={120} value={person.title} onChange={(event) => updateSchoolAdministrator(index, 'title', event.target.value)} placeholder={person.role === 'principal' ? 'Okul Müdürü' : 'Müdür Yardımcısı'} /></label>
                 <button className="remove-admin" type="button" aria-label={`${person.full_name || 'Yönetici'} kaydını kaldır`} onClick={() => removeSchoolAdministrator(index)}>Kaldır</button>
               </div>)}</div>
@@ -636,10 +723,10 @@ export default function App() {
             <h2>Öğrenci kayıtları</h2>
             <p>Okul ve sınıf listeleri için güvenli yerel kayıt alanı.</p>
             <label className="file-picker" id="student-import">
-              <span>{importLoading ? 'Dosya okunuyor…' : 'Excel dosyası seç (.xlsx)'}</span>
+              <span>{importLoading ? 'Dosya okunuyor…' : 'Excel veya PDF listesi seç'}</span>
               <input
                 type="file"
-                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                accept=".xlsx,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
                 disabled={importLoading}
                 onChange={(event) => previewStudentFile(event.target.files?.[0])}
               />
@@ -650,7 +737,7 @@ export default function App() {
             <button className="template-download demo-download" type="button" disabled={workbookDownload !== null} onClick={() => downloadStudentWorkbook('sample')}>
               <WorkspaceIcon name="students" size={15} /> {workbookDownload === 'sample' ? 'Örnekler hazırlanıyor…' : '48 sentetik öğrenci örneğini indir'}
             </button>
-            <p className="template-caption">e-Okul listeleri ve başlıkları tanınan standart Excel dosyaları okunur. Şablondaki tüm kişiler sentetiktir.</p>
+            <p className="template-caption">Excel sekmeleri ve PDF sayfaları başlık satırından bağımsız taranır. Taranmış görüntü PDF'leri desteklenmez.</p>
             {importError && <p className="import-error" role="alert">{importError}</p>}
           </article>}
           {activeSection === 'overview' && <article className="feature-card">
@@ -688,6 +775,12 @@ export default function App() {
 
         {activeSection === 'backup' && <BackupManager />}
 
+        {activeSection === 'reports' && <ReportCenter
+          academicYearId={activeYearId}
+          academicYearLabel={activeYear?.label ?? ''}
+          onExams={() => setActiveSection('exams')}
+        />}
+
         {activeSection === 'students' && importPreview && (
           <section className="import-preview" aria-labelledby="import-preview-title">
             <div className="import-preview-heading">
@@ -698,9 +791,10 @@ export default function App() {
               <span className="preview-badge">Henüz kaydedilmedi</span>
             </div>
             <p>
-              “{importPreview.sheet_name}” sayfası · Başlık satırı {importPreview.header_row} ·{' '}
+              {importPreview.sheet_names.length} liste bölümü bulundu · Örnek: “{importPreview.sheet_name}”, başlık satırı {importPreview.header_row} ·{' '}
               {importPreview.preview_rows.length} örnek satır gösteriliyor
             </p>
+            {importPreview.sources && <div className="import-source-list">{importPreview.sources.map((source, index) => <span key={`${source.name}-${index}`}>{source.name}{source.class_level && source.section ? ` · ${source.class_level}/${source.section}` : ''}{source.header_row ? ` · başlık ${source.header_row}` : ' · önceki sayfanın başlığı sürüyor'}</span>)}</div>}
             <div className="table-scroll">
               <table>
                 <thead>
@@ -740,6 +834,9 @@ export default function App() {
                       }}
                     >
                       <option value="">Sütun seç</option>
+                      {(field.key === 'class_level' || field.key === 'section') && importPreview.auto_mapping[field.key] === '__context__' && (
+                        <option value="__context__">Sınıf sayfası / başlığından al</option>
+                      )}
                       {importPreview.headers.map((header, index) => (
                         <option key={index} value={String(index)}>
                           {header ?? `Sütun ${index + 1}`}
@@ -791,7 +888,7 @@ export default function App() {
                 {importValidation.issues.length > 0 && (
                   <ul>
                     {importValidation.issues.map((issue, index) => (
-                      <li key={index}>Satır {issue.row}: {issue.issue} — {issue.fields.join(', ')}</li>
+                      <li key={index}>{issue.source ? `${issue.source} · ` : ''}Satır {issue.row}: {issue.issue} — {issue.fields.join(', ')}</li>
                     ))}
                   </ul>
                 )}
@@ -870,9 +967,10 @@ export default function App() {
               </div>
             )}
             {importCommitResult && (
-              <p className="commit-success" role="status">
-                Aktarım tamamlandı: {importCommitResult.created} yeni öğrenci, {importCommitResult.updated} değişen, {importCommitResult.unchanged} aynı kalan, {importCommitResult.deactivated} pasif kayıt. İşlem öncesi güvenlik yedeği de alındı.
-              </p>
+              <div className="commit-success" role="status">
+                <p>Aktarım tamamlandı: {importCommitResult.created} yeni öğrenci, {importCommitResult.updated} değişen, {importCommitResult.unchanged} aynı kalan, {importCommitResult.deactivated} pasif kayıt. İşlem öncesi güvenlik yedeği de alındı.</p>
+                {importCommitResult.classrooms?.length ? <details className="import-classroom-results"><summary>{importCommitResult.classrooms.length} derslik başlangıç planı</summary><ul>{importCommitResult.classrooms.map((room) => <li key={`${room.class_level}-${room.section}`}>{room.name}: {room.capacity ?? 0}/{room.requested_capacity} yer{room.needs_review ? ' · kontrol gerekli' : ''} — {room.message}</li>)}</ul><p>Düzen fiziksel sınıfın kesin çizimi değildir; manuel derslik ekranında sıra sayısı, oturma biçimi, koridor ve yerleşimi düzenleyin.</p></details> : null}
+              </div>
             )}
             <p className="privacy-note">Dosya bu adımda veritabanına kaydedilmez.</p>
           </section>
@@ -887,7 +985,8 @@ export default function App() {
                 <p>Excel aktarımını ve tekil öğrenci eklemelerini bu yıl için burada görebilirsin.</p>
               </div>
               <div className="student-registry-actions">
-                <span className="student-total"><strong>{students.length}</strong> öğrenci</span>
+                <span className="student-total"><strong>{students.filter((student) => student.is_active !== false).length}</strong> aktif öğrenci</span>
+                <button type="button" className="student-add-button" onClick={() => setShowInactiveStudents((shown) => !shown)}>{showInactiveStudents ? 'Pasifleri gizle' : 'Pasif kayıtları göster'}</button>
                 <button type="button" className="student-add-button" disabled={!activeYearId || activeYear?.is_archive} onClick={() => { setStudentFormOpen((open) => !open); setStudentMessage('') }}>
                   {studentFormOpen ? 'Formu kapat' : '+ Öğrenci ekle'}
                 </button>
@@ -905,10 +1004,19 @@ export default function App() {
             </form>}
             {studentsError && <p className="student-error" role="alert">{studentsError}</p>}
             {studentMessage && <p className="student-success" role="status">{studentMessage}</p>}
+            {editingStudentId && studentEditDraft && <form className="student-entry-form student-edit-form" onSubmit={saveStudentEdit}>
+              <label><span>Okul numarası *</span><input required maxLength={64} value={studentEditDraft.school_number} onChange={(event) => setStudentEditDraft({ ...studentEditDraft, school_number: event.target.value })} /></label>
+              <label><span>Ad *</span><input required maxLength={120} value={studentEditDraft.first_name} onChange={(event) => setStudentEditDraft({ ...studentEditDraft, first_name: event.target.value })} /></label>
+              <label><span>Soyad *</span><input required maxLength={120} value={studentEditDraft.last_name} onChange={(event) => setStudentEditDraft({ ...studentEditDraft, last_name: event.target.value })} /></label>
+              <label><span>Sınıf *</span><select value={studentEditDraft.class_level} onChange={(event) => setStudentEditDraft({ ...studentEditDraft, class_level: event.target.value, area: ['9', '10'].includes(event.target.value) ? '' : studentEditDraft.area || 'Sayısal' })}><option value="9">9. sınıf</option><option value="10">10. sınıf</option><option value="11">11. sınıf</option><option value="12">12. sınıf</option></select></label>
+              <label><span>Şube *</span><input required maxLength={32} value={studentEditDraft.section} onChange={(event) => setStudentEditDraft({ ...studentEditDraft, section: event.target.value })} /></label>
+              {['11', '12'].includes(studentEditDraft.class_level) && <label><span>Alan *</span><select required value={studentEditDraft.area} onChange={(event) => setStudentEditDraft({ ...studentEditDraft, area: event.target.value })}><option value="">Alan seç</option>{areaOptions.map((area) => <option key={area}>{area}</option>)}</select></label>}
+              <div className="student-entry-footer"><small>Düzenleme açık sınav taslaklarını geçersiz kılar; yeni dağıtım üretin. Tamamlananlar değişmez.</small><div><button type="button" onClick={() => { setEditingStudentId(null); setStudentEditDraft(null) }}>Vazgeç</button><button type="submit" disabled={studentSaving}>{studentSaving ? 'Kaydediliyor…' : 'Değişiklikleri kaydet'}</button></div></div>
+            </form>}
             {studentsLoading ? <p className="student-empty">Öğrenci listesi yükleniyor…</p> : students.length === 0 ? <div className="student-empty"><strong>Bu eğitim yılında henüz öğrenci yok.</strong><span>Excel şablonunu kullanabilir veya yukarıdan tek öğrenci ekleyebilirsin. İndirilen demo kayıtları yalnızca sen içe aktarırsan kaydedilir.</span></div> : <div className="table-scroll student-table-scroll">
               <table>
-                <thead><tr><th>Okul no</th><th>Ad soyad</th><th>Sınıf / şube</th><th>Alan</th></tr></thead>
-                <tbody>{students.map((student) => <tr key={student.id}><td>{student.school_number}</td><td>{student.first_name} {student.last_name}</td><td>{student.class_level}/{student.section}</td><td>{student.area || '—'}</td></tr>)}</tbody>
+                <thead><tr><th>Okul no</th><th>Ad soyad</th><th>Sınıf / şube</th><th>Alan</th><th>İşlemler</th></tr></thead>
+                <tbody>{students.map((student) => <tr className={student.is_active === false ? 'inactive-student-row' : ''} key={student.id}><td>{student.school_number}</td><td>{student.first_name} {student.last_name}{student.is_active === false && <small className="inactive-student-label">Pasif · geçmiş kayıt korunuyor</small>}</td><td>{student.class_level}/{student.section}</td><td>{student.area || '—'}</td><td className="student-row-actions">{student.is_active === false ? <button type="button" disabled={activeYear?.is_archive || studentSaving} onClick={() => void changeStudentActive(student, true)}>Yeniden etkinleştir</button> : <><button type="button" disabled={activeYear?.is_archive || studentSaving} onClick={() => startStudentEdit(student)}>Düzenle</button><button type="button" disabled={activeYear?.is_archive || studentSaving} onClick={() => void changeStudentActive(student, false)}>Pasife al</button></>}</td></tr>)}</tbody>
               </table>
             </div>}
           </section>

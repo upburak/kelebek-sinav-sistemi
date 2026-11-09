@@ -12,8 +12,9 @@ type CourseDraft = { id: number; name: string; groupKeys: string[] }
 type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back'
 type RuleSet = Record<RuleKey, boolean>
 type CandidateAssignment = { participant_id: string; seat_id: string | null; seat_number: number | null; classroom_id: string | null; classroom_name: string | null; first_name: string; last_name: string; school_number: string; class_level: string; section: string; area: string | null }
-type CandidatePreview = { candidate_id: string; run_id: string; generation_index: number; derived_from_candidate_id: string | null; status: string; affected_student_count: number; events: { id: string; event_type: string; participant_id: string; participant_name: string; school_number: string; displaced_participant_id: string | null; from_seat_id: string | null; to_seat_id: string | null; related_event_id: string | null; created_at: string }[]; history: { can_undo: boolean; can_redo: boolean; undo_count: number; redo_count: number; undo_event_id: string | null; redo_event_id: string | null }; report_status?: 'not_generated' | 'current' | 'stale'; available_seats: { seat_id: string; seat_number: number; classroom_id: string; classroom_name: string }[]; summary: { groups: { class_level: string; section: string; area: string | null; student_count: number }[]; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[]; waiting_count: number }; assignments: CandidateAssignment[]; plan: { classroom_id: string; classroom_name: string; layout_id: string; layout_name: string; desks: { desk_id: string; label: string; block_label: string; x: number; y: number; seats: { seat_id: string; seat_number: number; seat_index: number; x: number | null; y: number | null; is_available: boolean; student: CandidateAssignment | null }[] }[] }[] }
+type CandidatePreview = { candidate_id: string; run_id: string; generation_index: number; derived_from_candidate_id: string | null; status: string; affected_student_count: number; events: { id: string; event_type: string; participant_id: string; participant_name: string; school_number: string; displaced_participant_id: string | null; from_seat_id: string | null; to_seat_id: string | null; related_event_id: string | null; created_at: string }[]; history: { can_undo: boolean; can_redo: boolean; undo_count: number; redo_count: number; undo_event_id: string | null; redo_event_id: string | null }; report_status?: 'not_generated' | 'current' | 'stale'; report_statuses?: Partial<Record<ReportKind, { report_status: ReportStatus; report_updated_at: string | null }>>; available_seats: { seat_id: string; seat_number: number; classroom_id: string; classroom_name: string }[]; summary: { groups: { class_level: string; section: string; area: string | null; student_count: number }[]; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[]; waiting_count: number }; assignments: CandidateAssignment[]; plan: { classroom_id: string; classroom_name: string; layout_id: string; layout_name: string; desks: { desk_id: string; label: string; block_label: string; x: number; y: number; seats: { seat_id: string; seat_number: number; seat_index: number; x: number | null; y: number | null; is_available: boolean; student: CandidateAssignment | null }[] }[] }[] }
 type ReportStatus = 'not_generated' | 'current' | 'stale'
+type ReportKind = 'seating_plan_pdf' | 'attendance_pdf' | 'room_student_list_pdf'
 type FinalReview = { candidate_id: string; participant_count: number; seated_count: number; unassigned_count: number; available_capacity: number; empty_seats: number; affected_student_count: number; violation_count: number; can_finalize: boolean; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[] }
 const ruleLabels: { key: RuleKey; title: string; position: string }[] = [
   { key: 'prevent_same_section_adjacent', title: 'Aynı şubedeki öğrenciler', position: 'Yan yana' },
@@ -41,6 +42,7 @@ type ExamOrganization = {
   status: 'draft' | 'completed'
   report_status: ReportStatus
   report_updated_at: string | null
+  report_statuses: Partial<Record<ReportKind, { report_status: ReportStatus; report_updated_at: string | null }>>
   course_names: string[]
   course_count: number
   participant_count: number
@@ -438,6 +440,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       setOrganizations((items) => items.map((item) => item.id === organizationId ? {
         ...item, selected_candidate_id: child.candidate_id,
         ...(child.report_status ? { report_status: child.report_status } : {}),
+        ...(child.report_statuses ? { report_statuses: child.report_statuses } : {}),
       } : item))
       clearFinalReview(organizationId)
       setSelectedPlanStudentByCandidate((current) => { const next = { ...current }; delete next[candidateId]; return next })
@@ -477,6 +480,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       setOrganizations((items) => items.map((item) => item.id === organizationId ? {
         ...item, selected_candidate_id: child.candidate_id,
         ...(child.report_status ? { report_status: child.report_status } : {}),
+        ...(child.report_statuses ? { report_statuses: child.report_statuses } : {}),
       } : item))
       clearFinalReview(organizationId)
       setSelectedPlanStudentByCandidate((current) => { const next = { ...current }; delete next[candidateId]; return next })
@@ -503,6 +507,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       }))
       setOrganizations((items) => items.map((item) => item.id === organizationId ? {
         ...item, report_status: updated.report_status ?? item.report_status,
+        ...(updated.report_statuses ? { report_statuses: updated.report_statuses } : {}),
       } : item))
       setSelectedPlanStudentByCandidate((current) => { const next = { ...current }; delete next[candidateId]; return next })
       clearFinalReview(organizationId)
@@ -514,7 +519,12 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     }
   }
 
-  async function openSeatingPlanPdf(organization: ExamOrganization) {
+  async function openReportPdf(organization: ExamOrganization, kind: ReportKind) {
+    const reportPath = {
+      seating_plan_pdf: 'seating-plan.pdf',
+      attendance_pdf: 'attendance.pdf',
+      room_student_list_pdf: 'room-students.pdf',
+    }[kind]
     setReportError('')
     setReportErrorId(null)
     const preview = window.open('about:blank', '_blank')
@@ -526,7 +536,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     preview.document.title = 'Oturma planı hazırlanıyor…'
     setReportLoadingId(organization.id)
     try {
-      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organization.id)}/reports/seating-plan.pdf`)
+      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organization.id)}/reports/${reportPath}`)
       if (!response.ok) {
         const data = await response.json()
         throw new Error(data.error ?? 'PDF oluşturulamadı.')
@@ -535,7 +545,10 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       preview.location.href = url
       window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
       setOrganizations((items) => items.map((item) => item.id === organization.id
-        ? { ...item, report_status: 'current', report_updated_at: new Date().toISOString() }
+        ? { ...item, report_status: kind === 'seating_plan_pdf' ? 'current' : item.report_status,
+            report_updated_at: kind === 'seating_plan_pdf' ? new Date().toISOString() : item.report_updated_at,
+            report_statuses: { ...item.report_statuses,
+              [kind]: { report_status: 'current', report_updated_at: new Date().toISOString() } } }
         : item))
     } catch (reason) {
       preview.close()
@@ -568,7 +581,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     setFinalizing(true)
     setReviewError('')
     try {
-      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/finalize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) })
+      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/finalize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true, physical_layouts_confirmed: true }) })
       const data = await response.json()
       if (!response.ok) {
         if (data.review) {
@@ -642,7 +655,14 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
             <div className="exam-organization-copy"><span className="exam-status">{organization.status === 'completed' ? 'Tamamlandı' : 'Taslak'}</span><h3>{organization.name}</h3><p>{organization.course_names.length ? organization.course_names.join(' · ') : 'Genel sınav'} · {organization.participant_count} öğrenci</p></div>
             <div className="exam-organization-meta"><small>{organization.course_count} ders</small><small>{organization.exam_date}</small><small>{selectedRoomCount ? `${selectedRoomCount} derslik · ${organization.available_capacity} kullanılabilir yer` : 'Derslik seçilmedi'}</small></div>
             <button className="exam-room-open" type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRoomEditor(organization)}>{roomEditorOpen ? 'Derslik seçimini kapat' : selectedRoomCount ? 'Derslikleri düzenle' : 'Derslik seç'}</button>
-            {organization.status === 'completed' && <div className="exam-report-action"><button type="button" className="exam-report-link" disabled={reportLoadingId === organization.id} onClick={() => void openSeatingPlanPdf(organization)}>{reportLoadingId === organization.id ? 'PDF hazırlanıyor…' : organization.report_status === 'stale' ? 'PDF güncel değil · Yenile' : organization.report_status === 'current' ? 'Oturma planı PDF ön izle' : 'Oturma planı PDF oluştur'}</button>{organization.report_status === 'stale' && <small>Dağıtım, mevcut PDF oluşturulduktan sonra değiştirildi.</small>}</div>}
+            {organization.status === 'completed' && <div className="exam-report-action exam-report-actions">{([
+              ['seating_plan_pdf', 'Oturma planı'],
+              ['attendance_pdf', 'Yoklama çizelgesi'],
+              ['room_student_list_pdf', 'Derslik öğrenci listesi'],
+            ] as const).map(([kind, title]) => {
+              const status = organization.report_statuses?.[kind]?.report_status ?? 'not_generated'
+              return <button key={kind} type="button" className="exam-report-link" disabled={reportLoadingId === organization.id} onClick={() => void openReportPdf(organization, kind)}>{reportLoadingId === organization.id ? 'PDF hazırlanıyor…' : `${title} · ${status === 'stale' ? 'Güncel değil · Yenile' : status === 'current' ? 'Ön izle' : 'PDF oluştur'}`}</button>
+            })}</div>}
           </div>
           {reportError && reportErrorId === organization.id && <p className="exam-error" role="alert">{reportError}</p>}
           {roomEditorOpen && <div className="exam-room-panel">
@@ -732,7 +752,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
           </div>
           })}
           {reviewError && !finalizeConfirmId && <p className="exam-error" role="alert">{reviewError}</p>}
-          {finalizeConfirmId === organization.id && finalReviews[organization.id] && <div className="final-review-panel"><strong>Son kontrol · kesinleştirme öncesi</strong><span>{finalReviews[organization.id].seated_count}/{finalReviews[organization.id].participant_count} öğrenci oturuyor · {finalReviews[organization.id].unassigned_count} bekleyen · {finalReviews[organization.id].available_capacity} kullanılabilir koltuk · {finalReviews[organization.id].empty_seats} boş koltuk</span><span>{finalReviews[organization.id].violation_count} komşuluk ihlali · {finalReviews[organization.id].affected_student_count} öğrenci etkileniyor</span><div>{finalReviews[organization.id].rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students}/{room.available_seats} dolu · {room.empty_seats} boş</small>)}</div>{!finalReviews[organization.id].can_finalize && <p className="exam-error">Bekleyen öğrenci kalmamalı ve kural ihlalinden etkilenen öğrenci sayısı beşi aşmamalı.</p>}<label><input type="checkbox" checked={finalizeConfirmed} onChange={(event) => setFinalizeConfirmed(event.target.checked)} />Kontrol ettim; bu sınav dağıtımını kesinleştirmek istiyorum.</label>{reviewError && <p className="exam-error" role="alert">{reviewError}</p>}<div><button type="button" onClick={() => setFinalizeConfirmId(null)}>Vazgeç</button><button type="button" disabled={!finalizeConfirmed || !finalReviews[organization.id].can_finalize || finalizing} onClick={() => void finalizeOrganization(organization.id)}>{finalizing ? 'Kesinleştiriliyor…' : 'Onayla ve kesinleştir'}</button></div></div>}
+          {finalizeConfirmId === organization.id && finalReviews[organization.id] && <div className="final-review-panel"><strong>Son kontrol · kesinleştirme öncesi</strong><span>{finalReviews[organization.id].seated_count}/{finalReviews[organization.id].participant_count} öğrenci oturuyor · {finalReviews[organization.id].unassigned_count} bekleyen · {finalReviews[organization.id].available_capacity} kullanılabilir koltuk · {finalReviews[organization.id].empty_seats} boş koltuk</span><span>{finalReviews[organization.id].violation_count} komşuluk ihlali · {finalReviews[organization.id].affected_student_count} öğrenci etkileniyor</span><div>{finalReviews[organization.id].rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students}/{room.available_seats} dolu · {room.empty_seats} boş</small>)}</div><p>Başlangıç kapasitesi fiziksel sınıf planının yerine geçmez. Masa, sıra, koridor ve kullanılabilir koltukları gerçek derslikle karşılaştırın.</p>{!finalReviews[organization.id].can_finalize && <p className="exam-error">Bekleyen öğrenci kalmamalı ve kural ihlalinden etkilenen öğrenci sayısı beşi aşmamalı.</p>}<label><input type="checkbox" checked={finalizeConfirmed} onChange={(event) => setFinalizeConfirmed(event.target.checked)} />Dağıtımı kontrol ettim; seçilen dersliklerin fiziksel planlarını doğruladım ve sınavı kesinleştirmek istiyorum.</label>{reviewError && <p className="exam-error" role="alert">{reviewError}</p>}<div><button type="button" onClick={() => setFinalizeConfirmId(null)}>Vazgeç</button><button type="button" disabled={!finalizeConfirmed || !finalReviews[organization.id].can_finalize || finalizing} onClick={() => void finalizeOrganization(organization.id)}>{finalizing ? 'Kesinleştiriliyor…' : 'Onayla ve kesinleştir'}</button></div></div>}
           {activeRuleOrganizationId === organization.id && ruleDraft && <div className="exam-rule-panel"><div className="exam-room-panel-heading"><div><strong>Adım 03 · Oturma kuralları</strong><small>Kuralları birbirinden bağımsız açıp kapatabilirsin. Kurallar yalnızca kullanılabilir fiziksel koltuklar arasında değerlendirilir.</small></div></div><div className="exam-rule-list">{ruleLabels.map((rule) => <label key={rule.key}><span><strong>{rule.title}</strong><small>{rule.position}</small></span><input type="checkbox" checked={ruleDraft[rule.key]} onChange={(event) => setRuleDraft((current) => current ? { ...current, [rule.key]: event.target.checked } : current)} /></label>)}</div>{ruleError && <p className="exam-error" role="alert">{ruleError}</p>}{ruleMessage && <p className="exam-room-success" role="status">{ruleMessage}</p>}<div className="exam-room-footer"><span>Dağıtım adayı oluşturulurken bu ayarlar kullanılacak.</span><button type="button" disabled={ruleSaving} onClick={() => saveRules(organization.id)}>{ruleSaving ? 'Kaydediliyor…' : 'Kuralları kaydet'}</button></div></div>}
         </article>
       })}

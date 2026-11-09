@@ -65,6 +65,8 @@ def build_backup_package() -> tuple[BinaryIO, str, dict]:
                 result = destination.execute("PRAGMA integrity_check").fetchone()
                 if not result or result[0] != "ok":
                     raise ValueError("Veritabanı bütünlük denetimi başarısız oldu.")
+                if destination.execute("PRAGMA foreign_key_check").fetchone():
+                    raise ValueError("Veritabanında bağlantısı kopuk kayıtlar bulundu.")
                 version_row = destination.execute(
                     "SELECT version_num FROM alembic_version LIMIT 1"
                 ).fetchone()

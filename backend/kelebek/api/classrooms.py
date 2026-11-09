@@ -5,7 +5,10 @@ from math import isfinite
 from sqlalchemy import func, select
 
 from kelebek.db import current_academic_year_start
-from kelebek.models import AcademicYear, Classroom, ClassroomLayout, Desk, Seat
+from kelebek.models import (
+    AcademicYear, Classroom, ClassroomLayout, Desk,
+    ExamOrganizationClassroom, Seat,
+)
 from kelebek.distribution.neighbors import build_neighbor_pairs
 
 
@@ -122,6 +125,55 @@ def create_classroom():
         session.flush()
         result = {"id": classroom.id, "name": classroom.name, "layout_count": 0}
     return jsonify({"classroom": result}), 201
+
+
+@classrooms_api.patch("/classrooms/<classroom_id>")
+def rename_classroom(classroom_id: str):
+    payload = request.get_json(silent=True)
+    name = payload.get("name") if isinstance(payload, dict) else None
+    name = name.strip() if isinstance(name, str) else ""
+    if not name:
+        return jsonify({"error": "Derslik adı gerekli."}), 400
+    if len(name) > 120:
+        return jsonify({"error": "Derslik adı 120 karakterden kısa olmalı."}), 400
+
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory.begin() as session:
+        classroom = session.get(Classroom, classroom_id)
+        if classroom is None:
+            return jsonify({"error": "Derslik bulunamadı."}), 404
+        in_history = session.scalar(select(func.count(ExamOrganizationClassroom.id)).where(
+            ExamOrganizationClassroom.classroom_id == classroom_id,
+        )) or 0
+        if in_history:
+            return jsonify({"error": "Bu derslik sınav organizasyonlarında kullanılmış; geçmiş adını korumak için yeniden adlandırılamaz."}), 409
+        duplicates = session.scalars(select(Classroom).where(Classroom.id != classroom_id)).all()
+        if any(item.name.casefold() == name.casefold() for item in duplicates):
+            return jsonify({"error": "Bu derslik adı zaten kayıtlı."}), 409
+        classroom.name = name
+        result = {"id": classroom.id, "name": classroom.name}
+    return jsonify({"classroom": result})
+
+
+@classrooms_api.delete("/classrooms/<classroom_id>")
+def delete_empty_classroom(classroom_id: str):
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory.begin() as session:
+        classroom = session.get(Classroom, classroom_id)
+        if classroom is None:
+            return jsonify({"error": "Derslik bulunamadı."}), 404
+        layouts = session.scalar(select(func.count(ClassroomLayout.id)).where(
+            ClassroomLayout.classroom_id == classroom_id,
+        )) or 0
+        organizations = session.scalar(select(func.count(ExamOrganizationClassroom.id)).where(
+            ExamOrganizationClassroom.classroom_id == classroom_id,
+        )) or 0
+        if layouts or organizations:
+            return jsonify({
+                "error": "Düzeni veya sınav geçmişi bulunan derslik silinemez. Kullanılmayan boş derslikler silinebilir; geçmiş kayıtlar korunur.",
+            }), 409
+        session.delete(classroom)
+    return jsonify({"deleted": True})
 
 
 @classrooms_api.get("/classrooms/<classroom_id>/layouts")

@@ -8,12 +8,16 @@ from io import BytesIO
 from pathlib import Path
 from datetime import datetime, timezone
 
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A3, A4, A5, LEGAL, LETTER, landscape, portrait
+from reportlab.lib.colors import HexColor
 from reportlab.lib.utils import simpleSplit
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
-from sqlalchemy import select
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
+from sqlalchemy import func, select
 
 from kelebek.config import get_data_dir
 from kelebek.models import (
@@ -37,6 +41,96 @@ PAGE_WIDTH, PAGE_HEIGHT = PAGE_SIZE
 FONT_REGULAR = "KelebekSans"
 FONT_BOLD = "KelebekSansBold"
 SEATING_PLAN_REPORT_TYPE = "seating_plan_pdf"
+ATTENDANCE_REPORT_TYPE = "attendance_pdf"
+ROOM_STUDENT_LIST_REPORT_TYPE = "room_student_list_pdf"
+GENERAL_DISTRIBUTION_REPORT_TYPE = "general_distribution_pdf"
+ROOM_STUDENT_LIST_XLSX_REPORT_TYPE = "room_student_list_xlsx"
+GENERAL_DISTRIBUTION_XLSX_REPORT_TYPE = "general_distribution_xlsx"
+CLASS_STUDENT_LIST_REPORT_TYPE = "class_student_list_pdf"
+CLASS_STUDENT_LIST_XLSX_REPORT_TYPE = "class_student_list_xlsx"
+REPORT_TYPES = (SEATING_PLAN_REPORT_TYPE, ATTENDANCE_REPORT_TYPE, ROOM_STUDENT_LIST_REPORT_TYPE,
+                GENERAL_DISTRIBUTION_REPORT_TYPE, CLASS_STUDENT_LIST_REPORT_TYPE)
+
+REPORT_FIELDS = {
+    ATTENDANCE_REPORT_TYPE: ("seat", "school_number", "name", "class", "area"),
+    ROOM_STUDENT_LIST_REPORT_TYPE: ("seat", "school_number", "name", "class", "area", "status"),
+    ROOM_STUDENT_LIST_XLSX_REPORT_TYPE: ("seat", "school_number", "name", "class", "area", "status"),
+    GENERAL_DISTRIBUTION_REPORT_TYPE: ("room", "seat", "school_number", "name", "class", "area"),
+    GENERAL_DISTRIBUTION_XLSX_REPORT_TYPE: (
+        "room", "seat", "school_number", "name", "class", "area", "courses",
+    ),
+    CLASS_STUDENT_LIST_REPORT_TYPE: ("room", "seat", "school_number", "name", "class", "area"),
+    CLASS_STUDENT_LIST_XLSX_REPORT_TYPE: ("room", "seat", "school_number", "name", "class", "area"),
+}
+REPORT_FIELD_LABELS = {
+    "room": "Derslik", "seat": "Koltuk", "school_number": "Okul numarası",
+    "name": "Adı soyadı", "class": "Sınıf/şube", "area": "Alan",
+    "status": "Durum", "courses": "Dersler",
+}
+
+PAPER_SIZES = {"A4": A4, "A3": A3, "A5": A5, "LETTER": LETTER, "LEGAL": LEGAL}
+
+
+def resolve_pdf_options(params=None, *, default_orientation="portrait") -> dict:
+    params = params or {}
+    paper = str(params.get("paper", "A4")).upper()
+    orientation = str(params.get("orientation", default_orientation)).lower()
+    try:
+        margin_mm = float(params.get("margin_mm", "12"))
+    except (TypeError, ValueError) as error:
+        raise ValueError("Kenar boşluğu 5–30 mm arasında olmalı.") from error
+    if paper not in PAPER_SIZES:
+        raise ValueError("Kâğıt boyutu A4, A3, A5, Letter veya Legal olmalı.")
+    if orientation not in {"portrait", "landscape"}:
+        raise ValueError("Sayfa yönü dikey veya yatay olmalı.")
+    if not 5 <= margin_mm <= 30:
+        raise ValueError("Kenar boşluğu 5–30 mm arasında olmalı.")
+    size = PAPER_SIZES[paper]
+    page_size = landscape(size) if orientation == "landscape" else portrait(size)
+    return {"paper": paper, "orientation": orientation, "margin_points": margin_mm * 72 / 25.4,
+            "page_size": page_size}
+
+
+def resolve_report_fields(params, report_type: str) -> tuple[str, ...]:
+    allowed = REPORT_FIELDS.get(report_type)
+    if allowed is None:
+        raise ValueError("Bu rapor türünde sütun seçimi desteklenmiyor.")
+    raw = params.get("fields")
+    if raw is None:
+        return allowed
+    requested = tuple(item.strip() for item in str(raw).split(",") if item.strip())
+    unsupported = set(requested) - set(allowed)
+    if unsupported:
+        raise ValueError("Seçimde bu rapor türünde bulunmayan sütun var.")
+    if not requested:
+        raise ValueError("En az bir rapor alanı seçmelisin.")
+    if len(set(requested)) != len(requested):
+        raise ValueError("Bir sütun raporda birden fazla kez seçilemez.")
+    return requested
+
+
+def resolve_report_labels(params, report_type: str, fields: tuple[str, ...]) -> dict[str, str]:
+    allowed = set(REPORT_FIELDS.get(report_type, ()))
+    raw = params.get("labels")
+    if raw is None:
+        return {}
+    try:
+        requested = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as error:
+        raise ValueError("Sütun başlıkları okunamadı.") from error
+    if not isinstance(requested, dict):
+        raise ValueError("Sütun başlıkları geçersiz.")
+    if set(requested) - set(fields):
+        raise ValueError("Başlığı yalnız raporda görünür olan sütunlar için değiştirebilirsin.")
+    labels = {}
+    for key, label in requested.items():
+        if not isinstance(label, str):
+            raise ValueError("Sütun başlıkları metin olmalı.")
+        label = label.strip()
+        if not label or len(label) > 40 or any(ord(char) < 32 for char in label):
+            raise ValueError("Sütun başlığı 1–40 karakter arasında olmalı.")
+        labels[key] = label
+    return {key: labels[key] for key in fields if key in labels}
 
 
 def _register_fonts() -> tuple[str, str]:
@@ -89,16 +183,48 @@ def safe_report_stem(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", normalized).strip("-._")[:60] or "sinav"
 
 
+def seating_plan_report_filename(organization: ExamOrganization) -> str:
+    """Give same-named exams separate files without exposing names in a path."""
+    return f"{safe_report_stem(organization.name)}-{organization.id}-oturma-planlari.pdf"
+
+
 def seating_plan_report_path(file_name: str) -> Path:
     return get_data_dir() / "Exports" / "PDF" / file_name
+
+
+def report_filename(organization: ExamOrganization, report_type: str) -> str:
+    suffixes = {
+        SEATING_PLAN_REPORT_TYPE: "oturma-planlari",
+        ATTENDANCE_REPORT_TYPE: "yoklama-cizelgesi",
+        ROOM_STUDENT_LIST_REPORT_TYPE: "derslik-ogrenci-listesi",
+        GENERAL_DISTRIBUTION_REPORT_TYPE: "genel-dagitim-listesi",
+        ROOM_STUDENT_LIST_XLSX_REPORT_TYPE: "derslik-ogrenci-listesi",
+        GENERAL_DISTRIBUTION_XLSX_REPORT_TYPE: "genel-dagitim-listesi",
+        CLASS_STUDENT_LIST_REPORT_TYPE: "sinif-ogrenci-listesi",
+        CLASS_STUDENT_LIST_XLSX_REPORT_TYPE: "sinif-ogrenci-listesi",
+    }
+    if report_type not in suffixes:
+        raise ValueError("Bilinmeyen rapor türü.")
+    extension = "xlsx" if report_type.endswith("_xlsx") else "pdf"
+    return f"{safe_report_stem(organization.name)}-{organization.id}-{suffixes[report_type]}.{extension}"
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def report_data_fingerprint(session, organization: ExamOrganization, candidate_id: str) -> str:
     assignments = session.execute(
         select(SeatAssignment.participant_id, SeatAssignment.seat_id,
                ExamParticipant.school_number, ExamParticipant.first_name,
-               ExamParticipant.last_name, ExamParticipant.class_level, ExamParticipant.section)
+               ExamParticipant.last_name, ExamParticipant.class_level, ExamParticipant.section,
+               ExamParticipant.area)
         .join(ExamParticipant, ExamParticipant.id == SeatAssignment.participant_id)
+        .where(ExamParticipant.is_active.is_(True))
         .where(SeatAssignment.candidate_id == candidate_id)
         .order_by(SeatAssignment.participant_id)
     ).all()
@@ -140,17 +266,25 @@ def report_data_fingerprint(session, organization: ExamOrganization, candidate_i
     return hashlib.sha256(raw).hexdigest()
 
 
-def report_status(session, organization: ExamOrganization) -> dict:
+def report_status(session, organization: ExamOrganization, report_type: str = SEATING_PLAN_REPORT_TYPE) -> dict:
     report = session.scalar(select(DistributionReport).where(
         DistributionReport.organization_id == organization.id,
-        DistributionReport.report_type == SEATING_PLAN_REPORT_TYPE,
+        DistributionReport.report_type == report_type,
     ))
     if report is None:
         return {"report_status": "not_generated", "report_updated_at": None}
     report_path = seating_plan_report_path(report.file_name)
+    duplicate_path = session.scalar(select(func.count(DistributionReport.id)).where(
+        DistributionReport.file_name == report.file_name,
+        DistributionReport.report_type == report_type,
+        DistributionReport.organization_id != organization.id,
+    )) or 0
     current = (
         report.candidate_id == organization.selected_candidate_id
+        and duplicate_path == 0
         and report_path.is_file()
+        and report.file_sha256 is not None
+        and report.file_sha256 == _sha256_file(report_path)
         and report.data_fingerprint == report_data_fingerprint(
             session, organization, organization.selected_candidate_id or ""
         )
@@ -161,25 +295,387 @@ def report_status(session, organization: ExamOrganization) -> dict:
     }
 
 
+def all_report_statuses(session, organization: ExamOrganization) -> dict[str, dict]:
+    return {kind: report_status(session, organization, kind) for kind in REPORT_TYPES}
+
+
 def record_seating_plan_report(session, organization: ExamOrganization, candidate_id: str, file_name: str) -> None:
+    record_report(session, organization, candidate_id, SEATING_PLAN_REPORT_TYPE, file_name)
+
+
+def record_report(session, organization: ExamOrganization, candidate_id: str,
+                  report_type: str, file_name: str) -> None:
+    report_path = seating_plan_report_path(file_name)
+    if not report_path.is_file():
+        raise FileNotFoundError("Oluşturulan PDF raporu bulunamadı.")
+    file_sha256 = _sha256_file(report_path)
     report = session.scalar(select(DistributionReport).where(
         DistributionReport.organization_id == organization.id,
-        DistributionReport.report_type == SEATING_PLAN_REPORT_TYPE,
+        DistributionReport.report_type == report_type,
     ))
     if report is None:
         report = DistributionReport(
             organization_id=organization.id,
             candidate_id=candidate_id,
-            report_type=SEATING_PLAN_REPORT_TYPE,
+            report_type=report_type,
             data_fingerprint=report_data_fingerprint(session, organization, candidate_id),
+            file_sha256=file_sha256,
             file_name=file_name,
         )
         session.add(report)
     else:
         report.candidate_id = candidate_id
         report.data_fingerprint = report_data_fingerprint(session, organization, candidate_id)
+        report.file_sha256 = file_sha256
         report.file_name = file_name
         report.created_at = datetime.now(timezone.utc)
+
+
+def _report_context(session, organization: ExamOrganization, candidate_id: str):
+    school = session.get(SchoolProfile, 1)
+    school_name = school.school_name.strip() if school and school.school_name.strip() else "Kelebek Sınav Sistemi"
+    course_names = session.scalars(
+        select(Course.name).join(ExamCourse, ExamCourse.course_id == Course.id)
+        .where(ExamCourse.organization_id == organization.id).order_by(ExamCourse.display_order)
+    ).all()
+    assignments = session.execute(
+        select(SeatAssignment.seat_id, ExamParticipant)
+        .join(ExamParticipant, ExamParticipant.id == SeatAssignment.participant_id)
+        .where(ExamParticipant.is_active.is_(True), SeatAssignment.candidate_id == candidate_id,
+               SeatAssignment.seat_id.is_not(None))
+    ).all()
+    students_by_seat = {seat_id: participant for seat_id, participant in assignments}
+    rooms = session.execute(
+        select(Classroom, ClassroomLayout)
+        .join(ExamOrganizationClassroom, ExamOrganizationClassroom.classroom_id == Classroom.id)
+        .join(ClassroomLayout, ClassroomLayout.id == ExamOrganizationClassroom.layout_id)
+        .where(ExamOrganizationClassroom.organization_id == organization.id)
+        .order_by(ExamOrganizationClassroom.display_order, Classroom.name)
+    ).all()
+    if not rooms:
+        raise ValueError("PDF oluşturmak için seçili derslik düzeni bulunamadı.")
+    room_data = []
+    for classroom, layout in rooms:
+        seats = session.scalars(select(Seat).where(Seat.layout_id == layout.id)
+                                .order_by(Seat.seat_number)).all()
+        room_data.append((classroom, layout, [(seat, students_by_seat.get(seat.id)) for seat in seats]))
+    return school_name, course_names, room_data
+
+
+def _draw_table_page(pdf, organization, school_name, course_names, classroom, layout,
+                     report_title, headers, rows, page_size, page_number, page_total,
+                     regular, bold, options, column_keys, attendance=False, general=False):
+    width, height = page_size
+    margin = options["margin_points"]
+    vertical_offset = margin - 32
+    pdf.setFillColor(HexColor("#183943"))
+    _draw_fitted_text(pdf, school_name, margin, height - 34 - vertical_offset, width - 2 * margin, bold, 14, 8)
+    pdf.setFont(bold, 11)
+    pdf.drawString(margin, height - 54 - vertical_offset, report_title)
+    pdf.setFillColor(HexColor("#52636A"))
+    _draw_fitted_text(pdf, organization.name, width - margin, height - 54 - vertical_offset,
+                      width - 2 * margin, regular, 8.5, 5, "right")
+    course_label = " · ".join(course_names) if course_names else "Genel sınav"
+    _draw_fitted_text(pdf, f"{organization.exam_date.strftime('%d.%m.%Y')}  ·  {course_label}",
+                      margin, height - 70 - vertical_offset, width - 2 * margin, regular, 8, 5)
+    pdf.setFillColor(HexColor("#245B52"))
+    _draw_fitted_text(pdf, f"{classroom.name}  ·  {layout.name}", margin, height - 91 - vertical_offset,
+                      width - 2 * margin, bold, 10, 6)
+    table_top = height - 108 - vertical_offset
+    available_width = width - 2 * margin
+    weights = {"room": 90, "seat": 42, "school_number": 82, "name": 220,
+               "class": 75, "area": 80, "status": 58, "plus": 80, "minus": 80}
+    proportional_total = sum(weights[key] for key in column_keys)
+    col_widths = [available_width * weights[key] / proportional_total for key in column_keys]
+    x_positions = [margin]
+    for col_width in col_widths:
+        x_positions.append(x_positions[-1] + col_width)
+    pdf.setFillColor(HexColor("#E8EFF0"))
+    pdf.rect(margin, table_top - 22, sum(col_widths), 22, fill=1, stroke=0)
+    pdf.setFillColor(HexColor("#183943"))
+    for index, header in enumerate(headers):
+        _draw_fitted_text(pdf, header, x_positions[index] + 4, table_top - 14,
+                          col_widths[index] - 7, bold, 7.2, 5)
+    y = table_top - 22
+    row_height = 22
+    available_rows = max(1, int((table_top - margin - 10) / row_height))
+    row_start = (page_number - 1) * available_rows
+    for row_index, row in enumerate(rows[row_start:row_start + available_rows]):
+        row_y = y - (row_index + 1) * row_height
+        if row_index % 2 == 0:
+            pdf.setFillColor(HexColor("#F7F9F9"))
+            pdf.rect(margin, row_y, sum(col_widths), row_height, fill=1, stroke=0)
+        pdf.setStrokeColor(HexColor("#D8E0E2"))
+        pdf.line(margin, row_y, margin + sum(col_widths), row_y)
+        pdf.setFillColor(HexColor("#26383D"))
+        for col_index, value in enumerate(row):
+            cell_x = x_positions[col_index]
+            cell_width = col_widths[col_index]
+            if attendance and column_keys[col_index] in {"plus", "minus"}:
+                pdf.setStrokeColor(HexColor("#60767D"))
+                box = 11
+                pdf.rect(cell_x + (cell_width - box) / 2, row_y + (row_height - box) / 2,
+                         box, box, fill=0, stroke=1)
+            elif column_keys[col_index] == "name" and isinstance(value, tuple):
+                name_lines, name_size = _fit_name(value[0], value[1], cell_width - 8, regular)
+                text_y = row_y + row_height - 8
+                for line in name_lines:
+                    font_size = min(7.2, name_size)
+                    pdf.setFont(regular, font_size)
+                    pdf.drawString(cell_x + 4, text_y, line)
+                    text_y -= font_size + 1
+            else:
+                _draw_fitted_text(pdf, str(value), cell_x + 4, row_y + 6,
+                                  cell_width - 7, regular, 7.2, 5)
+    pdf.setStrokeColor(HexColor("#D8E0E2"))
+    footer_line_y = max(17, margin - 6)
+    pdf.line(margin, footer_line_y, width - margin, footer_line_y)
+    pdf.setFillColor(HexColor("#64747A"))
+    pdf.setFont(regular, 7)
+    item_label = "öğrenci" if attendance or general else "oturma yeri"
+    footer_y = max(5, margin - 21)
+    pdf.drawString(margin, footer_y, f"{len(rows)} {item_label}  ·  {classroom.name}")
+    pdf.drawRightString(width - margin, footer_y, f"{page_number}/{page_total}")
+    pdf.showPage()
+
+
+def _build_room_report_pdf(session, organization, candidate_id, report_type, options=None,
+                           fields=None, labels=None):
+    attendance = report_type == ATTENDANCE_REPORT_TYPE
+    general = report_type == GENERAL_DISTRIBUTION_REPORT_TYPE
+    if options is None:
+        options = resolve_pdf_options(default_orientation="landscape" if attendance or general else "portrait")
+    page_size = options["page_size"]
+    fields = fields or REPORT_FIELDS[report_type]
+    labels = labels or {}
+    column_keys = (*fields, "plus", "minus") if attendance else fields
+    headers = ["+" if key == "plus" else "−" if key == "minus" else labels.get(key, REPORT_FIELD_LABELS[key])
+               for key in column_keys]
+    school_name, course_names, room_data = _report_context(session, organization, candidate_id)
+    regular, bold = _register_fonts()
+    pages = []
+    for classroom, layout, seats in room_data:
+        rows = []
+        for seat, student in seats:
+            if (attendance or general) and (not seat.is_available or student is None):
+                continue
+            if not attendance and not seat.is_available:
+                continue
+            values = {
+                "room": classroom.name,
+                "seat": str(seat.seat_number),
+                "school_number": student.school_number if student else "—",
+                "name": (student.first_name, student.last_name) if student else "—",
+                "class": f"{student.class_level}/{student.section}" if student else "—",
+                "area": student.area or "—" if student else "—",
+                "status": "Dolu" if student else "Boş",
+                "plus": "", "minus": "",
+            }
+            rows.append([values[key] for key in column_keys])
+        margin_offset = options["margin_points"] - 32
+        table_top = page_size[1] - 108 - margin_offset
+        content_height = table_top - options["margin_points"] - 10
+        row_height = 22
+        rows_per_page = max(1, int(content_height / row_height))
+        page_count = max(1, (len(rows) + rows_per_page - 1) // rows_per_page)
+        for page_index in range(page_count):
+            pages.append((classroom, layout, rows, page_index + 1, page_count))
+    output = BytesIO()
+    pdf = canvas.Canvas(output, pagesize=page_size, pageCompression=1)
+    report_title = ("YOKLAMA ÇİZELGESİ" if attendance else "GENEL SINAV DAĞITIM LİSTESİ"
+                    if general else "DERSLİK BAZLI ÖĞRENCİ LİSTESİ")
+    pdf.setTitle(f"{organization.name} - {report_title.title()}")
+    pdf.setAuthor(school_name)
+    for classroom, layout, rows, page_index, page_count in pages:
+        _draw_table_page(pdf, organization, school_name, course_names, classroom, layout,
+                         report_title, headers, rows, page_size, page_index, page_count,
+                         regular, bold, options, column_keys, attendance, general)
+    pdf.save()
+    result = output.getvalue()
+    export_dir = get_data_dir() / "Exports" / "PDF"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    (export_dir / report_filename(organization, report_type)).write_bytes(result)
+    return result
+
+
+def build_attendance_pdf(session, organization, candidate_id: str, options=None,
+                         fields=None, labels=None) -> bytes:
+    return _build_room_report_pdf(
+        session, organization, candidate_id, ATTENDANCE_REPORT_TYPE, options, fields, labels,
+    )
+
+
+def build_room_student_list_pdf(session, organization, candidate_id: str, options=None,
+                                fields=None, labels=None) -> bytes:
+    return _build_room_report_pdf(
+        session, organization, candidate_id, ROOM_STUDENT_LIST_REPORT_TYPE, options, fields, labels,
+    )
+
+
+def build_general_distribution_pdf(session, organization, candidate_id: str, options=None,
+                                   fields=None, labels=None) -> bytes:
+    return _build_room_report_pdf(
+        session, organization, candidate_id, GENERAL_DISTRIBUTION_REPORT_TYPE, options, fields, labels,
+    )
+
+
+def build_class_student_list_pdf(session, organization, candidate_id: str, options=None,
+                                 fields=None, labels=None) -> bytes:
+    options = options or resolve_pdf_options()
+    fields = fields or REPORT_FIELDS[CLASS_STUDENT_LIST_REPORT_TYPE]
+    labels = labels or {}
+    school_name, course_names, rooms = _report_context(session, organization, candidate_id)
+    grouped = {}
+    for classroom, _layout, seats in rooms:
+        for seat, student in seats:
+            if student is None or not seat.is_available:
+                continue
+            key = (student.class_level, student.section)
+            values = {
+                "room": classroom.name, "seat": str(seat.seat_number),
+                "school_number": student.school_number, "name": (student.first_name, student.last_name),
+                "class": f"{student.class_level}/{student.section}", "area": student.area or "—",
+            }
+            grouped.setdefault(key, []).append([values[field] for field in fields])
+    if not grouped:
+        raise ValueError("Sınıf listesi oluşturmak için yerleşmiş öğrenci bulunamadı.")
+    regular, bold = _register_fonts()
+    page_size = options["page_size"]
+    margin_offset = options["margin_points"] - 32
+    table_top = page_size[1] - 108 - margin_offset
+    rows_per_page = max(1, int((table_top - options["margin_points"] - 10) / 22))
+    pages = []
+    for class_group, rows in sorted(grouped.items(), key=lambda item: (int(item[0][0]), item[0][1])):
+        name_index = fields.index("name") if "name" in fields else None
+        if name_index is not None:
+            rows.sort(key=lambda row: (str(row[name_index][1]).casefold(), str(row[name_index][0]).casefold()))
+        page_count = max(1, (len(rows) + rows_per_page - 1) // rows_per_page)
+        for page_index in range(page_count):
+            pages.append((class_group, rows, page_index + 1, page_count))
+    output = BytesIO()
+    pdf = canvas.Canvas(output, pagesize=page_size, pageCompression=1)
+    pdf.setTitle(f"{organization.name} - Sınıf Öğrenci Listesi")
+    pdf.setAuthor(school_name)
+    for (class_level, section), rows, page_index, page_count in pages:
+        group = type("ReportGroup", (), {"name": f"Sınıf {class_level}/{section}"})()
+        layout = type("ReportLayout", (), {"name": "Öğrenci listesi"})()
+        _draw_table_page(
+            pdf, organization, school_name, course_names, group, layout,
+            "SINIF BAZLI ÖĞRENCİ LİSTESİ",
+            [labels.get(field, REPORT_FIELD_LABELS[field]) for field in fields],
+            rows, page_size, page_index, page_count, regular, bold, options, fields, general=True,
+        )
+    pdf.save()
+    result = output.getvalue()
+    export_dir = get_data_dir() / "Exports" / "PDF"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    (export_dir / report_filename(organization, CLASS_STUDENT_LIST_REPORT_TYPE)).write_bytes(result)
+    return result
+
+
+def _write_workbook(rows_by_sheet: list[tuple[str, list[list[object]]]]) -> bytes:
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    header_fill = PatternFill("solid", fgColor="E8EFF0")
+    for sheet_name, rows in rows_by_sheet:
+        sheet = workbook.create_sheet(sheet_name[:31] or "Liste")
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = f"A1:{get_column_letter(max(1, len(rows[0]) if rows else 1))}{max(1, len(rows))}"
+        for row_index, row in enumerate(rows, start=1):
+            sheet.append(row)
+            for cell in sheet[row_index]:
+                if isinstance(cell.value, str):
+                    cell.data_type = "s"
+            if row_index == 1:
+                for cell in sheet[row_index]:
+                    cell.font = Font(bold=True, color="183943")
+                    cell.fill = header_fill
+        for column in sheet.columns:
+            letter = column[0].column_letter
+            max_width = max((len(str(cell.value or "")) for cell in column), default=10)
+            sheet.column_dimensions[letter].width = min(42, max(12, max_width + 2))
+    stream = BytesIO()
+    workbook.save(stream)
+    return stream.getvalue()
+
+
+def build_room_student_list_xlsx(session, organization, candidate_id: str, fields=None, labels=None) -> bytes:
+    fields = fields or REPORT_FIELDS[ROOM_STUDENT_LIST_XLSX_REPORT_TYPE]
+    labels = labels or {}
+    _school, _courses, rooms = _report_context(session, organization, candidate_id)
+    sheets = []
+    for classroom, _layout, seats in rooms:
+        rows = [[labels.get(field, REPORT_FIELD_LABELS[field]) for field in fields]]
+        for seat, student in seats:
+            if not seat.is_available:
+                continue
+            values = {
+                "room": classroom.name, "seat": seat.seat_number,
+                "school_number": student.school_number if student else "",
+                "name": f"{student.first_name} {student.last_name}" if student else "",
+                "class": f"{student.class_level}/{student.section}" if student else "",
+                "area": student.area or "" if student else "",
+                "status": "Dolu" if student else "Boş",
+            }
+            rows.append([values[field] for field in fields])
+        sheets.append((classroom.name, rows))
+    return _write_workbook(sheets)
+
+
+def build_general_distribution_xlsx(session, organization, candidate_id: str, fields=None, labels=None) -> bytes:
+    fields = fields or REPORT_FIELDS[GENERAL_DISTRIBUTION_XLSX_REPORT_TYPE]
+    labels = labels or {}
+    _school, course_names, rooms = _report_context(session, organization, candidate_id)
+    rows = [[labels.get(field, REPORT_FIELD_LABELS[field]) for field in fields]]
+    for classroom, _layout, seats in rooms:
+        for seat, student in seats:
+            if student is None or not seat.is_available:
+                continue
+            values = {
+                "room": classroom.name, "seat": seat.seat_number,
+                "school_number": student.school_number,
+                "name": f"{student.first_name} {student.last_name}",
+                "class": f"{student.class_level}/{student.section}",
+                "area": student.area or "", "courses": " · ".join(course_names),
+            }
+            rows.append([values[field] for field in fields])
+    return _write_workbook([("Genel dağıtım", rows)])
+
+
+def build_class_student_list_xlsx(session, organization, candidate_id: str,
+                                  fields=None, labels=None) -> bytes:
+    fields = fields or REPORT_FIELDS[CLASS_STUDENT_LIST_XLSX_REPORT_TYPE]
+    labels = labels or {}
+    _school, _courses, rooms = _report_context(session, organization, candidate_id)
+    grouped = {}
+    for classroom, _layout, seats in rooms:
+        for seat, student in seats:
+            if student is None or not seat.is_available:
+                continue
+            key = (student.class_level, student.section)
+            values = {
+                "room": classroom.name, "seat": seat.seat_number,
+                "school_number": student.school_number,
+                "name": f"{student.first_name} {student.last_name}",
+                "class": f"{student.class_level}/{student.section}",
+                "area": student.area or "",
+            }
+            grouped.setdefault(key, []).append([values[field] for field in fields])
+    sheets = []
+    for (class_level, section), students in sorted(
+        grouped.items(), key=lambda item: (int(item[0][0]), item[0][1])
+    ):
+        name_index = fields.index("name") if "name" in fields else None
+        school_number_index = fields.index("school_number") if "school_number" in fields else None
+        if name_index is not None:
+            students.sort(key=lambda row: (str(row[name_index]).casefold(),
+                                           str(row[school_number_index]) if school_number_index is not None else ""))
+        sheets.append((f"{class_level}-{section}", [[
+            labels.get(field, REPORT_FIELD_LABELS[field]) for field in fields
+        ], *students]))
+    if not sheets:
+        raise ValueError("Sınıf listesi oluşturmak için yerleşmiş öğrenci bulunamadı.")
+    return _write_workbook(sheets)
 
 
 def _draw_fitted_text(pdf, text: str, x: float, y: float, max_width: float,
@@ -249,31 +745,32 @@ def _draw_seat(pdf, seat, student, x: float, y: float, width: float, height: flo
 def _draw_room_page(pdf, school_name: str, organization: ExamOrganization, course_names: list[str],
                     classroom: Classroom, layout: ClassroomLayout, desks: list[Desk],
                     seats_by_desk: dict[str, list[Seat]], students_by_seat: dict[str, ExamParticipant],
-                    page_index: int, page_count: int, regular: str, bold: str) -> None:
-    margin = 28
+                    page_index: int, page_count: int, regular: str, bold: str,
+                    page_size=PAGE_SIZE, margin=28) -> None:
+    page_width, page_height = page_size
     pdf.setFillColorRGB(0.10, 0.22, 0.28)
-    _draw_fitted_text(pdf, school_name or "Kelebek Sınav Sistemi", margin, PAGE_HEIGHT - 35,
-                      PAGE_WIDTH - 2 * margin, bold, 16, 9)
+    _draw_fitted_text(pdf, school_name or "Kelebek Sınav Sistemi", margin, page_height - 35,
+                      page_width - 2 * margin, bold, 16, 9)
     pdf.setFont(bold, 12)
-    pdf.drawString(margin, PAGE_HEIGHT - 55, "SINAV OTURMA PLANI")
+    pdf.drawString(margin, page_height - 55, "SINAV OTURMA PLANI")
     pdf.setFillColorRGB(0.35, 0.41, 0.47)
-    _draw_fitted_text(pdf, organization.name, PAGE_WIDTH - margin, PAGE_HEIGHT - 55,
-                      PAGE_WIDTH - 2 * margin, regular, 9, 5.5, "right")
+    _draw_fitted_text(pdf, organization.name, page_width - margin, page_height - 55,
+                      page_width - 2 * margin, regular, 9, 5.5, "right")
     course_label = " · ".join(course_names) if course_names else "Genel sınav"
     exam_label = f"{organization.exam_date.strftime('%d.%m.%Y')}  ·  {course_label}"
-    _draw_fitted_text(pdf, exam_label, margin, PAGE_HEIGHT - 73,
-                      PAGE_WIDTH - 2 * margin, regular, 9, 5.5)
+    _draw_fitted_text(pdf, exam_label, margin, page_height - 73,
+                      page_width - 2 * margin, regular, 9, 5.5)
     pdf.setFont(bold, 10)
     pdf.setFillColorRGB(0.15, 0.38, 0.34)
-    _draw_fitted_text(pdf, f"{classroom.name}  ·  {layout.name}", margin, PAGE_HEIGHT - 96,
-                      PAGE_WIDTH - 2 * margin, bold, 10, 6)
+    _draw_fitted_text(pdf, f"{classroom.name}  ·  {layout.name}", margin, page_height - 96,
+                      page_width - 2 * margin, bold, 10, 6)
     pdf.setStrokeColorRGB(0.83, 0.87, 0.88)
-    pdf.line(margin, PAGE_HEIGHT - 105, PAGE_WIDTH - margin, PAGE_HEIGHT - 105)
+    pdf.line(margin, page_height - 105, page_width - margin, page_height - 105)
 
     plan_left = margin + 36
-    plan_right = PAGE_WIDTH - margin - 12
-    plan_top = PAGE_HEIGHT - 137
-    plan_bottom = 38
+    plan_right = page_width - margin - 12
+    plan_top = page_height - 137
+    plan_bottom = margin + 10
     grid_step = 2.0
     min_x = min((desk.x for desk in desks), default=0)
     min_y = min((desk.y for desk in desks), default=0)
@@ -291,10 +788,10 @@ def _draw_room_page(pdf, school_name: str, organization: ExamOrganization, cours
     board_width = min(190, max(112, plan_right - plan_left - 20))
     pdf.setFillColorRGB(1, 1, 1)
     pdf.setStrokeColorRGB(0.72, 0.78, 0.81)
-    pdf.roundRect((PAGE_WIDTH - board_width) / 2, plan_top + 7, board_width, 17, 4, fill=1, stroke=1)
+    pdf.roundRect((page_width - board_width) / 2, plan_top + 7, board_width, 17, 4, fill=1, stroke=1)
     pdf.setFillColorRGB(0.41, 0.49, 0.53)
     pdf.setFont(bold, 7)
-    pdf.drawCentredString(PAGE_WIDTH / 2, plan_top + 12, "TAHTA / ÖĞRETMEN MASASI")
+    pdf.drawCentredString(page_width / 2, plan_top + 12, "TAHTA / ÖĞRETMEN MASASI")
 
     column_positions = sorted({round((desk.x - min_x) / grid_step) for desk in desks})
     for left_column, right_column in zip(column_positions, column_positions[1:]):
@@ -330,17 +827,21 @@ def _draw_room_page(pdf, school_name: str, organization: ExamOrganization, cours
             _draw_seat(pdf, seat, students_by_seat.get(seat.id), seat_x, seat_y, seat_width, seat_height, regular, bold)
 
     pdf.setStrokeColorRGB(0.87, 0.89, 0.9)
-    pdf.line(margin, 25, PAGE_WIDTH - margin, 25)
+    pdf.line(margin, max(17, margin - 6), page_width - margin, max(17, margin - 6))
     pdf.setFillColorRGB(0.47, 0.52, 0.57)
     pdf.setFont(regular, 7)
     total_students = sum(1 for seat_id in students_by_seat if seat_id in {seat.id for desk in desks for seat in seats_by_desk.get(desk.id, [])})
-    pdf.drawString(margin, 13, f"{total_students} öğrenci  ·  {len(desks)} masa  ·  {sum(len(seats_by_desk.get(desk.id, [])) for desk in desks)} koltuk")
-    pdf.drawRightString(PAGE_WIDTH - margin, 13, f"{page_index}/{page_count}")
+    footer_y = max(5, margin - 21)
+    pdf.drawString(margin, footer_y, f"{total_students} öğrenci  ·  {len(desks)} masa  ·  {sum(len(seats_by_desk.get(desk.id, [])) for desk in desks)} koltuk")
+    pdf.drawRightString(page_width - margin, footer_y, f"{page_index}/{page_count}")
     pdf.showPage()
 
 
-def build_seating_plan_pdf(session, organization: ExamOrganization, candidate_id: str) -> bytes:
+def build_seating_plan_pdf(session, organization: ExamOrganization, candidate_id: str, options=None) -> bytes:
     """Build one A4 landscape page for every selected classroom layout."""
+    options = options or resolve_pdf_options(default_orientation="landscape")
+    page_size = options["page_size"]
+    margin = options["margin_points"]
     school = session.get(SchoolProfile, 1)
     school_name = school.school_name.strip() if school and school.school_name.strip() else "Kelebek Sınav Sistemi"
     course_names = session.scalars(
@@ -352,6 +853,7 @@ def build_seating_plan_pdf(session, organization: ExamOrganization, candidate_id
     assignments = session.execute(
         select(SeatAssignment.seat_id, ExamParticipant)
         .join(ExamParticipant, ExamParticipant.id == SeatAssignment.participant_id)
+        .where(ExamParticipant.is_active.is_(True))
         .where(SeatAssignment.candidate_id == candidate_id, SeatAssignment.seat_id.is_not(None))
     ).all()
     students_by_seat = {seat_id: participant for seat_id, participant in assignments}
@@ -367,7 +869,7 @@ def build_seating_plan_pdf(session, organization: ExamOrganization, candidate_id
 
     regular, bold = _register_fonts()
     output = BytesIO()
-    pdf = canvas.Canvas(output, pagesize=PAGE_SIZE, pageCompression=1)
+    pdf = canvas.Canvas(output, pagesize=page_size, pageCompression=1)
     pdf.setTitle(f"{organization.name} - Oturma Planı")
     pdf.setAuthor(school_name)
     for page_index, (classroom, layout) in enumerate(selections, start=1):
@@ -382,13 +884,13 @@ def build_seating_plan_pdf(session, organization: ExamOrganization, candidate_id
         _draw_room_page(
             pdf, school_name, organization, course_names, classroom, layout, desks,
             seats_by_desk, students_by_seat, page_index, len(selections), regular, bold,
+            page_size, margin,
         )
     pdf.save()
     output.seek(0)
 
     export_dir = get_data_dir() / "Exports" / "PDF"
     export_dir.mkdir(parents=True, exist_ok=True)
-    safe_name = safe_report_stem(organization.name)
-    report_path = export_dir / f"{safe_name}-oturma-planlari.pdf"
+    report_path = export_dir / seating_plan_report_filename(organization)
     report_path.write_bytes(output.getvalue())
     return output.getvalue()

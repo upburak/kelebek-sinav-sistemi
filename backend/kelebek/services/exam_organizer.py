@@ -19,7 +19,7 @@ from kelebek.models import (
     Seat,
     StudentYearEnrollment,
 )
-from kelebek.services.reporting import report_status
+from kelebek.services.reporting import REPORT_TYPES, all_report_statuses
 
 
 class ExamOrganizerError(ValueError):
@@ -113,7 +113,10 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
     participant_counts = dict(
         session.execute(
             select(ExamParticipant.organization_id, func.count(ExamParticipant.id))
-            .where(ExamParticipant.organization_id.in_(ids))
+            .where(
+                ExamParticipant.organization_id.in_(ids),
+                ExamParticipant.is_active.is_(True),
+            )
             .group_by(ExamParticipant.organization_id)
         ).all()
     )
@@ -145,8 +148,9 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
             "available_seats": available,
         })
     report_status_by_org = {
-        item.id: report_status(session, item) if item.status == "completed"
-        else {"report_status": "not_generated", "report_updated_at": None}
+        item.id: all_report_statuses(session, item) if item.status == "completed"
+        else {kind: {"report_status": "not_generated", "report_updated_at": None}
+              for kind in REPORT_TYPES}
         for item in organizations
     }
     return [
@@ -173,7 +177,9 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
             ),
             "rules": _serialize_rules(item),
             "selected_candidate_id": item.selected_candidate_id,
-            **report_status_by_org[item.id],
+            "report_status": report_status_by_org[item.id].get("seating_plan_pdf", {}).get("report_status", "not_generated"),
+            "report_updated_at": report_status_by_org[item.id].get("seating_plan_pdf", {}).get("report_updated_at"),
+            "report_statuses": report_status_by_org[item.id],
         }
         for item in organizations
     ]

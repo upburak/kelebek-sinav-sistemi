@@ -26,10 +26,30 @@ from kelebek.services.exam_organizer import (
     update_organization_rooms,
 )
 from kelebek.services.reporting import (
+    ATTENDANCE_REPORT_TYPE,
+    CLASS_STUDENT_LIST_REPORT_TYPE,
+    CLASS_STUDENT_LIST_XLSX_REPORT_TYPE,
+    GENERAL_DISTRIBUTION_REPORT_TYPE,
+    GENERAL_DISTRIBUTION_XLSX_REPORT_TYPE,
+    ROOM_STUDENT_LIST_REPORT_TYPE,
+    ROOM_STUDENT_LIST_XLSX_REPORT_TYPE,
     build_seating_plan_pdf,
+    build_attendance_pdf,
+    build_general_distribution_pdf,
+    build_general_distribution_xlsx,
+    build_room_student_list_pdf,
+    build_room_student_list_xlsx,
+    build_class_student_list_pdf,
+    build_class_student_list_xlsx,
+    record_report,
     record_seating_plan_report,
+    all_report_statuses,
     report_status,
-    safe_report_stem,
+    report_filename,
+    resolve_pdf_options,
+    resolve_report_fields,
+    resolve_report_labels,
+    seating_plan_report_filename,
 )
 
 
@@ -68,7 +88,10 @@ def _candidate_history_state(events):
 def _distribution_fingerprint(session, organization):
     participant_rows = session.execute(
         select(ExamParticipant.id, ExamParticipant.class_level, ExamParticipant.section, ExamParticipant.area)
-        .where(ExamParticipant.organization_id == organization.id)
+        .where(
+            ExamParticipant.organization_id == organization.id,
+            ExamParticipant.is_active.is_(True),
+        )
         .order_by(ExamParticipant.id)
     ).all()
     layout_ids = session.scalars(
@@ -123,7 +146,10 @@ def _review_selected_candidate(session, organization, candidate_id=None):
     run = session.get(DistributionRun, candidate.run_id) if candidate else None
     if candidate is None or run is None or run.organization_id != organization.id or run.config_hash != _distribution_fingerprint(session, organization):
         raise ValueError("Seçili aday güncel değil. Güncel derslik ve kurallarla yeni aday üretin.")
-    participants = session.scalars(select(ExamParticipant).where(ExamParticipant.organization_id == organization.id)).all()
+    participants = session.scalars(select(ExamParticipant).where(
+        ExamParticipant.organization_id == organization.id,
+        ExamParticipant.is_active.is_(True),
+    )).all()
     selections = session.execute(
         select(ExamOrganizationClassroom, Classroom, ClassroomLayout)
         .join(Classroom, Classroom.id == ExamOrganizationClassroom.classroom_id)
@@ -148,7 +174,14 @@ def _review_selected_candidate(session, organization, candidate_id=None):
         seat_pairs["adjacent"].extend(graph["adjacent"])
         seat_pairs["front_back"].extend(graph["front_back"])
         room_capacities.append({"classroom_id": _classroom.id, "classroom_name": _classroom.name, "available_seats": len([seat for seat in seats if seat.is_available])})
-    rows = session.scalars(select(SeatAssignment).where(SeatAssignment.candidate_id == candidate.id)).all()
+    rows = session.scalars(
+        select(SeatAssignment)
+        .join(ExamParticipant, ExamParticipant.id == SeatAssignment.participant_id)
+        .where(
+            SeatAssignment.candidate_id == candidate.id,
+            ExamParticipant.is_active.is_(True),
+        )
+    ).all()
     assignment_map = {row.participant_id: row.seat_id for row in rows}
     if len(rows) != len(participants) or len(assignment_map) != len(participants):
         raise ValueError("Adayda her öğrenci için tam olarak bir koltuk bulunmalı.")
@@ -189,6 +222,7 @@ def _serialize_candidate(session, organization, candidate):
         .outerjoin(ClassroomLayout, ClassroomLayout.id == Desk.layout_id)
         .outerjoin(Classroom, Classroom.id == ClassroomLayout.classroom_id)
         .where(SeatAssignment.candidate_id == candidate.id)
+        .where(ExamParticipant.is_active.is_(True))
         .order_by(Classroom.name, Seat.seat_number)
     ).all()
     assignments = [{
@@ -375,7 +409,10 @@ def create_distribution_candidate(organization_id: str):
             if year is None or year.start_year < current_academic_year_start() or organization.status != "draft":
                 return jsonify({"error": "Bu organizasyonda dağıtım adayı oluşturulamaz."}), 403
             participants = session.scalars(
-                select(ExamParticipant).where(ExamParticipant.organization_id == organization.id)
+                select(ExamParticipant).where(
+                    ExamParticipant.organization_id == organization.id,
+                    ExamParticipant.is_active.is_(True),
+                )
                 .order_by(ExamParticipant.class_level, ExamParticipant.section, ExamParticipant.school_number)
             ).all()
             selections = session.execute(
@@ -506,7 +543,10 @@ def select_distribution_candidate(organization_id: str):
                 select(func.count(SeatAssignment.id)).where(SeatAssignment.candidate_id == candidate.id)
             ) or 0
             participant_count = session.scalar(
-                select(func.count(ExamParticipant.id)).where(ExamParticipant.organization_id == organization.id)
+                select(func.count(ExamParticipant.id)).where(
+                    ExamParticipant.organization_id == organization.id,
+                    ExamParticipant.is_active.is_(True),
+                )
             ) or 0
             if assignment_count != participant_count or candidate.affected_student_count > 5:
                 return jsonify({"error": "Bu aday son kontrole alınamaz; tüm öğrenciler yerleşmeli ve en fazla beş öğrenci kural ihlalinden etkilenmelidir."}), 409
@@ -597,6 +637,7 @@ def move_candidate_participant(organization_id: str, candidate_id: str):
                 candidate.affected_student_count = review["affected_student_count"]
                 result = _serialize_candidate(session, organization, candidate)
                 result["report_status"] = report_status(session, organization)["report_status"]
+                result["report_statuses"] = all_report_statuses(session, organization)
             else:
                 child = DistributionCandidate(
                     run_id=run.id,
@@ -705,6 +746,7 @@ def change_completed_distribution_history(organization_id: str, candidate_id: st
             result = _serialize_candidate(session, organization, candidate)
             result["review"] = review
             result["report_status"] = report_status(session, organization)["report_status"]
+            result["report_statuses"] = all_report_statuses(session, organization)
     except IntegrityError:
         return jsonify({"error": "Geçmiş işlemi uygulanamadı; koltuk durumu çakışıyor."}), 409
     return jsonify({"candidate": result})
@@ -729,6 +771,10 @@ def finalize_distribution(organization_id: str):
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict) or payload.get("confirm") is not True:
         return jsonify({"error": "Kesinleştirmek için açık onay gereklidir."}), 400
+    if payload.get("physical_layouts_confirmed") is not True:
+        return jsonify({
+            "error": "Kesinleştirmeden önce seçilen dersliklerin fiziksel masa ve oturma planlarını doğrulayın."
+        }), 400
     session_factory = current_app.extensions["kelebek_session_factory"]
     try:
         with session_factory.begin() as session:
@@ -758,6 +804,10 @@ def finalize_distribution(organization_id: str):
 def download_seating_plan_pdf(organization_id: str):
     session_factory = current_app.extensions["kelebek_session_factory"]
     try:
+        options = resolve_pdf_options(request.args, default_orientation="landscape")
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    try:
         with session_factory.begin() as session:
             organization = session.get(ExamOrganization, organization_id)
             if organization is None:
@@ -770,11 +820,11 @@ def download_seating_plan_pdf(organization_id: str):
                 return jsonify({"error": str(error)}), 409
             if not review["can_finalize"]:
                 return jsonify({"error": "Dağıtımın son kontrolü geçerli değil; PDF oluşturulamadı."}), 409
-            pdf_bytes = build_seating_plan_pdf(session, organization, review["candidate_id"])
-            filename_stem = safe_report_stem(organization.name)
+            pdf_bytes = build_seating_plan_pdf(session, organization, review["candidate_id"], options)
+            report_file_name = seating_plan_report_filename(organization)
             record_seating_plan_report(
                 session, organization, review["candidate_id"],
-                f"{filename_stem}-oturma-planlari.pdf",
+                report_file_name,
             )
     except ValueError as error:
         return jsonify({"error": str(error)}), 409
@@ -782,5 +832,116 @@ def download_seating_plan_pdf(organization_id: str):
         BytesIO(pdf_bytes),
         mimetype="application/pdf",
         as_attachment=False,
-        download_name=f"{filename_stem}-oturma-planlari.pdf",
+        download_name=report_file_name,
     )
+
+
+def _download_tabular_report(organization_id: str, report_type: str):
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    builders = {
+        ATTENDANCE_REPORT_TYPE: build_attendance_pdf,
+        ROOM_STUDENT_LIST_REPORT_TYPE: build_room_student_list_pdf,
+        GENERAL_DISTRIBUTION_REPORT_TYPE: build_general_distribution_pdf,
+        CLASS_STUDENT_LIST_REPORT_TYPE: build_class_student_list_pdf,
+    }
+    builder = builders[report_type]
+    default_orientation = "landscape" if report_type in {
+        ATTENDANCE_REPORT_TYPE, GENERAL_DISTRIBUTION_REPORT_TYPE
+    } else "portrait"
+    try:
+        options = resolve_pdf_options(request.args, default_orientation=default_orientation)
+        fields = resolve_report_fields(request.args, report_type)
+        labels = resolve_report_labels(request.args, report_type, fields)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    try:
+        with session_factory.begin() as session:
+            organization = session.get(ExamOrganization, organization_id)
+            if organization is None:
+                return jsonify({"error": "Sınav organizasyonu bulunamadı."}), 404
+            if organization.status != "completed":
+                return jsonify({"error": "Rapor yalnızca kesinleştirilmiş sınavlar için oluşturulur."}), 409
+            try:
+                review = _review_selected_candidate(session, organization)
+            except ValueError as error:
+                return jsonify({"error": str(error)}), 409
+            if not review["can_finalize"]:
+                return jsonify({"error": "Dağıtımın son kontrolü geçerli değil; rapor oluşturulamadı."}), 409
+            pdf_bytes = builder(session, organization, review["candidate_id"], options, fields, labels)
+            file_name = report_filename(organization, report_type)
+            record_report(session, organization, review["candidate_id"], report_type, file_name)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 409
+    return send_file(BytesIO(pdf_bytes), mimetype="application/pdf", as_attachment=False,
+                     download_name=file_name)
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/reports/attendance.pdf")
+def download_attendance_pdf(organization_id: str):
+    return _download_tabular_report(organization_id, ATTENDANCE_REPORT_TYPE)
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/reports/room-students.pdf")
+def download_room_students_pdf(organization_id: str):
+    return _download_tabular_report(organization_id, ROOM_STUDENT_LIST_REPORT_TYPE)
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/reports/distribution.pdf")
+def download_general_distribution_pdf(organization_id: str):
+    return _download_tabular_report(organization_id, GENERAL_DISTRIBUTION_REPORT_TYPE)
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/reports/class-students.pdf")
+def download_class_students_pdf(organization_id: str):
+    return _download_tabular_report(organization_id, CLASS_STUDENT_LIST_REPORT_TYPE)
+
+
+def _download_excel_report(organization_id: str, report_type: str):
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    builders = {
+        ROOM_STUDENT_LIST_XLSX_REPORT_TYPE: build_room_student_list_xlsx,
+        GENERAL_DISTRIBUTION_XLSX_REPORT_TYPE: build_general_distribution_xlsx,
+        CLASS_STUDENT_LIST_XLSX_REPORT_TYPE: build_class_student_list_xlsx,
+    }
+    try:
+        fields = resolve_report_fields(request.args, report_type)
+        labels = resolve_report_labels(request.args, report_type, fields)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    try:
+        with session_factory() as session:
+            organization = session.get(ExamOrganization, organization_id)
+            if organization is None:
+                return jsonify({"error": "Sınav organizasyonu bulunamadı."}), 404
+            if organization.status != "completed":
+                return jsonify({"error": "Excel raporu yalnızca kesinleştirilmiş sınavlar için oluşturulur."}), 409
+            try:
+                review = _review_selected_candidate(session, organization)
+            except ValueError as error:
+                return jsonify({"error": str(error)}), 409
+            if not review["can_finalize"]:
+                return jsonify({"error": "Dağıtımın son kontrolü geçerli değil; Excel oluşturulamadı."}), 409
+            workbook_bytes = builders[report_type](
+                session, organization, review["candidate_id"], fields, labels,
+            )
+            file_name = report_filename(organization, report_type)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 409
+    return send_file(BytesIO(workbook_bytes),
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                     as_attachment=True, download_name=file_name, max_age=0)
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/reports/room-students.xlsx")
+def download_room_students_xlsx(organization_id: str):
+    return _download_excel_report(organization_id, ROOM_STUDENT_LIST_XLSX_REPORT_TYPE)
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/reports/distribution.xlsx")
+def download_general_distribution_xlsx(organization_id: str):
+    return _download_excel_report(organization_id, GENERAL_DISTRIBUTION_XLSX_REPORT_TYPE)
+
+
+@exam_organizations_api.get("/exam-organizations/<organization_id>/reports/class-students.xlsx")
+def download_class_students_xlsx(organization_id: str):
+    return _download_excel_report(organization_id, CLASS_STUDENT_LIST_XLSX_REPORT_TYPE)

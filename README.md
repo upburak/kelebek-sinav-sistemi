@@ -22,8 +22,7 @@ Gereksinimler: Python 3.12, Node.js 22.12 veya üzeri ve npm.
 ./scripts/dev-windows.ps1
 ```
 
-Vite arayüzü `http://127.0.0.1:5173`, Flask API'si yalnızca `127.0.0.1:5000` adresinde açılır.
-Geliştirme sunucusu API sağlık kontrolünü `/api/health` üzerinden sağlar.
+Vite arayüzü varsayılan olarak `http://127.0.0.1:5173` adresinde açılır. Geliştirme başlatıcısı Flask API'si için önce `127.0.0.1:5000` portunu dener, doluysa `5001–5100` aralığındaki ilk boş porta geçer; seçilen porta Vite API proxy'sini kendisi yönlendirir. Her iki adres de yalnızca yerel bilgisayarda dinler. Arayüz portu gerekirse `KELEBEK_UI_PORT` ile değiştirilebilir. Geliştirme sunucusu API sağlık kontrolünü `/api/health` üzerinden sağlar.
 
 ## Veri güvenliği
 

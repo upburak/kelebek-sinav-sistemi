@@ -22,6 +22,7 @@ class DistributionReport(Base):
     )
     report_type: Mapped[str] = mapped_column(String(64), nullable=False)
     data_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc),
