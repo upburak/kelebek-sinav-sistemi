@@ -1,0 +1,42 @@
+{
+  "summary": "Tested the whole flow from both the API and the UI (public preview URL), using only the synthetic DEMO data. The happy path works in the UI: draft with 8 groups/48 students -> DEMO-101+DEMO-102 -> candidate -> review -> final check -> 'Kesinleşti'. Pinned redistribution works: the new candidate gets the label 'Sabitlemeli alternatif (1 derslik korundu)', all 24 students in the pinned room keep their seats while 23 of 24 in the other room move, and pinning 0 or both rooms leaves the button disabled (backend returns 409). Student changes (Karar 39) work: 'none' state shown, a name edit is detected, apply puts the student in the waiting pool with 1 waiting, reports return 409 until the student is re-seated, then 200. Edit lock (Karar 40) works with two browser contexts: tab B shows the banner within about 2s, its edit buttons are disabled and hidden, a direct write from B gets 423, takeover works, and tab A shows the banner about 9s later. Report center: PDF/Excel buttons stay disabled until the confirm box is ticked; header checkboxes, custom title and scale 120 are sent correctly and the PDF comes back 200. Archive & copy: badge becomes 'Tamamlandı · Arşiv', undo/redo is disabled, moves return 403, and the copy is created as 'Taslak · Kopya' with 48 students and 2 rooms, can produce a candidate, and the source is unchanged. Backend: 19/19 new pytest API regression tests pass; the existing 22 unittest tests still pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/exam-organizations/<id>/reports/*.pdf on archived org", "issue": "GET report endpoints call record_report/record_seating_plan_report inside session.begin(), so an archived 'read-only' exam's report history/status can still be changed (the card even offers 'Güncel değil · Yenile'). Writes on archived exams are otherwise blocked by guard_exam_writes, which only checks POST/PUT/PATCH/DELETE."},
+      {"endpoint": "edit locks (in-memory)", "issue": "If a tab closes without pagehide firing (crash/kill, or Playwright context close), its lock is held for up to 30s and a freshly opened tab starts in preview mode with the banner. This is expected with the TTL; mention it in the docs."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ReportCenter 'Üst bilgi ve ölçek' section", "issue": "Layout is broken: the 6 header checkboxes are huge (about 30px native blue boxes), stacked vertically in a single column, with a large empty area on the left and the section title pushed to the bottom-left. The custom title input is only 88px wide, so text is cut off ('TEST Özel Baş'). Root cause is CSS specificity. `.report-settings > div {display:grid; margin-right:auto}` (0,1,1) beats `.report-header-parts {display:flex}` (0,1,0). `.report-settings input {min-height:34px; width:88px}` also applies to the checkboxes and the title input. Fix: use `.report-settings > .report-header-parts {display:flex; flex-wrap:wrap; margin-right:0}`, add `.report-header-parts input[type=checkbox] {min-height:auto; width:auto; min-width:0; accent-color:#247b65}`, and give the custom title input a wider width (e.g. 220px).", "selector": "[data-testid=report-header-settings]", "priority": "MEDIUM"},
+      {"component": "ExamLifecyclePanel ArchiveAndCopy", "issue": "The copy success message (including the skipped_students/skipped_rooms warnings) is never visible. onReload() makes ExamOrganizer show the loading state, which unmounts the list and the ArchiveAndCopy component along with its message state. Lift the message to ExamOrganizer or show it as a toast.", "selector": "[data-testid^=archive-copy-] .exam-room-success", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Report center with waiting students", "issue": "When final review has unassigned_count > 0, the panel shows '1 bekleyen öğrenci' but the 'raporları oluşturmaya hazırım' checkbox can still be ticked and the buttons enabled; the backend then returns 409. The UI should disable the buttons or show a blocking message when unassigned_count > 0.", "affected_selectors": ["[data-testid=report-ready-confirm]", "[data-testid^=report-open-]"]}
+    ],
+    "design_issues": [
+      {"screen": "Exam organizations - candidate cards on a finalized exam", "issues": ["Every candidate button says 'Kesinleşmiş dağıtım', including candidates that were not finalized (e.g. Aday 1). Only the selected candidate should carry that label.", "Few data-testids on the main flow (create form, group checkboxes, 'Derslik seç', candidate create/select, final-review checkbox and finalize button); tests had to rely on text and class selectors."]}
+    ]
+  },
+  "test_report_links": ["/app/tests/e2e/test_lifecycle_api_e2e.py", "/app/test_reports/pytest/lifecycle_api.xml"],
+  "action_items": [
+    "Fix the CSS for the ReportCenter header/scale section (checkbox size, flex layout, title input width).",
+    "Keep the copy success/skip message visible after onReload (lift state or use a toast).",
+    "Disable report buttons or show a blocking message in ReportCenter when review.unassigned_count > 0.",
+    "Optional: do not record/regenerate report history for archived organizations; only show the stored state.",
+    "Optional: add data-testids to the main exam-flow controls; show 'Kesinleşmiş dağıtım' only on the selected candidate."
+  ],
+  "critical_code_review_comments": [
+    "guard_exam_writes skips locking for requests without an X-Kelebek-Tab header. This is by design, but any non-UI client bypasses Karar 40.",
+    "The ExamLifecyclePanel post() helper calls response.json() without a try/catch; a non-JSON error (e.g. a 502 HTML page) would show a confusing JSON parse error.",
+    "Pinned redistribution marks empty seats in pinned rooms as unavailable, so free seats there cannot be used for the other rooms. This matches 'aynen korunur', but can cause 409 capacity errors when the other rooms are tight; consider a clearer error message.",
+    "ExamOrganizer.tsx is 776 lines; consider splitting candidate/plan rendering into its own component."
+  ],
+  "updated_files": ["/app/tests/e2e/test_lifecycle_api_e2e.py (new; placed outside backend/tests so unittest discovery is not affected)"],
+  "success_rate": {"backend": "100% (19/19 e2e API + 22/22 existing unittests)", "frontend": "~90% (all requested flows work; 2 UI bugs + 1 integration UX gap)"},
+  "seed_data_creation": "Created TEST orgs (there is no delete endpoint, so they remain): TEST_API_16ec68 (archived), 'TEST_API_16ec68 kopya' (draft), TEST_UI_Happy (id 5e0fc563..., archived), 'TEST_UI_Happy kopya' (id db5aaef0..., draft with 1 candidate). Temporarily edited synthetic students DEMO-003 (section) and DEMO-005 (first name) and restored both to their original values. The archived TEST_UI_Happy org still shows the DEMO-005 name difference, which is expected.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Public URL: https://3d869be9-708c-49f0-ba7a-215cf7b3a641.preview.emergentagent.com (there is no frontend/.env; the frontend uses relative /api). Run the API regression with: KELEBEK_PUBLIC_URL=<url> /root/.venv/bin/python -m pytest /app/tests/e2e/test_lifecycle_api_e2e.py -p no:cacheprovider. Each run creates 2 TEST orgs. Unit tests: PYTHONPATH=backend:backend/tests /root/.venv/bin/python -m unittest discover -s backend/tests. Do not put pytest-only files in backend/tests: a module-level pytest.skip breaks unittest discovery. Year id 1e53766c-d8ba-4503-9b83-45bee1d0d78b. The solver is fast here (~1-3s)."
+}

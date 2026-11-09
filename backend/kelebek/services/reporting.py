@@ -327,6 +327,8 @@ def record_seating_plan_report(session, organization: ExamOrganization, candidat
 
 def record_report(session, organization: ExamOrganization, candidate_id: str,
                   report_type: str, file_name: str) -> None:
+    if organization.archived_at:
+        return
     report_path = seating_plan_report_path(file_name)
     if not report_path.is_file():
         raise FileNotFoundError("Oluşturulan PDF raporu bulunamadı.")

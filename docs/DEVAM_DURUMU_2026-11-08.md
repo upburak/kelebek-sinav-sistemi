@@ -1,33 +1,26 @@
 # Kelebek Sınav Sistemi — devam notu
 
-Son güncelleme: 9 Kasım 2026
+Son güncelleme: 9 Kasım 2026 (sürüm 0.2.0)
 
-Bu not, sonraki çalışma oturumunda bağlamı hızlıca geri yüklemek içindir. Proje kapsamı ve kesinleşmiş kararlar için ana karar belgesi v4.3 ile teknik mimari v1.0 esas alınır; onaylanmış 71 karar ve çapraz platform kararı değiştirilmemiştir.
+Kapsam ve kararlar için ana karar belgesi v4.3 ile teknik mimari v1.0 esas alınır; 72 karar değiştirilmedi.
 
-## Bugün tamamlananlar
+## Bu oturumda tamamlananlar
 
-- Raporlar bölümü etkinleştirildi; kesinleşmiş sınav seçimiyle kapı krokisi, yoklama, derslik listesi, genel dağıtım ve sınıf/şube listesi çıktıları erişilebilir.
-- PDF ve Excel listelerinde rapor türüne göre sütunları açıp kapatma eklendi. En az bir alan seçili kalır; kapı krokisinin zorunlu alanları sabittir.
-- Seçili sütunların başlıkları düzenlenebilir ve yukarı/aşağı taşınabilir; yeni başlık ve sıra PDF ile Excel çıktılarına uygulanır. API yalnızca görünür sütunların 1–40 karakterlik başlıklarına izin verir.
-- PDF sayfa ayarları A4, A3, A5, Letter ve Legal; otomatik/dikey/yatay yön; 5–30 mm kenar boşluğu seçeneklerini destekler.
-- Raporlarda Türkçe karakter, sınıf gruplaması, boş/kullanım dışı koltuklar ve uzun adlarda soyadın korunması sentetik verilerle doğrulandı.
-- Geliştirme API port seçimi, fiziksel derslik doğrulaması ve geri yükleme geçici alanı açılış temizliğiyle ilgili önceki oturum değişiklikleri çalışma ağacında korunuyor.
+- Kalan rapor seçenekleri: üst bilgi alanları göster/gizle, özel başlık, yazı ölçeği; rapor öncesi hazır onayı, ihlal kabulü, bekleyen öğrenci engeli. Arşivlenmiş sınavda rapor durumu değiştirilmez.
+- Derslik sabitleyerek yeniden dağıtım (Karar 25) — `pinned_classroom_ids`, `base_candidate_id`.
+- Güncel öğrenci listesiyle karşılaştırma ve onaylı havuza alma (Karar 39).
+- Tek düzenleme oturumu / önizleme modu (Karar 40) — bellekte kilit, 30 sn TTL, `X-Kelebek-Tab` başlığı.
+- Tamamlandı/arşiv ve çalışma kopyası (Karar 68–70) — migration `0017_exam_archive_and_pins`.
+- Masaüstü başlatıcı, PyInstaller tarifi, macOS/Windows paketleme betikleri ve GitHub Actions iş akışı. Linux'ta PyInstaller derlemesi denendi: dondurulmuş uygulama migration'ları uyguladı, arayüzü ve API'yi sundu.
 
 ## Son doğrulama
 
-- `PYTHONPATH=backend .venv/bin/python -m unittest discover -s backend/tests -v` — 16 test geçti; özel başlık/sıra PDF metni ve Excel başlık hücreleriyle doğrulandı.
-- `frontend/` içinde `npm run build` — başarılı.
-- `git diff --check` — başarılı.
-- Chrome’da yerel sentetik sınavla Raporlar ekranı, sayfa ayarları ve sütun seçici kontrol edildi. Test sunucuları kapatıldı.
-- Gerçek öğrenci verisi, okul listesi, gerçek yedek veya gerçek veritabanı bu doğrulamada kullanılmadı.
-
-## Devam ederken dikkat
-
-- Çalışma ağacında çok sayıda kasıtlı ve henüz commit edilmemiş değişiklik var. Bunları silme, üzerine yazma, commit veya push yapma.
-- 0016 migration’ın daha önce uygulandığı kaydedilmiş durumda; tekrar çalıştırmadan önce çalışan süreci ve şema sürümünü kontrol et.
-- Veritabanı, yedekler ve sırlar Git’e eklenmemeli.
+- `PYTHONPATH=backend:backend/tests .venv/bin/python -m unittest discover -s backend/tests` — 22 test geçti.
+- `frontend/` içinde `npm run build` — başarılı. Uçtan uca tarayıcı testi sentetik veriyle geçti.
 
 ## Açık kalanlar
 
-- Rapor alanlarında göster/gizle, özel sütun başlığı ve sütun sırası kullanılabiliyor. Diğer şablon/içerik seçenekleri ve kalan karar belgesi çıktıları gözden geçirilmeli.
-- Windows çalıştırma/dağıtım doğrulaması ve paketlenmiş masaüstü teslimi ayrıca tamamlanmalı.
+- macOS ve Windows paketlerinin gerçek cihazlarda/CI'da üretilip denenmesi; kod imzalama ve notarization (isteğe bağlı).
+- Artımlı güncelleme paketi (manifest, hash, migration aralığı, rollback) — Faz J'nin kalan kısmı.
+- Hibrit çoklu pencere çalışma alanı (Karar 18–19), dağıtım ilerleme ekranı/durdurma (Karar 58), ihlal listesi ve krokide vurgulama (Karar 55), kural ihlali kabulünün işlem geçmişine yazılması (Karar 50).
+- Önizleme ortamı için eklenen `backend/server.py` yalnızca bulut önizleme adaptörüdür; yerel çalışmayı etkilemez.

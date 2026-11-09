@@ -984,8 +984,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .lifecycle-row input { padding: 6px 8px; border: 1px solid #dfe6f0; border-radius: 7px; font: inherit; }
 .lifecycle-ok { color: #2f7a52; }
 .report-header-settings { flex-wrap: wrap; }
-.report-header-parts { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; }
-.report-header-parts label { display: inline-flex; gap: 5px; align-items: center; }
+.report-settings > .report-header-parts { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px; margin-right: 0; font-size: 12px; }
+.report-header-parts label { display: inline-flex; gap: 6px; align-items: center; font-size: 11px; }
+.report-settings .report-header-parts input[type=checkbox] { width: 15px; min-width: 0; min-height: 0; height: 15px; padding: 0; accent-color: #247b65; }
+.report-settings input[data-testid=report-custom-title] { width: 230px; min-width: 230px; }
 .report-ready { display: grid; gap: 7px; margin: 14px 0; padding: 14px 16px; border: 1px solid #f0d9a8; border-radius: 12px; background: #fffaf0; color: #6d5520; font-size: 12px; }
 .report-ready label { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 800px) { .lifecycle-panel { grid-template-columns: 1fr; } }

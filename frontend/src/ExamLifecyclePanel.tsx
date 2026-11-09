@@ -10,12 +10,12 @@ type Props = {
   candidates: Candidate[]
   readOnly: boolean
   yearReadOnly: boolean
-  onReload: () => void
+  onReload: (notice?: string) => void
 }
 
 async function post(url: string, body: unknown) {
   const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-  const data = await response.json()
+  const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(data.error ?? 'İşlem tamamlanamadı.')
   return data
 }
@@ -93,8 +93,7 @@ function ArchiveAndCopy({ organization, readOnly, onReload }: Props) {
     setBusy(true); setError(''); setMessage('')
     try {
       const data = await post(`/api/exam-organizations/${encodeURIComponent(organization.id)}/copy`, { name, exam_date: examDate })
-      setMessage(`Çalışma kopyası güncel eğitim yılında taslak olarak oluşturuldu.${data.skipped_students ? ` ${data.skipped_students} öğrenci güncel listede bulunamadığı için eklenmedi.` : ''}${data.skipped_rooms ? ` ${data.skipped_rooms} derslik için bu yıla ait düzen yok.` : ''}`)
-      setCopyOpen(false); onReload()
+      setCopyOpen(false); onReload(`«${name}» çalışma kopyası güncel eğitim yılında taslak olarak oluşturuldu.${data.skipped_students ? ` ${data.skipped_students} öğrenci güncel listede bulunamadığı için eklenmedi.` : ''}${data.skipped_rooms ? ` ${data.skipped_rooms} derslik için bu yıla ait düzen yok; derslikleri yeniden seç.` : ''}`)
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Kopya oluşturulamadı.') } finally { setBusy(false) }
   }
   return <div className="lifecycle-block" data-testid={`archive-copy-${organization.id}`}>

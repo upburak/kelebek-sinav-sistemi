@@ -24,6 +24,16 @@ Gereksinimler: Python 3.12, Node.js 22.12 veya üzeri ve npm.
 
 Vite arayüzü varsayılan olarak `http://127.0.0.1:5173` adresinde açılır. Geliştirme başlatıcısı Flask API'si için önce `127.0.0.1:5000` portunu dener, doluysa `5001–5100` aralığındaki ilk boş porta geçer; seçilen porta Vite API proxy'sini kendisi yönlendirir. Her iki adres de yalnızca yerel bilgisayarda dinler. Arayüz portu gerekirse `KELEBEK_UI_PORT` ile değiştirilebilir. Geliştirme sunucusu API sağlık kontrolünü `/api/health` üzerinden sağlar.
 
+## Kurulum paketleri (macOS ve Windows)
+
+Paketler her işletim sisteminin kendisinde üretilir (Mac'te Windows paketi, Windows'ta Mac paketi üretilmez).
+
+- **macOS (Apple Silicon):** `./scripts/build-macos.sh` → `dist/KelebekSinavSistemi-<sürüm>-macos-arm64.dmg`. DMG'yi açıp uygulamayı *Uygulamalar* klasörüne sürükleyin. İmzasız paket ilk açılışta Finder'da sağ tık → *Aç* ile onaylanır.
+- **Windows (x64):** PowerShell'de `./scripts/build-windows.ps1` → `dist\KelebekSinavSistemi-<sürüm>-windows-x64.zip` ve Inno Setup kuruluysa `...-kurulum.exe`. Kurulum yönetici yetkisi istemez, masaüstü kısayolu oluşturur.
+- **Bilgisayar kurmadan:** Depo GitHub'a gönderildiğinde *Actions → Paketleri oluştur → Run workflow* iki platform paketini birlikte üretir; çıktılar iş akışı sonuçlarından indirilir.
+
+Uygulama açıldığında yerel servis `127.0.0.1` üzerinde boş bir portta başlar ve varsayılan tarayıcı açılır. Uygulama zaten çalışıyorsa yeni servis açılmaz, mevcut adres açılır. Kapatmak için üst çubuktaki **Uygulamayı kapat** düğmesini kullanın (Windows'ta konsol penceresini kapatmak da yeterlidir); tüm sekmeler kapandıktan 10 dakika sonra servis kendiliğinden kapanır. Kullanıcı verileri paket klasöründe değil, aşağıdaki veri konumunda kalır; güncelleme veya yeniden kurulum verileri silmez.
+
 ## Veri güvenliği
 
 Öğrenci verileri ve SQLite veritabanı kaynak kod klasöründe tutulmaz. Uygulama verileri macOS kullanıcı hesabında `~/Library/Application Support/Kelebek Sinav Sistemi`, Windows kullanıcı hesabında `%APPDATA%\Kelebek Sinav Sistemi` altında saklanır. Geliştirme betikleri de bu işletim sistemi veri konumlarını kullanır; uygulama verileri proje klasörünün dışında kalır. `KELEBEK_DATA_DIR` yalnızca özel, yerel denemelerde geçici bir veri dizini seçmek için kullanılabilir.

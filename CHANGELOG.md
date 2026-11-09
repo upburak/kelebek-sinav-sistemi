@@ -27,3 +27,12 @@
 - Rapor merkezi genişletmesi: sınıf/şube bazlı öğrenci listeleri PDF/Excel; PDF çıktılarında A4/A3/A5/Letter/Legal, dikey/yatay ve 5–30 mm kenar boşluğu seçimi.
 - Rapor alanları: PDF/Excel listelerinde rapor türüne göre sütun göster/gizle; en az bir alan zorunlu, kapı krokisinin karar gereği sabit alanları korunur.
 - Rapor şablonu ayarları: seçili rapor alanları için özel sütun başlığı ve yukarı/aşağı taşıma; başlıkların PDF/Excel çıktısında kullanılması ve API doğrulaması.
+
+## 0.2.0
+
+- Rapor seçenekleri: liste/yoklama PDF'lerinde üst bilgi alanlarını (okul, başlık, sınav, tarih, ders, derslik) göster/gizle, özel rapor başlığı ve %80–%130 yazı ölçeği. Rapor öncesi "düzenlemeler tamamlandı" onayı (Karar 49), ihlal varsa ayrı kabul (Karar 50), bekleyen öğrenci varken rapor engeli.
+- Derslik sabitleyerek yeniden dağıtım (Karar 25): seçilen adaydaki derslik yerleşimleri aynen korunur, kalan derslikler CP-SAT ile yeniden optimize edilir; yeni aday kaynak adaydan türetilmiş ve sabitlenen derslikleri kayıtlı bağımsız alternatif olarak saklanır.
+- Güncel öğrenci listesiyle karşılaştırma (Karar 39/47/48): kesinleşmiş dağıtımda okul numarası + ad-soyad eşleştirmesiyle değişen ve ayrılan öğrenciler listelenir; kullanıcı onayıyla güncel bilgiye geçirilip bekleyen havuza alınır, işlem geçmişe yazılır.
+- Tek düzenleme oturumu (Karar 40): her sekmeye kimlik; bir sınavı yalnızca bir sekme düzenler, diğerleri önizleme modunda salt okunur kalır; "Düzenlemeyi bu sekmeye al" ile devir; kilit 30 sn yanıt gelmezse kendiliğinden düşer.
+- Sınavı tamamlama ve arşiv (Karar 68–70): kesinleşmiş sınav "Tamamlandı" olarak arşivlenir ve salt okunur olur; kaynağı değiştirmeden güncel yılda bağımsız çalışma kopyası oluşturulur. Silme yoktur. Migration 0017.
+- Masaüstü paketleme (Faz J başlangıcı): `kelebek.launcher` boş yerel portta Waitress ile servis açar, tarayıcıyı başlatır, tek örnek çalıştırır, Host/Origin denetler, "Uygulamayı kapat" düğmesi ve 10 dk boşta kapanma. PyInstaller tarifi, `build-macos.sh` (.app + DMG), `build-windows.ps1` (ZIP + Inno Setup kurulum) ve GitHub Actions iş akışı.
