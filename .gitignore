@@ -49,6 +49,13 @@ build/
 !frontend/public/downloads/kelebek_ogrenci_sablonu_ornek_verili.xlsx
 !frontend/public/downloads/kelebek_sentetik_demo_48_ogrenci.xlsx
 
+# Üretilen test/araç çıktıları (depoda tutulmaz)
+test_reports/
+.pytest_cache/
+.ruff_cache/
+.screenshots/
+.emergent/
+
 # Platform clutter
 .DS_Store
 Thumbs.db

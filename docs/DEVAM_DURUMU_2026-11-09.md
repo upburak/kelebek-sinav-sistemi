@@ -49,6 +49,13 @@ değiştirilmedi. Bu oturumda yeni özellik eklenmedi; amaç projeyi macOS ve Wi
   (`/root/.local/share/...`) ve sabit `0.2.0` sürümü kullanıyordu; Mac ve Windows'ta çalışması
   mümkün değildi ve her sürümde bozulacaktı. Artık veri klasörünü ve sürümü çalışan servisten alıyor.
 - Raporlardaki ölü değişken ve dağınık kod temizlendi.
+- **Kullanılmayan klasörler ve bulut önizleme kalıntıları depodan çıkarıldı:** `.emergent/`
+  (derleme platformu artığı), `.screenshots/` (başıboş görsel), `test_reports/` (eski ajan
+  koşularının üretilmiş çıktıları), `memory/` (güncelliğini yitirmiş not ve artık var olmayan
+  bir yolu gösteren `test_credentials.md`) ve `backend/server.py` (bulut önizlemesi için ASGI
+  adaptörü; bağımlılığı `a2wsgi` projede tanımlı bile değildi). Arayüzdeki önizlemeye özel
+  `npm start` betiği de kaldırıldı: `--host 0.0.0.0` ile dinliyordu ve yalnızca-yerel çalışma
+  kararına aykırıydı. Üretilen çıktılar `.gitignore` ile geri gelmeyecek biçimde kapatıldı.
 
 ## Açık kalanlar
 
@@ -59,4 +66,3 @@ değiştirilmedi. Bu oturumda yeni özellik eklenmedi; amaç projeyi macOS ve Wi
   varsayılan simgeyle çıkıyor.
 - Hibrit çoklu pencere çalışma alanı (Karar 18–19).
 - Kural ihlali kabulünün işlem geçmişine yazılması (Karar 50).
-- `backend/server.py` yalnızca bulut önizleme adaptörüdür; yerel çalışmayı etkilemez.

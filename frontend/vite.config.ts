@@ -6,8 +6,8 @@ const apiProxyTarget = process.env.KELEBEK_API_PROXY_TARGET ?? 'http://127.0.0.1
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Geliştirme sunucusu yalnızca bu bilgisayarda dinler (çevrimdışı yerel çalışma kararı).
     host: '127.0.0.1',
-    allowedHosts: process.env.KELEBEK_ALLOWED_HOSTS ? true : undefined,
     proxy: {
       '/api': apiProxyTarget,
     },

@@ -48,6 +48,16 @@ yapılan testlerde bulunan hataları giderir ve doğrulamayı sürekli hale geti
   `test_report_fonts.py`.
 - `ruff` kural kümesi `pyproject.toml` içinde sabitlendi; sonuçlar sürümden sürüme kaymaz.
 
+### Depo temizliği
+
+- Kullanılmayan klasörler çıkarıldı: `.emergent/` (derleme platformu artığı), `.screenshots/`,
+  `test_reports/` (eski koşuların üretilmiş çıktıları), `memory/` (güncelliğini yitirmiş notlar).
+- `backend/server.py` (bulut önizlemesi için ASGI adaptörü) çıkarıldı; bağımlılığı `a2wsgi`
+  projede tanımlı değildi, yerel çalışmada kullanılmıyordu.
+- Arayüzdeki önizlemeye özel `npm start` betiği ve `allowedHosts` kaçağı kaldırıldı; geliştirme
+  sunucusu yalnızca `127.0.0.1` üzerinde dinler.
+- Üretilen test ve araç çıktıları `.gitignore` kapsamına alındı.
+
 ## Geliştirme sürümü
 
 - Faz A başlangıç iskeleti: Flask sağlık API'si, React/TypeScript arayüzü, platforma uygun veri dizini ve geliştirme betikleri.
