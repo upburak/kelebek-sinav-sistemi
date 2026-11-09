@@ -158,7 +158,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     setFocusedViolation((current) => ({ ...current, [candidateId]: current[candidateId] === participantId ? '' : participantId }))
     const details = document.getElementById(`plan-details-${candidateId}`) as HTMLDetailsElement | null
     if (details) details.open = true
-    if (seatId) window.setTimeout(() => document.querySelector(`[data-seat-id="${seatId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }), 60)
+    if (seatId) window.setTimeout(() => details?.querySelector(`[data-seat-id="${seatId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }), 60)
   }
   const [movingCandidateId, setMovingCandidateId] = useState<string | null>(null)
   const [finalReviews, setFinalReviews] = useState<Record<string, FinalReview>>({})

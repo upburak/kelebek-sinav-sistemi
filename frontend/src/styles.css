@@ -1026,3 +1026,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .update-summary code { font-size: 10px; word-break: break-all; }
 .update-summary label { display: flex; gap: 8px; align-items: center; }
 .update-actions { display: flex; gap: 8px; }
+.exam-candidate-result > .candidate-violations { display: grid; }
+.exam-candidate-result > .candidate-violations > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.exam-candidate-result .candidate-violations > small { padding: 0; border: 0; background: none; color: #8a6040; font-size: 10px; }
+.exam-candidate-result .candidate-violations button small { padding: 0; border: 0; background: none; }
+.update-card > p { font-size: 12px; line-height: 1.7; }
+.update-secondary-button { min-height: 38px; padding: 0 14px; border: 1px solid #d2dfdb; border-radius: 9px; background: #fff; color: #34505a; font: inherit; font-weight: 700; cursor: pointer; }
+.update-actions { align-items: center; }

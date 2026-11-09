@@ -115,7 +115,13 @@ def _summary(manifest: dict, package_sha256: str) -> dict:
 def inspect_package(stream: BinaryIO) -> tuple[str, dict]:
     """Paketi geçici dizine al, manifest ve her dosyanın SHA-256 değerini doğrula."""
     token = uuid.uuid4().hex
-    stage = _updates_dir() / "staged" / token
+    staged_root = _updates_dir() / "staged"
+    if staged_root.is_dir():
+        cutoff = datetime.now(timezone.utc).timestamp() - 24 * 3600
+        for old in staged_root.iterdir():
+            if old.is_dir() and old.stat().st_mtime < cutoff:
+                shutil.rmtree(old, ignore_errors=True)
+    stage = staged_root / token
     stage.mkdir(parents=True)
     archive = stage / "package.zip"
     try:

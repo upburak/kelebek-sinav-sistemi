@@ -21,6 +21,7 @@ export default function UpdateManager() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [applying, setApplying] = useState('')
+  const [inputKey, setInputKey] = useState(0)
 
   useEffect(() => {
     fetch('/api/updates/status').then((response) => response.json()).then(setStatus).catch(() => undefined)
@@ -40,7 +41,7 @@ export default function UpdateManager() {
   }
   async function cancel() {
     await fetch('/api/updates/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) })
-    setToken(''); setSummary(null); setFile(null); setConfirmed(false)
+    setToken(''); setSummary(null); setFile(null); setConfirmed(false); setInputKey((key) => key + 1)
   }
   async function apply() {
     setBusy(true); setError('')
@@ -53,17 +54,18 @@ export default function UpdateManager() {
   }
 
   return <article className="backup-card update-card" data-testid="update-manager">
-    <div className="backup-card-heading"><span className="backup-icon" aria-hidden="true">⟳</span><div><h3>Uygulama güncellemesi</h3><p>Kurulu sürüm <strong data-testid="update-current-version">{status?.current_version ?? '…'}</strong> · {status?.platform ?? ''}. Yalnızca değişen dosyaları içeren paketle güncelle; önce güvenlik yedeği alınır, sorun çıkarsa önceki sürüm ve veriler geri yüklenir.</p></div></div>
+    <div className="backup-card-heading"><span className="backup-icon" aria-hidden="true">⟳</span><div><span className="eyebrow">UYGULAMA GÜNCELLEMESİ</span><h2>Sürüm {status?.current_version ?? '…'}</h2></div></div>
+    <p>Kurulu sürüm <strong data-testid="update-current-version">{status?.current_version ?? '…'}</strong> · {status?.platform ?? ''}. Yalnızca değişen dosyaları içeren paketle güncellenir; önce güvenlik yedeği alınır, sorun çıkarsa önceki sürüm ve veriler otomatik geri yüklenir.</p>
     {status?.last_result && <p className={`backup-feedback ${status.last_result.status === 'success' ? 'success' : 'error'}`} data-testid="update-last-result">Son güncelleme ({status.last_result.from_version} → {status.last_result.to_version}): <strong>{resultLabels[status.last_result.status] ?? status.last_result.status}</strong> · {status.last_result.message}</p>}
     {applying ? <p className="backup-feedback success" role="status" data-testid="update-applying">{applying}</p> : <>
-      <div className="update-pick"><input type="file" accept=".zip,application/zip" data-testid="update-file-input" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setSummary(null); setError('') }} /><button type="button" className="backup-create-button" data-testid="update-inspect-btn" disabled={!file || busy} onClick={() => void inspect()}>{busy && !summary ? 'Doğrulanıyor…' : 'Paketi doğrula'}</button></div>
+      <label className="restore-file-label" htmlFor="update-package-file">Kelebek güncelleme paketi (ZIP)</label><div className="update-pick"><input key={inputKey} id="update-package-file" className="restore-file-input" type="file" accept=".zip,application/zip" data-testid="update-file-input" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setSummary(null); setError('') }} /><button type="button" className="backup-create-button" data-testid="update-inspect-btn" disabled={!file || busy} onClick={() => void inspect()}>{busy && !summary ? 'Doğrulanıyor…' : 'Paketi doğrula'}</button></div>
       {summary && <div className="update-summary" data-testid="update-summary">
         <strong>{summary.from_version} → {summary.to_version}</strong>
-        <ul><li>{summary.changed_file_count} dosya değişecek ({(summary.changed_bytes / 1048576).toFixed(1)} MB), {summary.removed_file_count} dosya kaldırılacak</li><li>{summary.migration_required ? `Veritabanı güncellemesi gerekiyor (${summary.migration_from ?? '—'} → ${summary.migration_to ?? '—'})` : 'Veritabanı yapısı değişmiyor'}</li><li>Tüm dosyaların SHA-256 doğrulaması geçti</li><li>Paket özeti: <code data-testid="update-package-sha">{summary.package_sha256}</code> — yayımlanan .sha256 değeriyle karşılaştırın</li></ul>
+        <ul><li>{summary.changed_file_count} dosya değişecek ({summary.changed_bytes < 1048576 ? `${Math.max(1, Math.round(summary.changed_bytes / 1024))} KB` : `${(summary.changed_bytes / 1048576).toFixed(1)} MB`}), {summary.removed_file_count} dosya kaldırılacak</li><li>{summary.migration_required ? `Veritabanı güncellemesi gerekiyor (${summary.migration_from ?? '—'} → ${summary.migration_to ?? '—'})` : 'Veritabanı yapısı değişmiyor'}</li><li>Tüm dosyaların SHA-256 doğrulaması geçti</li><li>Paket özeti: <code data-testid="update-package-sha">{summary.package_sha256}</code> — yayımlanan .sha256 değeriyle karşılaştırın</li></ul>
         {summary.notes && <p>{summary.notes}</p>}
         {!status?.can_apply && <p className="backup-feedback error">Bu çalışma geliştirme modunda; güncelleme yalnızca kurulu uygulamada uygulanır.</p>}
         <label><input type="checkbox" data-testid="update-confirm-checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />Güvenlik yedeği alınsın, uygulama kapanıp güncellensin. Açık işlerimi kaydettim.</label>
-        <div className="update-actions"><button type="button" data-testid="update-cancel-btn" onClick={() => void cancel()}>Vazgeç</button><button type="button" className="backup-create-button" data-testid="update-apply-btn" disabled={!confirmed || busy || !status?.can_apply} onClick={() => void apply()}>Güncellemeyi uygula</button></div>
+        <div className="update-actions"><button type="button" className="update-secondary-button" data-testid="update-cancel-btn" onClick={() => void cancel()}>Vazgeç</button><button type="button" className="backup-create-button" data-testid="update-apply-btn" disabled={!confirmed || busy || !status?.can_apply} onClick={() => void apply()}>Güncellemeyi uygula</button></div>
       </div>}
     </>}
     {error && <p className="backup-feedback error" role="alert" data-testid="update-error">{error}</p>}

@@ -274,6 +274,11 @@ def sync_draft_exam_snapshots(
                     from_seat_id=seat_id,
                 ))
         else:
+            placement_changed = reactivate and not participant.is_active or any(
+                getattr(participant, field) != getattr(enrollment, field) for field in ("class_level", "section", "area")
+            )
+            identity_changed = any(getattr(participant, field) != getattr(enrollment, field)
+                                   for field in ("school_number", "first_name", "last_name"))
             participant.school_number = enrollment.school_number
             participant.first_name = enrollment.first_name
             participant.last_name = enrollment.last_name
@@ -282,6 +287,10 @@ def sync_draft_exam_snapshots(
             participant.area = enrollment.area
             if reactivate:
                 participant.is_active = True
+            if not placement_changed:
+                # Yalnız ad/numara değişikliği komşuluk kurallarını etkilemez; adaylar korunur.
+                affected += int(identity_changed)
+                continue
         affected += 1
         runs = session.scalars(select(DistributionRun).where(
             DistributionRun.organization_id == organization.id,

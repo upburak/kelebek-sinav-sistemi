@@ -10,9 +10,10 @@ type Progress = {
 export default function DistributionProgressOverlay({ organizationId, active }: { organizationId: string; active: boolean }) {
   const [progress, setProgress] = useState<Progress | null>(null)
   const [stopError, setStopError] = useState('')
+  const [stopping, setStopping] = useState(false)
 
   useEffect(() => {
-    if (!active) { setProgress(null); setStopError(''); return }
+    if (!active) { setProgress(null); setStopError(''); setStopping(false); return }
     let cancelled = false
     const poll = async () => {
       try {
@@ -29,6 +30,7 @@ export default function DistributionProgressOverlay({ organizationId, active }: 
   if (!active) return null
   const stageIndex = progress ? progress.steps.findIndex((step) => step.key === progress.stage) : 0
   async function stop() {
+    setStopping(true)
     const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/distribution-progress/stop`, { method: 'POST' })
     if (!response.ok) setStopError('Dağıtım zaten tamamlanmak üzere.')
   }
@@ -45,7 +47,7 @@ export default function DistributionProgressOverlay({ organizationId, active }: 
       </dl>
       <p>Arama süresince daha dengeli yerleşimler denenir. Durdurursan o ana kadar bulunan en iyi geçerli çözüm aday olarak kaydedilir.</p>
       {stopError && <p className="exam-error" role="alert">{stopError}</p>}
-      <button type="button" data-testid="distribution-stop-btn" disabled={!progress || progress.stop_requested || progress.stage !== 'search'} onClick={() => void stop()}>{progress?.stop_requested ? 'Durduruluyor…' : 'Durdur ve en iyi çözümü kullan'}</button>
+      <button type="button" data-testid="distribution-stop-btn" disabled={stopping || !progress || progress.stop_requested || progress.stage !== 'search'} onClick={() => void stop()}>{stopping || progress?.stop_requested ? 'Durduruluyor…' : 'Durdur ve en iyi çözümü kullan'}</button>
     </div>
   </div>
 }
