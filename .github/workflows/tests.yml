@@ -2,7 +2,11 @@ name: Testler
 
 on:
   push:
-    branches: ['**']
+    # Otomatik yedek anlık görüntüleri 15 dakikada bir gelir; bunlar gözden
+    # geçirilecek kod değil, çalışma klasörünün kopyasıdır. Test matrisini
+    # her seferinde çalıştırmak boşuna kaynak harcar ve macOS sırasını tıkar.
+    # (branches ile branches-ignore birlikte kullanılamaz; olumsuz desen tek listede.)
+    branches: ['**', '!otomatik-yedek/**']
   pull_request:
   workflow_dispatch:
 

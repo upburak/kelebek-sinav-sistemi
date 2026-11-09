@@ -78,6 +78,33 @@ Yeni iş akışının ilk koşusunda macOS, Ubuntu, uçtan uca ve arayüz işler
   `npm start` betiği de kaldırıldı: `--host 0.0.0.0` ile dinliyordu ve yalnızca-yerel çalışma
   kararına aykırıydı. Üretilen çıktılar `.gitignore` ile geri gelmeyecek biçimde kapatıldı.
 
+## 0.3.0 sonrası (aynı gün, ikinci bölüm)
+
+- **Excel'den öğrenci içe aktarma çalışmıyordu.** Dosya okunuyor, kontrol raporu çıkıyor, ama
+  "İçe aktarmayı onayla" düğmesi hiç görünmüyordu: arka uç fark raporunu (`diff`) yanıtın en üst
+  düzeyinde döndürüyor, arayüz ise `validation` nesnesinin içinde arıyordu. `as` tip dönüşümü
+  uyumsuzluğu TypeScript'ten gizlemişti. Düzeltildi; tarayıcıda akış sonuna kadar yürütülüp
+  48 sentetik öğrencinin veritabanına girdiği doğrulandı.
+- Bu hata API testlerinden kaçmıştı (her uç tek tek doğruydu, kopukluk arada). Gerçek tarayıcıda
+  akışı tıklayan `tests/e2e/test_student_import_ui_e2e.py` eklendi; düzeltme geri alındığında
+  düştüğü doğrulandı. CI'nın uçtan uca işi Playwright kuruyor.
+- Uygulama simgesi eklendi: `packaging/icon/kelebek.svg` kaynak, `packaging/macos/kelebek.icns`
+  ve `packaging/windows/kelebek.ico` üretildi, Inno Setup'a bağlandı. Simgenin pakete gerçekten
+  gömülmesi **henüz doğrulanmadı** (Linux derlemesi simgeyi atlar).
+- Otomatik yedekleme: `scripts/auto-push.sh` çalışma klasörünün anlık görüntüsünü ayrı bir dala
+  gönderir; kullanıcının dalına, HEAD'ine, index'ine ve çalışma dizinine dokunmaz. macOS
+  zamanlayıcısı `scripts/com.kelebek.autopush.plist` (15 dk). Yedek dalları CI tetiklemez.
+
+## Bundan sonra Mac'te çalışırken
+
+Bu belge bulut oturumundan devralma notudur. Mac'te klasörün içinde `claude` ile açılan oturum
+için başlangıç noktası: `main` dalı 0.3.0, beş CI işi (Ubuntu/macOS/Windows birim testleri,
+arayüz derlemesi, uçtan uca testler) geçiyor. Çalıştırma komutları README'de.
+
+**Arayüz tarafı hâlâ en zayıf halka.** Yukarıdaki içe aktarma hatası bunu gösterdi: arka uç
+testleri sağlam ama arayüzle arka uç arasındaki sözleşme kopabiliyor ve bu sessiz oluyor.
+Dağıtım oluşturma, rapor merkezi ve yedekleme akışları bu gözle elle denenmeli.
+
 ## Açık kalanlar
 
 - macOS ve Windows paketlerinin gerçek cihazlarda veya CI'da üretilip denenmesi. Paketleme yolu
