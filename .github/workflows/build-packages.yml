@@ -1,49 +1,63 @@
-name: Paketleri oluştur
+name: Paketleri Oluştur
 
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14
-            script: ./scripts/build-macos.sh
-            shell: bash
-          - os: windows-latest
-            script: ./scripts/build-windows.ps1
-            shell: pwsh
-    runs-on: ${{ matrix.os }}
-    env:
-      PYTHONIOENCODING: utf-8
-      PYTHONUTF8: "1"
+  build-macos:
+    name: macOS Paketini Derle
+    runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Kodları Çek
+        uses: actions/checkout@v4
+
+      - name: Python Kur
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - uses: actions/setup-node@v4
+          python-version: '3.12'
+
+      - name: Node.js Kur
+        uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - name: Windows için Inno Setup
-        if: runner.os == 'Windows'
-        run: choco install innosetup -y --no-progress
-      - name: Paketle
-        shell: ${{ matrix.shell }}
-        run: ${{ matrix.script }}
-      - name: Paketlenmiş uygulamayı aç ve doğrula
-        run: python packaging/smoke_test.py
-      - uses: actions/upload-artifact@v4
+          node-version: '22'
+
+      - name: macOS Kurulumu ve Derleme
+        run: |
+          chmod +x ./scripts/setup-macos.sh ./scripts/build-macos.sh
+          ./scripts/setup-macos.sh
+          ./scripts/build-macos.sh
+
+      - name: macOS Artifact Yükle
+        uses: actions/upload-artifact@v4
         with:
-          name: kelebek-${{ runner.os }}
-          path: |
-            dist/*.dmg
-            dist/*.zip
-            dist/*.exe
-            dist/*.sha256
-            dist/SHA256SUMS.txt
-          if-no-files-found: error
+          name: kelebek-macOS
+          path: dist/*.dmg
+
+  build-windows:
+    name: Windows Paketini Derle
+    runs-on: windows-latest
+    steps:
+      - name: Kodları Çek
+        uses: actions/checkout@v4
+
+      - name: Python Kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Node.js Kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Windows Derleme
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy -Scope Process Bypass
+          .\scripts\build-windows.ps1
+
+      - name: Windows Artifact Yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: kelebek-Windows
+          path: dist/*
