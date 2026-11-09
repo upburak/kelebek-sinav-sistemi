@@ -11,6 +11,8 @@ Kullanıcı: tek okul yöneticisi (giriş yok).
 - İhlal krokisi (K55), dağıtım ilerleme + durdurma (K58), artımlı güncelleme + rollback, CI duman testi, çözücü grup dengesi hatası düzeltildi, yalnız ad değişikliğinde taslak adaylar korunuyor
 ## 2026-11-09 (3) yapılanlar
 - Ed25519 güncelleme imzası (update_signing.py init/show, update_trust.py), ihlal çözüm önerisi + "Taşı ve düzelt", "Erken durduruldu" etiketi, CI sağlamlaştırma (Windows venv, UTF-8, DMG retry); 28 unit test, frozen build smoke test geçti
+## 2026-11-09 (4) yapılanlar
+- scripts/release.py tek komut sürüm (tam paket + imzalı güncelleme, releases/ arşivi), "Tümünü düzelt", Yenilikler penceresi (release_notes.py, ui_state.json); 29 unit test geçti
 ## Backlog
 P0: Mac/Windows paketlerini gerçek cihazda/CI'da üretip denemek
 P1: Mac/Windows paketlerini GitHub Actions'ta üretip gerçek cihazda denemek; kullanıcı kendi imza anahtarını `init` ile oluşturmalı; ExamOrganizer bileşen bölme

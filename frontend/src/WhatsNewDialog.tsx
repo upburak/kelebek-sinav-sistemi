@@ -13,6 +13,13 @@ export default function WhatsNewDialog() {
     }).catch(() => undefined)
   }, [])
 
+  useEffect(() => {
+    if (!notes.length) return
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   if (!notes.length) return null
   function close() {
     void fetch('/api/app/whats-new/seen', { method: 'POST' }).catch(() => undefined)

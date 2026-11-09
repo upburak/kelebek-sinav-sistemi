@@ -669,7 +669,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       <div className="exam-form-footer"><span>Bu adım taslak oluşturur; derslik ve oturma düzeni sonraki aşamada seçilir.</span><button type="submit" data-testid="exam-create-submit" disabled={saving || !selectedStudentCount || !selectionsComplete || !name.trim()}>{saving ? 'Taslak oluşturuluyor…' : 'Organizasyon taslağı oluştur'}</button></div>
     </form>}
 
-    {notice && <p className="exam-room-success" role="status" data-testid="exam-notice">{notice} <button type="button" onClick={() => setNotice('')}>Kapat</button></p>}
+    {notice && <p className="exam-room-success exam-notice-toast" role="status" data-testid="exam-notice">{notice} <button type="button" onClick={() => setNotice('')}>Kapat</button></p>}
     {error && !formOpen && <p className="exam-error" role="alert">{error}</p>}
     {loading ? <div className="exam-empty">Organizasyonlar yükleniyor…</div> : organizations.length === 0 && !formOpen ? <div className="exam-empty"><strong>{groups.length ? 'Henüz sınav organizasyonu yok.' : 'Bu eğitim yılında öğrenci grubu bulunamadı.'}</strong><span>{groups.length ? 'İlk taslağı oluştur; ders seçmek zorunlu değil.' : 'Önce öğrenci listesini içe aktar veya örnek verilerle başlangıç yap.'}</span>{groups.length ? !readOnly && <button type="button" onClick={() => setFormOpen(true)}>İlk organizasyonu oluştur</button> : <button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button>}</div> : <div className="exam-organization-list">
       {organizations.map((organization) => {
