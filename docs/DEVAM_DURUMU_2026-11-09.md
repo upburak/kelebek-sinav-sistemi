@@ -8,7 +8,7 @@ değiştirilmedi. Bu oturumda yeni özellik eklenmedi; amaç projeyi macOS ve Wi
 
 ## Bu oturumda yapılan testler
 
-- Birim testleri: 29 → 41 benzersiz test (yeni gerileme testleri; çifte koşum giderildi), tamamı geçiyor.
+- Birim testleri: 29 → 43 benzersiz test (yeni gerileme testleri; çifte koşum giderildi), tamamı geçiyor.
 - Uçtan uca API testleri: 53 test, elle hazırlık gerekmeden geçiyor.
 - Arayüz: `npm run build` (TypeScript + Vite) başarılı.
 - Lint: `ruff` ile 117 bulgu vardı, tamamı giderildi; kural kümesi `pyproject.toml` içinde sabitlendi.
@@ -49,7 +49,11 @@ Yeni iş akışının ilk koşusunda macOS, Ubuntu, uçtan uca ve arayüz işler
    kapatmaz, yalnızca işlemi tamamlar; Windows'ta bu dosya kilidi demek. Geri yükleme
    şema doğrulaması, bütünlük kontrolü ve migration öncesi yedek `contextlib.closing`
    ile düzeltildi.
-7. **Testlerin bir bölümü iki kez çalışıyordu.** İki dosya başka bir test sınıfını modül
+7. **Uygulama kapandıktan sonra dosya tutamağı bırakıyordu.** SQLite veritabanı ve
+   `logs/application.log` açık kalıyordu; Windows'ta geçici veri klasörü silinemiyordu.
+   Ortak `_support.release_app_resources` yardımcısı eklendi, `test_file_handles.py`
+   açık tutamakları ölçerek sabitliyor. Günlük dosyası da artık güncel veri klasörünü izler.
+8. **Testlerin bir bölümü iki kez çalışıyordu.** İki dosya başka bir test sınıfını modül
    düzeyinde içe aktardığı için `unittest` onları ikinci kez topluyordu; `BackupRestoreTests`
    her koşuda 8 yerine 16 test çalıştırıyordu. Süit artık 41 benzersiz test.
 

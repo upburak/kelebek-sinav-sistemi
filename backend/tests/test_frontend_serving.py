@@ -10,11 +10,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _support import release_app_resources
+
 from kelebek import create_app
 
 
 class FrontendServingTests(unittest.TestCase):
     def setUp(self):
+        self.apps = []
         self.temp_dir = tempfile.TemporaryDirectory()
         base = Path(self.temp_dir.name)
         self.previous_data_dir = os.environ.get("KELEBEK_DATA_DIR")
@@ -42,6 +45,8 @@ class FrontendServingTests(unittest.TestCase):
             self.linked_root = None
 
     def tearDown(self):
+        for app in self.apps:
+            release_app_resources(app)
         if self.previous_data_dir is None:
             os.environ.pop("KELEBEK_DATA_DIR", None)
         else:
@@ -50,8 +55,9 @@ class FrontendServingTests(unittest.TestCase):
 
     def _client(self, dist: Path):
         app = create_app(frontend_dist=dist)
-        # Windows açık SQLite dosyasını silmeye izin vermez; motor testin sonunda kapatılır.
-        self.addCleanup(app.extensions["kelebek_engine"].dispose)
+        # Windows açık dosyanın silinmesine izin vermez; kaynaklar tearDown'da,
+        # geçici klasör silinmeden önce bırakılır (addCleanup tearDown'dan SONRA çalışır).
+        self.apps.append(app)
         return app.test_client()
 
     def _assert_serves_assets(self, dist: Path, label: str):

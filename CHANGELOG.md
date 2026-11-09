@@ -46,8 +46,14 @@ ve arayüz işleri geçti. Çıkan iki sorun giderildi:
   geri yüklenen veritabanının bütünlük kontrolü ve migration öncesi yedek)
   bağlantılar açık kalıyordu; Windows'ta dosya kilidi, her yerde tutamak sızıntısı
   anlamına geliyordu. Hepsi `contextlib.closing` ile kapatıldı.
-- Testler artık `unittest` geçici klasörünü silemeden kalmıyor; uygulama motoru
-  her testin sonunda kapatılıyor.
+- **Uygulama kapandıktan sonra dosya tutamağı bırakıyordu:** SQLite veritabanı ve
+  `logs/application.log` açık kalıyordu; Windows açık dosyanın silinmesine izin
+  vermediği için geçici veri klasörüyle çalışan testler düşüyordu. Ortak
+  `backend/tests/_support.py` yardımcısı her testin sonunda motoru ve günlük
+  işleyicisini kapatıyor; `backend/tests/test_file_handles.py` bunu ölçerek sabitliyor.
+- Günlük dosyası artık güncel veri klasörünü izliyor: `app.logger` Flask'ta modül adına
+  bağlı olduğu için süreç içinde paylaşılıyor ve veri klasörü değiştiğinde eski dosyaya
+  yazmaya devam ediyordu.
 - **Testlerin bir bölümü iki kez çalışıyordu:** iki test dosyası başka bir test
   sınıfını modül düzeyinde içe aktardığı için `unittest` onları ikinci kez topluyordu
   (`BackupRestoreTests`'in 8 testi her koşuda 16 kez çalışıyordu). Giderildi;

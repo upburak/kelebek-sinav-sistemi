@@ -10,6 +10,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
+from _support import release_app_resources
 from sqlalchemy import select
 
 from kelebek import create_app
@@ -57,7 +58,7 @@ class BackupRestoreTests(unittest.TestCase):
         stream.close()
 
     def tearDown(self):
-        self.app.extensions["kelebek_engine"].dispose()
+        release_app_resources(self.app)
         if self.previous_data_dir is None:
             os.environ.pop("KELEBEK_DATA_DIR", None)
         else:
