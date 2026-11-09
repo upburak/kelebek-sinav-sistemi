@@ -739,7 +739,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
             <div className="candidate-group-summary">{candidate.summary.groups.map((group) => <small key={`${group.class_level}-${group.section}-${group.area ?? ''}`}>{group.class_level}/{group.section}{group.area ? ` · ${group.area}` : ''}: {group.student_count} öğrenci</small>)}</div>
             {violatingStudents.length > 0 && <div className="candidate-violations" data-testid={`candidate-violations-${candidate.candidate_id}`}>
               <strong>Kural ihlalinden etkilenen öğrenciler · {violatingStudents.length}</strong>
-              <small>Öğrenciye dokun: krokide yeri ve ihlale neden olan komşu yerler vurgulanır.</small>
+              <small>Öğrenciye dokun: krokide yeri ve ihlale neden olan komşu yerler vurgulanır. Çiftteki öğrencilerden birini taşımak diğerinin ihlalini de giderir.</small>
               <div>{violatingStudents.map(({ assignment, details }) => {
                 const suggestion = candidate.violation_suggestions?.[assignment!.participant_id]?.[0]
                 return <div className="candidate-violation-item" key={assignment!.participant_id}><button type="button" data-testid={`violation-student-${assignment!.participant_id}`} className={focusedId === assignment!.participant_id ? 'active' : ''} aria-pressed={focusedId === assignment!.participant_id} onClick={() => focusViolation(candidate.candidate_id, assignment!.participant_id, assignment!.seat_id)}><b>{assignment!.class_level}/{assignment!.section} · {assignment!.first_name} {assignment!.last_name}</b><span>{assignment!.classroom_name} · Koltuk {assignment!.seat_number}</span>{details.map((detail) => <small key={detail}>{detail}</small>)}</button>

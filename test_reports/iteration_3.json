@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 3: tested İhlal çözüm önerisi (API+UI), Erken durduruldu badge (API+UI), update signature trust (API+UI) and light regression. All requested features work. API e2e: new file 10 tests (8 passed + 2 stop tests that skipped once due to a solver-finished-first race, passed on rerun); previous e2e regression file 15/15 passed; backend unit tests test_violation_suggestions + test_app_update 5/5 passed. UI: violations box shows each student once with 'Öneri: Koltuk 15' + 'Taşı ve düzelt'; clicking it created a new manual candidate (Aday 3) with 0 violations, auto-selected; the old candidate's box then showed 'Uygulamak için adayı incelemeye al' instead of the button. Stop via overlay after 'Bulunan çözüm' >= 1 saved a candidate with status 'stopped', the 'Erken durduruldu' badge and the text 'Durdurulana kadar bulunan en iyi çözüm…'. Normal candidates have no badge. The update card shows that no publisher key is defined; a manifest zip (kelebek-update/1) was rejected with 'güvenilir yayıncı anahtarı…' and a non-zip with 'açılamadı veya bozuk'. Focus highlighting (violation-focus/neighbor = 1/1) and the progress overlay still work, and the reports page loads.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/exam-organizations/<id>/distribution-progress/stop", "issue": "Race: the solver often reaches optimal in about 2s. A stop sent at about 1.2-2s sometimes arrives after the solve finished, so a normal 'optimal' candidate is saved (no badge) and the overlay briefly shows 'Dağıtım zaten tamamlanmak üzere.'. This happened in 1 of 2 UI attempts and 1 of 2 API attempts. It is expected behaviour, not a bug, but worth knowing for tests."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Yedek ve arşiv > Uygulama güncellemesi", "issues": ["When trusted_key_ids is empty, the file picker and the 'Paketi doğrula' button stay active, but every package is rejected anyway. Consider disabling or hiding the picker and showing only the trust message."]},
+      {"screen": "Sınav organizasyonları > violation suggestion", "issues": ["Both students of a pair get the same suggestion (Koltuk 15). That is correct, since one move fixes both, but the UI does not say that applying one fixes the other student too."]}
+    ]
+  },
+  "test_report_links": ["/app/tests/e2e/test_suggestions_stop_signing_e2e.py", "/app/tests/e2e/prep_ui_violation.py", "/app/test_reports/pytest/iter3_e2e.xml", "/app/tests/e2e/test_progress_violations_updates_e2e.py"],
+  "action_items": [
+    "Optional: disable the update picker and inspect button when no trusted publisher key is configured.",
+    "Optional: in draft mode every 'Taşı ve düzelt' creates a new 'Manuel sürüm' candidate whose history shows only '1 işlem'. The review asked for 'history count increases', but in draft the candidate count increases instead; undo means selecting the previous candidate. Confirm this is intended, or carry the parent events into the child."
+  ],
+  "critical_code_review_comments": [
+    "suggest_violation_fixes is correct: it excludes occupied seats, ignores the mover's own old seat (other != participant_id) and checks only the adjacent/front_back relations, the same ones evaluate_assignments uses. E2E confirmed that applying the top suggestion for each affected student removed that student's violations and created no new violation pair.",
+    "_serialize_candidate calls _review_selected_candidate for every candidate in GET distribution-candidates, which rebuilds the neighbour graph and runs per-layout seat queries each time (N+1). This slows down as manual candidates pile up, since every fix adds one.",
+    "File sizes: ExamOrganizer.tsx is 809 lines and exam_organizations.py is 1030 lines. Both are over the 700-line guideline; consider splitting out the candidate card and violations box component and the candidate/move routes.",
+    "DistributionProgressOverlay.stop() never resets 'stopping' and does not catch fetch rejection (a network error becomes an unhandled promise rejection)."
+  ],
+  "updated_files": ["/app/tests/e2e/test_suggestions_stop_signing_e2e.py", "/app/tests/e2e/prep_ui_violation.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created draft orgs TEST_SUGG_226d9f (cbcc4626-…), TEST_SUGG_ac4052 (011e0d99-…) and one more TEST_PROG_* org from the regression run, all with candidates. No org delete endpoint exists, so they are left in place. Seed data was not modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: KELEBEK_PUBLIC_URL=$preview_endpoint /root/.venv/bin/python -m pytest tests/e2e/test_suggestions_stop_signing_e2e.py -p no:cacheprovider -v (creates 1 TEST_SUGG org per run). UI prep: python tests/e2e/prep_ui_violation.py <orgId> creates a fresh candidate plus a same-section adjacent violation and prints the ids. Nav buttons are role=button with the names 'Sınav organizasyonları' and 'Yedek ve arşiv'. Stop with in-page JS polling distribution-solutions >= 1; it may still race against the solver finishing at about 2s. The browser can read files under /tmp for set_input_files."
+}
