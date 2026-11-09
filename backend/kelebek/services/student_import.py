@@ -6,11 +6,10 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from io import BytesIO
+from zipfile import BadZipFile
 
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
-from zipfile import BadZipFile
-
 
 MAX_HEADER_SCAN_ROWS = 1000
 HEADER_ALIASES = {
@@ -123,7 +122,9 @@ def read_student_tables(content: bytes, filename: str) -> list[ImportTable]:
         except (InvalidFileException, BadZipFile, OSError, ValueError) as error:
             raise ValueError("Dosya açılamadı. Geçerli bir .xlsx dosyası seçin.") from error
         try:
-            for sheet, formula_sheet in zip(workbook.worksheets, formula_workbook.worksheets):
+            # İki çalışma kitabı aynı dosyadan açıldığı için sayfa sayıları eşittir;
+            # yine de eşitlik açıkça istenir ki bozuk dosyada sessizce sayfa atlanmasın.
+            for sheet, formula_sheet in zip(workbook.worksheets, formula_workbook.worksheets, strict=True):
                 rows = list(sheet.iter_rows(values_only=True))
                 formula_cells = frozenset(
                     (row_index, column_index)
@@ -153,7 +154,7 @@ def read_student_tables(content: bytes, filename: str) -> list[ImportTable]:
                             "vertical_strategy": "text",
                             "horizontal_strategy": "text",
                         }) or []
-                    for table_index, raw_rows in enumerate(page_tables, start=1):
+                    for raw_rows in page_tables:
                         rows = _as_rows(raw_rows)
                         table = _find_table(f"Sayfa {page_number}", rows, [page_text])
                         if table:

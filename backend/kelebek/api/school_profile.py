@@ -7,7 +7,6 @@ from sqlalchemy import delete, select
 
 from kelebek.models import SchoolAdministrator, SchoolProfile
 
-
 school_profile_api = Blueprint("school_profile", __name__)
 PROFILE_FIELDS = {
     "school_name": (160, True),

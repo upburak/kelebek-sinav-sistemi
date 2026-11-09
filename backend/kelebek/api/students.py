@@ -8,12 +8,11 @@ from kelebek.services.student_registry import (
     StudentRegistryError,
     add_student_to_year,
     deactivate_student_in_year,
-    list_year_students,
     list_year_student_groups,
+    list_year_students,
     reactivate_student_in_year,
     update_student_in_year,
 )
-
 
 students_api = Blueprint("students", __name__)
 

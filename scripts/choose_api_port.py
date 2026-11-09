@@ -6,7 +6,6 @@ import socket
 import sys
 from collections.abc import Iterable
 
-
 DEFAULT_PORTS = range(5000, 5101)
 
 

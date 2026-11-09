@@ -1,6 +1,6 @@
 """Auditable manual placement changes made to a candidate fork."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import DateTime, ForeignKey, String
@@ -22,4 +22,4 @@ class DistributionEvent(Base):
     related_event_id: Mapped[str | None] = mapped_column(
         ForeignKey("distribution_events.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))

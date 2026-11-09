@@ -8,13 +8,12 @@ from datetime import datetime
 from flask import Blueprint, current_app, jsonify, request, send_file
 
 from kelebek.config import get_data_dir
+from kelebek.services.backup import BACKUP_RETENTION_COUNT, build_backup_package
 from kelebek.services.backup_restore import (
     apply_confirmed_restore,
     discard_pending_restore,
     inspect_uploaded_backup,
 )
-from kelebek.services.backup import BACKUP_RETENTION_COUNT, build_backup_package
-
 
 backups_api = Blueprint("backups", __name__)
 logger = logging.getLogger(__name__)

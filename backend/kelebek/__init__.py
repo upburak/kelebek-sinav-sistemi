@@ -11,11 +11,11 @@ from kelebek.api.backups import backups_api
 from kelebek.api.classrooms import classrooms_api
 from kelebek.api.exam_lifecycle import exam_lifecycle_api, guard_exam_writes
 from kelebek.api.exam_organizations import exam_organizations_api
-from kelebek.api.updates import updates_api
 from kelebek.api.health import health_api
 from kelebek.api.school_profile import school_profile_api
 from kelebek.api.student_import import student_import_api
 from kelebek.api.students import students_api
+from kelebek.api.updates import updates_api
 from kelebek.config import configure_logging
 from kelebek.db import initialize_database
 from kelebek.services.backup import ensure_daily_backup
@@ -24,7 +24,6 @@ from kelebek.services.backup_restore import (
     recover_interrupted_restore,
 )
 
-
 _api_request_lock = threading.RLock()
 # Uzun dağıtım sürerken ilerleme, durdurma ve sekme kilidi istekleri beklememeli.
 _LOCK_FREE_PATH = re.compile(r"/distribution-progress(/stop)?$|^/api/edit-locks|^/api/health$")
@@ -32,17 +31,24 @@ _LOCK_FREE_PATH = re.compile(r"/distribution-progress(/stop)?$|^/api/edit-locks|
 
 def _register_frontend(app: Flask, frontend_dist: Path) -> None:
     """Paketlenmiş uygulamada derlenmiş arayüzü aynı yerel adresten sun."""
-    index = frontend_dist / "index.html"
+    # Kök, kurulum yolu sembolik bağ içerse de (macOS'ta /var, bağlı Applications
+    # klasörleri) karşılaştırmanın doğru çalışması için bir kez çözümlenir.
+    root = frontend_dist.resolve()
+    index_name = (root / "index.html").name
 
     @app.get("/", defaults={"path": ""})
     @app.get("/<path:path>")
     def frontend(path: str):
         if path.startswith("api/"):
             return jsonify({"error": "Bulunamadı."}), 404
-        target = frontend_dist / path
-        if path and target.is_file() and frontend_dist in target.resolve().parents:
-            return send_from_directory(frontend_dist, path)
-        return send_from_directory(frontend_dist, index.name)
+        if path:
+            try:
+                target = (root / path).resolve()
+            except OSError:
+                target = None
+            if target is not None and target.is_file() and target != root and target.is_relative_to(root):
+                return send_from_directory(root, target.relative_to(root).as_posix())
+        return send_from_directory(root, index_name)
 
 
 def create_app(frontend_dist: Path | None = None, allowed_hosts: set[str] | None = None) -> Flask:

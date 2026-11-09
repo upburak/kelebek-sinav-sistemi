@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 from kelebek.db import current_academic_year_start
 from kelebek.models import (
     AcademicYear,
-    Course,
     Classroom,
     ClassroomLayout,
+    Course,
     ExamCourse,
     ExamCourseParticipant,
     ExamOrganization,

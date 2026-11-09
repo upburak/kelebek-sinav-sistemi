@@ -5,9 +5,8 @@ Revises: 0012_candidate_manual_edits
 Create Date: 2026-11-07
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0013_candidate_waiting_pool"
 down_revision = "0012_candidate_manual_edits"

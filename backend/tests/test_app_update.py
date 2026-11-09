@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _support import release_app_resources
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -59,7 +60,7 @@ class AppUpdateTests(unittest.TestCase):
 
     def tearDown(self):
         update_trust.TRUSTED_PUBLIC_KEYS = self.original_keys
-        self.app.extensions["kelebek_engine"].dispose()
+        release_app_resources(self.app)
         os.environ.pop("KELEBEK_INSTALL_ROOT", None)
         os.environ.pop("KELEBEK_DATA_DIR", None)
         self.temp.cleanup()

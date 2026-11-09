@@ -5,9 +5,8 @@ Revises: 0007_exam_classrooms
 Create Date: 2026-11-07
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0008_exam_distribution_rules"
 down_revision = "0007_exam_classrooms"

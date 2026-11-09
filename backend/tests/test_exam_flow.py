@@ -1,7 +1,7 @@
 """Synthetic acceptance tests for creating and completing an exam seating plan."""
 
-import os
 import json
+import os
 import re
 import tempfile
 import unittest
@@ -9,6 +9,7 @@ from io import BytesIO
 from urllib.parse import urlencode
 
 import pdfplumber
+from _support import release_app_resources
 from openpyxl import load_workbook
 from sqlalchemy import select
 
@@ -17,8 +18,8 @@ from kelebek.models import (
     AcademicYear,
     Classroom,
     ClassroomLayout,
-    ExamParticipant,
     Desk,
+    ExamParticipant,
     SchoolProfile,
     Seat,
     Student,
@@ -38,7 +39,7 @@ class ExamFlowTests(unittest.TestCase):
         self._seed_synthetic_school()
 
     def tearDown(self):
-        self.app.extensions["kelebek_engine"].dispose()
+        release_app_resources(self.app)
         if self.previous_data_dir is None:
             os.environ.pop("KELEBEK_DATA_DIR", None)
         else:

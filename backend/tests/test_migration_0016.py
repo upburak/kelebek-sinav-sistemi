@@ -1,13 +1,12 @@
 """Synthetic acceptance checks for the 0016 participant activation migration."""
 
 import importlib.util
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import create_engine, inspect, text
-
 
 MIGRATION_PATH = (
     Path(__file__).resolve().parents[1]

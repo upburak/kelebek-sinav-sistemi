@@ -5,9 +5,8 @@ Revises: 0016_exam_participant_active
 Create Date: 2026-11-09
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0017_exam_archive_and_pins"
 down_revision = "0016_exam_participant_active"

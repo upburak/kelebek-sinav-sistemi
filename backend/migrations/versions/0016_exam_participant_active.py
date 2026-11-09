@@ -5,9 +5,8 @@ Revises: 0015_distribution_report_file_hash
 Create Date: 2026-11-08
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0016_exam_participant_active"
 down_revision = "0015_distribution_report_file_hash"

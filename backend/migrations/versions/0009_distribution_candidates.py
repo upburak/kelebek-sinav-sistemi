@@ -5,9 +5,8 @@ Revises: 0008_exam_distribution_rules
 Create Date: 2026-11-07
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0009_distribution_candidates"
 down_revision = "0008_exam_distribution_rules"

@@ -3,10 +3,11 @@ import hashlib
 import json
 import sys
 import zipfile
+from pathlib import Path
 
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp"
 platform_name = sys.argv[2] if len(sys.argv) > 2 else "linux-arm64"
-open(f"{out}/bad.zip", "wb").write(b"this is not a zip")
+Path(f"{out}/bad.zip").write_bytes(b"this is not a zip")
 with zipfile.ZipFile(f"{out}/nomanifest.zip", "w") as z:
     z.writestr("readme.txt", "x")
 payload = b"TEST update payload\n"

@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, datetime, timezone
+from contextlib import closing
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import Engine, URL, create_engine, event, inspect, select, update
+from sqlalchemy import URL, Engine, create_engine, event, inspect, select, update
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from kelebek.config import get_database_path, get_data_dir
-
+from kelebek.config import get_data_dir, get_database_path
 
 logger = logging.getLogger("kelebek.database")
 MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "migrations"
@@ -38,10 +38,12 @@ def _backup_database(db_path: Path) -> Path:
     """Migration öncesinde SQLite'ın tutarlı bir kopyasını al."""
     backup_dir = get_data_dir() / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     backup_path = backup_dir / f"pre-migration-{timestamp}.sqlite3"
 
-    with sqlite3.connect(db_path) as source, sqlite3.connect(backup_path) as destination:
+    # Bağlantılar açıkça kapatılır; `with sqlite3.connect(...)` yalnızca işlemi
+    # tamamlar, dosyayı serbest bırakmaz ve Windows'ta kilit bırakır.
+    with closing(sqlite3.connect(db_path)) as source, closing(sqlite3.connect(backup_path)) as destination:
         source.backup(destination)
 
     logger.info("Migration öncesi yerel veritabanı yedeği oluşturuldu.")

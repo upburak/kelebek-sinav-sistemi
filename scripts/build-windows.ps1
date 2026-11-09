@@ -4,12 +4,10 @@ $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $Root
 
 if (-not (Test-Path ".venv\Scripts\python.exe")) {
-  # CI'da Python Launcher (py) bulunmayabilir; PATH'teki Python 3.12 kullanılır.
-  if (Get-Command py -ErrorAction SilentlyContinue) { py -3.12 -m venv .venv }
-  if (-not (Test-Path ".venv\Scripts\python.exe")) { python -m venv .venv }
-  & ".venv\Scripts\python.exe" -m pip install --upgrade pip
-  & ".venv\Scripts\python.exe" -m pip install -e .
-  if ($LASTEXITCODE -ne 0) { throw "Bağımlılıklar kurulamadı." }
+  # Ortam kurulumu tek yerde: setup betiği Python Launcher'ı olmayan bilgisayarlarda
+  # PATH'teki Python 3.12+ sürümünü de bulur.
+  & (Join-Path $PSScriptRoot "setup-windows.ps1")
+  if (-not (Test-Path ".venv\Scripts\python.exe")) { throw "Sanal ortam (.venv) kurulamadı." }
 }
 $Python = Join-Path $Root ".venv\Scripts\python.exe"
 & $Python -m pip install --quiet "pyinstaller>=6.10,<7"

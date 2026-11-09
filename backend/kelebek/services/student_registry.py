@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from kelebek.db import current_academic_year_start
 from kelebek.models import AcademicYear, Student, StudentYearEnrollment
 
-
 AREA_OPTIONS = {"Sayısal", "Eşit Ağırlık", "Sözel", "Dil"}
 
 
@@ -247,8 +246,11 @@ def sync_draft_exam_snapshots(
 ) -> int:
     """Update or deactivate snapshots only in drafts; completed history stays fixed."""
     from kelebek.models import (
-        DistributionEvent, DistributionRun, ExamOrganization,
-        ExamParticipant, SeatAssignment,
+        DistributionEvent,
+        DistributionRun,
+        ExamOrganization,
+        ExamParticipant,
+        SeatAssignment,
     )
 
     participants = session.scalars(select(ExamParticipant).where(
@@ -274,7 +276,7 @@ def sync_draft_exam_snapshots(
                     from_seat_id=seat_id,
                 ))
         else:
-            placement_changed = reactivate and not participant.is_active or any(
+            placement_changed = (reactivate and not participant.is_active) or any(
                 getattr(participant, field) != getattr(enrollment, field) for field in ("class_level", "section", "area")
             )
             identity_changed = any(getattr(participant, field) != getattr(enrollment, field)

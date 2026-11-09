@@ -12,6 +12,16 @@ npm --prefix frontend run build
 PYTHONPATH=backend .venv/bin/python -m unittest discover -s backend/tests
 .venv/bin/python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging/kelebek.spec
 
+APP="dist/Kelebek Sınav Sistemi.app"
+[[ -d "$APP" ]] || { echo "Uygulama paketi üretilemedi: $APP"; exit 1; }
+
+# Apple Silicon çekirdeği imzası olmayan ikili dosyayı çalıştırmaz. Paket, artımlı
+# güncellemeden sonra da aynı biçimde yenilenebilsin diye burada açıkça ad-hoc
+# imzalanır ve karantina damgaları temizlenir.
+xattr -cr "$APP" || true
+codesign --force --deep --sign - --timestamp=none "$APP"
+codesign --verify --deep --strict "$APP" || { echo "Uygulama imzası doğrulanamadı."; exit 1; }
+
 VERSION="$(PYTHONPATH=backend .venv/bin/python -c 'from kelebek.version import APP_VERSION;print(APP_VERSION)')"
 DMG="dist/KelebekSinavSistemi-${VERSION}-macos-arm64.dmg"
 rm -f "$DMG"

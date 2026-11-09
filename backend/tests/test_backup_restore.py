@@ -3,13 +3,16 @@
 import io
 import json
 import os
+import shutil
 import sqlite3
 import tempfile
 import unittest
 import zipfile
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
+from _support import release_app_resources
 from sqlalchemy import select
 
 from kelebek import create_app
@@ -57,7 +60,7 @@ class BackupRestoreTests(unittest.TestCase):
         stream.close()
 
     def tearDown(self):
-        self.app.extensions["kelebek_engine"].dispose()
+        release_app_resources(self.app)
         if self.previous_data_dir is None:
             os.environ.pop("KELEBEK_DATA_DIR", None)
         else:
@@ -130,11 +133,13 @@ class BackupRestoreTests(unittest.TestCase):
         with zipfile.ZipFile(safety_files[0]) as safety_zip:
             manifest = json.loads(safety_zip.read("manifest.json"))
             database_bytes = safety_zip.read("database/kelebek.sqlite3")
-        with tempfile.NamedTemporaryFile(suffix=".sqlite3") as safety_database:
-            safety_database.write(database_bytes)
-            safety_database.flush()
-            safety_uri = Path(safety_database.name).as_uri() + "?mode=ro"
-            with sqlite3.connect(safety_uri, uri=True) as database:
+        # Windows açık bir NamedTemporaryFile'ı adıyla yeniden açmaya izin vermediği
+        # için dosya önce yazılıp kapatılır, sonra salt okunur açılır.
+        with tempfile.TemporaryDirectory() as safety_dir:
+            safety_database = Path(safety_dir) / "safety.sqlite3"
+            safety_database.write_bytes(database_bytes)
+            safety_uri = safety_database.as_uri() + "?mode=ro"
+            with closing(sqlite3.connect(safety_uri, uri=True)) as database:
                 self.assertEqual(database.execute("PRAGMA integrity_check").fetchone()[0], "ok")
                 self.assertEqual(database.execute(
                     "SELECT school_name FROM school_profiles WHERE id=1"
@@ -194,10 +199,12 @@ class BackupRestoreTests(unittest.TestCase):
         older_package = io.BytesIO()
         with zipfile.ZipFile(io.BytesIO(self.package_bytes), "r") as source:
             entries = {item.filename: source.read(item.filename) for item in source.infolist()}
-        with tempfile.NamedTemporaryFile(suffix=".sqlite3") as older_database:
-            older_database.write(entries["database/kelebek.sqlite3"])
-            older_database.flush()
-            with sqlite3.connect(older_database.name) as database:
+        with tempfile.TemporaryDirectory() as older_dir:
+            older_database = Path(older_dir) / "older.sqlite3"
+            older_database.write_bytes(entries["database/kelebek.sqlite3"])
+            # closing() bağlantıyı kapatır, `with database:` ise işlemi tamamlar;
+            # şema değişikliklerinin dosyaya yazılması için ikisi birlikte gerekir.
+            with closing(sqlite3.connect(older_database)) as database, database:
                 database.execute("ALTER TABLE distribution_reports DROP COLUMN file_sha256")
                 database.execute("ALTER TABLE exam_participants DROP COLUMN is_active")
                 database.execute("ALTER TABLE exam_organizations DROP COLUMN archived_at")
@@ -207,8 +214,7 @@ class BackupRestoreTests(unittest.TestCase):
                     "UPDATE alembic_version SET version_num=?",
                     ("0014_completed_distribution_edits",),
                 )
-            older_database.seek(0)
-            entries["database/kelebek.sqlite3"] = older_database.read()
+            entries["database/kelebek.sqlite3"] = older_database.read_bytes()
         manifest = json.loads(entries["manifest.json"])
         manifest["schema_revision"] = "0014_completed_distribution_edits"
         manifest_file = next(item for item in manifest["files"]
@@ -235,7 +241,9 @@ class BackupRestoreTests(unittest.TestCase):
         )
         self.assertEqual(restored.status_code, 200, restored.get_json())
         database_uri = (self.data_dir / "kelebek.sqlite3").as_uri() + "?mode=ro"
-        with sqlite3.connect(database_uri, uri=True) as database:
+        # closing() olmadan bağlantı açık kalır ve Windows veri klasörünün
+        # silinmesine izin vermez (`with` yalnızca işlemi tamamlar).
+        with closing(sqlite3.connect(database_uri, uri=True)) as database:
             self.assertEqual(
                 database.execute("SELECT version_num FROM alembic_version").fetchone()[0],
                 "0017_exam_archive_and_pins",
@@ -253,12 +261,11 @@ class BackupRestoreTests(unittest.TestCase):
         with patch(
             "kelebek.services.backup_restore._integrity_check",
             side_effect=RuntimeError("synthetic failure"),
-        ):
-            with self.assertLogs("kelebek", level="ERROR"):
-                restored = self.client.post(
-                    "/api/backups/restore/confirm",
-                    json={"token": token, "confirmed": True},
-                )
+        ), self.assertLogs("kelebek", level="ERROR"):
+            restored = self.client.post(
+                "/api/backups/restore/confirm",
+                json={"token": token, "confirmed": True},
+            )
         self.assertEqual(restored.status_code, 500)
         self.assertEqual(self._school_name(), "SENTETİK KORUNACAK OKULU")
         self.assertEqual(self._synthetic_student_name(), "SENTETİK KORUNACAK AD")
@@ -322,8 +329,7 @@ class BackupRestoreTests(unittest.TestCase):
             if symlink is not None:
                 self.assertTrue(symlink.is_symlink())
         finally:
-            restarted_app.extensions["kelebek_engine"].dispose()
-            import shutil
+            release_app_resources(restarted_app)
             shutil.rmtree(startup_data)
 
 

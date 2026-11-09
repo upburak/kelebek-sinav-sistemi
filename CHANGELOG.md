@@ -1,5 +1,92 @@
 # Değişiklik günlüğü
 
+## 0.3.0
+
+Bu sürüm yeni özellik eklemez; projeyi macOS ve Windows'ta güvenle çalıştırmak için
+yapılan testlerde bulunan hataları giderir ve doğrulamayı sürekli hale getirir.
+
+### Düzeltmeler
+
+- **Arayüz açılmıyordu (macOS):** Kurulum yolu bir sembolik bağ içerdiğinde (bağlı
+  *Applications* klasörleri, taşınmış kullanıcı klasörleri, `/var` gibi yollar)
+  JavaScript, CSS ve Excel indirme istekleri dosya yerine `index.html` döndürüyordu;
+  uygulama boş ekranla açılıyordu. Yol karşılaştırması artık iki tarafı da çözümlüyor;
+  klasör dışına çıkan istekler yine reddediliyor.
+- **Raporlarda Türkçe harfler bozuluyordu:** Türkçe destekleyen sistem yazı tipi
+  bulunamadığında raporlar sessizce Helvetica'ya dönüyor ve `Çağrı Işık Şükrü İpek`
+  çıktıya `Çanrn Innk nükrü npek` olarak düşüyordu. Yazı tipi adayları her iki
+  platform için genişletildi, seçilen yazı tipinde Türkçe harflerin gerçekten
+  bulunduğu doğrulanıyor; hiçbiri yoksa metin yanlış harf yerine okunabilir ASCII
+  karşılığına sadeleştiriliyor ve günlüğe uyarı yazılıyor.
+- **macOS'ta artımlı güncelleme uygulamayı çalışmaz hale getiriyordu:** `.app`
+  paketinin içindeki dosyalar değişince paketin imzası geçersiz kalıyor, Apple
+  Silicon çekirdeği de imzası bozuk ikili dosyayı hiç çalıştırmıyordu; güncelleme
+  her seferinde geri dönüşe düşüyordu. Güncelleyici dosyaları yerleştirdikten ve
+  geri aldıktan sonra karantinayı temizleyip paketi yeniden ad-hoc imzalıyor;
+  `build-macos.sh` de ürettiği paketi açıkça imzalayıp doğruluyor.
+- **Kurulum yalnızca Python 3.12 ile çalışıyordu:** `pyproject.toml` 3.12 ve üzerini
+  desteklemesine karşın kurulum betikleri tam olarak `python3.12` ya da Windows
+  Python Launcher'ı arıyor, bulamayınca duruyordu. Her iki betik artık 3.12 ve üzeri
+  herhangi bir sürümü buluyor; Windows derlemesi de aynı kurulum yolunu kullanıyor.
+- Raporlarda ölü değişken ve kod temizliği; tüm depoda `ruff` uyarısı kalmadı.
+
+### CI'ın yakaladığı Windows hataları
+
+Yeni test iş akışının ilk koşusu Windows'ta kırmızı yandı; macOS, Ubuntu, uçtan uca
+ve arayüz işleri geçti. Çıkan iki sorun giderildi:
+
+- **İptal edilen geri yükleme önizlemesi veri klasöründe kopya bırakıyordu.**
+  `discard_pending_restore` silme işlemini `ignore_errors=True` ile yapıyor ve
+  silemese bile kullanıcıya "iptal edildi" diyordu. Windows, dosyayı açık tutan
+  tutamak serbest kalana kadar silmeye izin vermediği için klasör kalıyordu — içinde
+  kullanıcının veritabanının bir kopyası vardı. Silme artık kısa aralıklarla yeniden
+  denenir, başarısız olursa günlüğe yazılır ve bir sonraki açılışta temizlenir.
+- **Kapatılmayan SQLite bağlantıları.** `with sqlite3.connect(...)` bağlantıyı
+  kapatmaz, yalnızca işlemi tamamlar. Üç yerde (geri yükleme şema doğrulaması,
+  geri yüklenen veritabanının bütünlük kontrolü ve migration öncesi yedek)
+  bağlantılar açık kalıyordu; Windows'ta dosya kilidi, her yerde tutamak sızıntısı
+  anlamına geliyordu. Hepsi `contextlib.closing` ile kapatıldı.
+- **Uygulama kapandıktan sonra dosya tutamağı bırakıyordu:** SQLite veritabanı ve
+  `logs/application.log` açık kalıyordu; Windows açık dosyanın silinmesine izin
+  vermediği için geçici veri klasörüyle çalışan testler düşüyordu. Ortak
+  `backend/tests/_support.py` yardımcısı her testin sonunda motoru ve günlük
+  işleyicisini kapatıyor; `backend/tests/test_file_handles.py` bunu ölçerek sabitliyor.
+- Günlük dosyası artık güncel veri klasörünü izliyor: `app.logger` Flask'ta modül adına
+  bağlı olduğu için süreç içinde paylaşılıyor ve veri klasörü değiştiğinde eski dosyaya
+  yazmaya devam ediyordu.
+- **Testlerin bir bölümü iki kez çalışıyordu:** iki test dosyası başka bir test
+  sınıfını modül düzeyinde içe aktardığı için `unittest` onları ikinci kez topluyordu
+  (`BackupRestoreTests`'in 8 testi her koşuda 16 kez çalışıyordu). Giderildi;
+  süit 41 benzersiz test.
+
+### Test ve doğrulama
+
+- **Otomatik test iş akışı eklendi** (`.github/workflows/tests.yml`): her gönderimde
+  ve birleştirme isteğinde Ubuntu, macOS ve Windows'ta lint + birim testleri, ayrıca
+  arayüz derlemesi ve uçtan uca API testleri çalışır. Önceden hiçbir test kendiliğinden
+  çalışmıyordu.
+- **Paket iş akışına duman testi eklendi:** README'nin söz verdiği
+  `packaging/smoke_test.py` adımı iş akışında yoktu; artık her iki platformun paketi
+  üretildikten sonra çalışır.
+- **Uçtan uca testler kendi kendine çalışıyor:** `tests/e2e/conftest.py` geçici veri
+  klasöründe yerel servisi açıp sentetik okul verisini kuruyor. Testler eskiden elle
+  hazırlanmış bir ortam ve `KELEBEK_PUBLIC_URL` olmadan hiç çalışmıyordu.
+- "Yenilikler" testi Linux'a özel sabit bir yol (`/root/.local/share/...`) ve sabit
+  sürüm numarası kullanıyordu; artık platformdan ve sürümden bağımsız.
+- Düzeltilen iki hata için gerileme testleri: `test_frontend_serving.py` ve
+  `test_report_fonts.py`.
+- `ruff` kural kümesi `pyproject.toml` içinde sabitlendi; sonuçlar sürümden sürüme kaymaz.
+
+### Depo temizliği
+
+- Kullanılmayan klasörler çıkarıldı: `.emergent/` (derleme platformu artığı), `.screenshots/`,
+  `test_reports/` (eski koşuların üretilmiş çıktıları), `memory/` (güncelliğini yitirmiş notlar).
+- `backend/server.py` (bulut önizlemesi için ASGI adaptörü) çıkarıldı; bağımlılığı `a2wsgi`
+  projede tanımlı değildi, yerel çalışmada kullanılmıyordu.
+- Arayüzdeki önizlemeye özel `npm start` betiği ve `allowedHosts` kaçağı kaldırıldı; geliştirme
+  sunucusu yalnızca `127.0.0.1` üzerinde dinler.
+- Üretilen test ve araç çıktıları `.gitignore` kapsamına alındı.
+
 ## Geliştirme sürümü
 
 - Faz A başlangıç iskeleti: Flask sağlık API'si, React/TypeScript arayüzü, platforma uygun veri dizini ve geliştirme betikleri.

@@ -9,22 +9,36 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from kelebek.db import current_academic_year_start
-from kelebek.models import (
-    AcademicYear, Classroom, ClassroomLayout, Desk, DistributionCandidate,
-    DistributionEvent, DistributionRun, ExamOrganization, ExamOrganizationClassroom,
-    ExamParticipant, Seat, SeatAssignment,
-)
-from kelebek.distribution.neighbors import build_neighbor_pairs
 from kelebek.distribution import progress as distribution_progress
-from kelebek.distribution.solver import DistributionError, evaluate_assignments, solve_candidate, suggest_violation_fixes
+from kelebek.distribution.neighbors import build_neighbor_pairs
+from kelebek.distribution.solver import (
+    DistributionError,
+    evaluate_assignments,
+    solve_candidate,
+    suggest_violation_fixes,
+)
+from kelebek.models import (
+    AcademicYear,
+    Classroom,
+    ClassroomLayout,
+    Desk,
+    DistributionCandidate,
+    DistributionEvent,
+    DistributionRun,
+    ExamOrganization,
+    ExamOrganizationClassroom,
+    ExamParticipant,
+    Seat,
+    SeatAssignment,
+)
 from kelebek.services.exam_organizer import (
     ExamOrganizerError,
     create_organization,
     list_courses,
     list_organizations,
     list_room_options,
-    update_organization_rules,
     update_organization_rooms,
+    update_organization_rules,
 )
 from kelebek.services.reporting import (
     ATTENDANCE_REPORT_TYPE,
@@ -34,25 +48,24 @@ from kelebek.services.reporting import (
     GENERAL_DISTRIBUTION_XLSX_REPORT_TYPE,
     ROOM_STUDENT_LIST_REPORT_TYPE,
     ROOM_STUDENT_LIST_XLSX_REPORT_TYPE,
-    build_seating_plan_pdf,
+    all_report_statuses,
     build_attendance_pdf,
+    build_class_student_list_pdf,
+    build_class_student_list_xlsx,
     build_general_distribution_pdf,
     build_general_distribution_xlsx,
     build_room_student_list_pdf,
     build_room_student_list_xlsx,
-    build_class_student_list_pdf,
-    build_class_student_list_xlsx,
+    build_seating_plan_pdf,
     record_report,
     record_seating_plan_report,
-    all_report_statuses,
-    report_status,
     report_filename,
+    report_status,
     resolve_pdf_options,
     resolve_report_fields,
     resolve_report_labels,
     seating_plan_report_filename,
 )
-
 
 exam_organizations_api = Blueprint("exam_organizations", __name__)
 
@@ -503,7 +516,8 @@ def create_distribution_candidate(organization_id: str):
                 generation_index = (max((item.generation_index for item in previous_candidates), default=0)) + 1
             else:
                 run = DistributionRun(organization_id=organization.id, status="completed", config_hash=config_hash)
-                session.add(run); session.flush()
+                session.add(run)
+                session.flush()
                 generation_index = 1
             fixed_assignments = {}
             if pinned_classroom_ids:
@@ -542,7 +556,8 @@ def create_distribution_candidate(organization_id: str):
                 derived_from_candidate_id=base_candidate_id if pinned_classroom_ids else None,
                 pinned_classroom_ids=json.dumps(sorted(pinned_classroom_ids)) if pinned_classroom_ids else None,
             )
-            session.add(candidate); session.flush()
+            session.add(candidate)
+            session.flush()
             for assignment in result["assignments"]:
                 session.add(SeatAssignment(
                     candidate_id=candidate.id,
@@ -730,7 +745,8 @@ def move_candidate_participant(organization_id: str, candidate_id: str):
                     objective_value=candidate.objective_value,
                     generation_index=(session.scalar(select(func.max(DistributionCandidate.generation_index)).where(DistributionCandidate.run_id == run.id)) or 0) + 1,
                 )
-                session.add(child); session.flush()
+                session.add(child)
+                session.flush()
                 for item in assignments:
                     seat_id = item.seat_id
                     if item.participant_id == participant_id:
@@ -787,7 +803,8 @@ def fix_candidate_violations(organization_id: str, candidate_id: str):
                     affected_student_count=before, objective_value=candidate.objective_value,
                     generation_index=(session.scalar(select(func.max(DistributionCandidate.generation_index)).where(DistributionCandidate.run_id == run.id)) or 0) + 1,
                 )
-                session.add(target); session.flush()
+                session.add(target)
+                session.flush()
                 for item in session.scalars(select(SeatAssignment).where(SeatAssignment.candidate_id == candidate.id)).all():
                     session.add(SeatAssignment(candidate_id=target.id, participant_id=item.participant_id, seat_id=item.seat_id))
                 organization.selected_candidate_id = target.id

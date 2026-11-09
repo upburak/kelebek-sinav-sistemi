@@ -1,6 +1,7 @@
 # E2E API (public URL) for iteration 4: "Tümünü düzelt" (fix-violations) and "Yenilikler" (whats-new).
 import json
 import os
+import sys
 import uuid
 from pathlib import Path
 
@@ -11,7 +12,21 @@ BASE_URL = os.environ.get("KELEBEK_PUBLIC_URL", "").rstrip("/")
 if not BASE_URL:
     pytest.skip("KELEBEK_PUBLIC_URL not set", allow_module_level=True)
 API = f"{BASE_URL}/api"
-UI_STATE = Path("/root/.local/share/kelebek-sinav-sistemi/ui_state.json")
+
+
+def _ui_state_path() -> Path:
+    """Çalışan servisin veri klasöründeki ui_state.json yolunu platformdan bağımsız bul."""
+    data_dir = os.environ.get("KELEBEK_DATA_DIR")
+    if not data_dir:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+        from kelebek.config import get_data_dir
+
+        return get_data_dir() / "ui_state.json"
+    return Path(data_dir).expanduser().resolve() / "ui_state.json"
+
+
+UI_STATE = _ui_state_path()
+CURRENT_VERSION = requests.get(f"{API}/updates/status", timeout=20).json()["current_version"]
 state: dict = {}
 
 
@@ -126,22 +141,26 @@ class TestFixAll:
 
 class TestWhatsNew:
     def test_show_after_update(self):
-        original = UI_STATE.read_text(encoding="utf-8") if UI_STATE.exists() else None
         try:
             UI_STATE.write_text(json.dumps({"last_seen_version": "0.1.0"}), encoding="utf-8")
             d = requests.get(f"{API}/app/whats-new", timeout=20).json()
             assert d["show"] is True
-            assert d["current_version"] == "0.2.0"
+            assert d["current_version"] == CURRENT_VERSION
             assert d["previous_version"] == "0.1.0"
-            assert [n["version"] for n in d["notes"]] == ["0.2.0"]
-            assert any("Tümünü düzelt" in i for i in d["notes"][0]["items"])
+            # 0.1.0'dan gelen kullanıcı, o sürümden sonraki tüm notları en yeniden
+            # eskiye doğru görür; en üstteki kurulu sürüm olmalıdır.
+            versions = [n["version"] for n in d["notes"]]
+            assert versions and versions[0] == CURRENT_VERSION, versions
+            assert versions == sorted(versions, key=lambda v: [int(p) for p in v.split(".")], reverse=True)
+            assert "0.1.0" not in versions
+            assert d["notes"][0]["items"], "Sürüm notları boş olmamalı."
             r = requests.post(f"{API}/app/whats-new/seen", timeout=20)
-            assert r.status_code == 200 and r.json()["seen"] == "0.2.0"
-            assert json.loads(UI_STATE.read_text())["last_seen_version"] == "0.2.0"
+            assert r.status_code == 200 and r.json()["seen"] == CURRENT_VERSION
+            assert json.loads(UI_STATE.read_text())["last_seen_version"] == CURRENT_VERSION
             d = requests.get(f"{API}/app/whats-new", timeout=20).json()
             assert d["show"] is False and d["notes"] == []
         finally:
-            UI_STATE.write_text(json.dumps({"last_seen_version": "0.2.0"}), encoding="utf-8")
+            UI_STATE.write_text(json.dumps({"last_seen_version": CURRENT_VERSION}), encoding="utf-8")
 
     def test_fresh_install_no_show(self):
         UI_STATE.write_text(json.dumps({"other": 1}), encoding="utf-8")
@@ -149,9 +168,9 @@ class TestWhatsNew:
             d = requests.get(f"{API}/app/whats-new", timeout=20).json()
             assert d["show"] is False
             st = json.loads(UI_STATE.read_text())
-            assert st["last_seen_version"] == "0.2.0" and st["other"] == 1
+            assert st["last_seen_version"] == CURRENT_VERSION and st["other"] == 1
         finally:
-            UI_STATE.write_text(json.dumps({"last_seen_version": "0.2.0"}), encoding="utf-8")
+            UI_STATE.write_text(json.dumps({"last_seen_version": CURRENT_VERSION}), encoding="utf-8")
 
     def test_corrupt_file(self):
         UI_STATE.write_text("{not json", encoding="utf-8")
@@ -159,4 +178,4 @@ class TestWhatsNew:
             r = requests.get(f"{API}/app/whats-new", timeout=20)
             assert r.status_code == 200 and r.json()["show"] is False
         finally:
-            UI_STATE.write_text(json.dumps({"last_seen_version": "0.2.0"}), encoding="utf-8")
+            UI_STATE.write_text(json.dumps({"last_seen_version": CURRENT_VERSION}), encoding="utf-8")

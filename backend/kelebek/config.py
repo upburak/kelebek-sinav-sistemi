@@ -6,7 +6,6 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-
 APP_NAME = "Kelebek Sinav Sistemi"
 
 
@@ -38,11 +37,19 @@ def configure_logging(app_logger: logging.Logger) -> None:
     log_dir = get_data_dir() / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    if any(getattr(handler, "_kelebek_handler", False) for handler in app_logger.handlers):
-        return
+    log_path = log_dir / "application.log"
+    for handler in list(app_logger.handlers):
+        if not getattr(handler, "_kelebek_handler", False):
+            continue
+        # Flask'ın app.logger'ı modül adına bağlı olduğundan süreç içinde paylaşılır.
+        # Veri klasörü değiştiyse eski dosyaya yazmaya devam etmek yerine kapatılır.
+        if Path(getattr(handler, "baseFilename", "")) == log_path.resolve():
+            return
+        app_logger.removeHandler(handler)
+        handler.close()
 
     handler = RotatingFileHandler(
-        log_dir / "application.log",
+        log_path,
         maxBytes=1_000_000,
         backupCount=3,
         encoding="utf-8",

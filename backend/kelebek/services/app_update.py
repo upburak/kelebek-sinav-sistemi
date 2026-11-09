@@ -18,7 +18,7 @@ import subprocess
 import sys
 import uuid
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 
@@ -123,7 +123,7 @@ def inspect_package(stream: BinaryIO) -> tuple[str, dict]:
     token = uuid.uuid4().hex
     staged_root = _updates_dir() / "staged"
     if staged_root.is_dir():
-        cutoff = datetime.now(timezone.utc).timestamp() - 24 * 3600
+        cutoff = datetime.now(UTC).timestamp() - 24 * 3600
         for old in staged_root.iterdir():
             if old.is_dir() and old.stat().st_mtime < cutoff:
                 shutil.rmtree(old, ignore_errors=True)
@@ -277,7 +277,7 @@ def spawn_updater(job: dict) -> None:
 
 def write_verification(path: str) -> None:
     """Yeni sürüm migration'ları uygulayıp servisi açtıysa güncelleyiciye başarı bildir."""
-    Path(path).write_text(f"ok {APP_VERSION} {datetime.now(timezone.utc).isoformat()}\n", encoding="utf-8")
+    Path(path).write_text(f"ok {APP_VERSION} {datetime.now(UTC).isoformat()}\n", encoding="utf-8")
 
 
 POSIX_SCRIPT = r'''#!/bin/bash
@@ -296,10 +296,26 @@ while IFS= read -r rel; do
   else echo "$rel" >> "$ROLLBACK/new.txt"; fi
 done < <(cat "$STAGED/files.txt" "$STAGED/removed.txt")
 for suffix in "" "-wal" "-shm"; do [ -f "$DB_PATH$suffix" ] && cp -p "$DB_PATH$suffix" "$ROLLBACK/db$suffix"; done
+# macOS'ta .app içindeki dosyalar değişince paketin imzası geçersiz kalır ve Apple
+# Silicon çekirdeği imzası bozuk ikili dosyayı hiç çalıştırmaz. Bu yüzden dosyalar
+# yerleştirildikten (ve geri alındıktan) sonra karantina temizlenip paket yeniden
+# ad-hoc imzalanır.
+resign() {
+  case "$(uname)" in Darwin) ;; *) return 0 ;; esac
+  case "$APP_ROOT" in *.app) ;; *) return 0 ;; esac
+  command -v codesign >/dev/null 2>&1 || { echo "codesign bulunamadı; imza yenilenemedi."; return 0; }
+  xattr -cr "$APP_ROOT" 2>/dev/null || true
+  if codesign --force --deep --sign - --timestamp=none "$APP_ROOT"; then
+    codesign --verify --deep "$APP_ROOT" || echo "Uyarı: imza doğrulaması başarısız."
+  else
+    echo "Uyarı: uygulama paketi yeniden imzalanamadı."
+  fi
+}
 restore() {
   while IFS= read -r rel; do [ -n "$rel" ] && rm -f "$APP_ROOT/$rel"; done < "$ROLLBACK/new.txt"
   (cd "$ROLLBACK/files" && find . -type f -print0) | while IFS= read -r -d '' rel; do mkdir -p "$APP_ROOT/$(dirname "$rel")"; cp -p "$ROLLBACK/files/$rel" "$APP_ROOT/$rel"; done
   for suffix in "" "-wal" "-shm"; do rm -f "$DB_PATH$suffix"; [ -f "$ROLLBACK/db$suffix" ] && cp -p "$ROLLBACK/db$suffix" "$DB_PATH$suffix"; done
+  resign
 }
 failed=0
 while IFS= read -r rel; do
@@ -308,6 +324,7 @@ while IFS= read -r rel; do
 done < "$STAGED/files.txt"
 if [ "$failed" = 0 ]; then while IFS= read -r rel; do [ -n "$rel" ] && rm -f "$APP_ROOT/$rel"; done < "$STAGED/removed.txt"; fi
 if [ "$failed" = 1 ]; then restore; result rolled_back "Dosyalar kopyalanamadı; önceki sürüm geri yüklendi."; "$LAUNCH" & exit 1; fi
+resign
 rm -f "$VERIFY_FILE"
 KELEBEK_UPDATE_VERIFY="$VERIFY_FILE" "$LAUNCH" &
 NEW_PID=$!
