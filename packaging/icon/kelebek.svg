@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E5187"/>
+      <stop offset="1" stop-color="#15274A"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <g fill="#FFFFFF" stroke="#15274A" stroke-width="22" stroke-linejoin="round">
+    <path d="M560 380 C 636 282 762 206 836 244 C 906 280 898 418 826 494 C 766 556 656 582 560 566 Z"/>
+    <path d="M464 380 C 388 282 262 206 188 244 C 118 280 126 418 198 494 C 258 556 368 582 464 566 Z"/>
+    <path d="M560 606 C 664 592 806 630 834 714 C 862 798 772 862 678 840 C 600 822 566 724 560 648 Z"/>
+    <path d="M464 606 C 360 592 218 630 190 714 C 162 798 252 862 346 840 C 424 822 458 724 464 648 Z"/>
+  </g>
+  <g stroke="#FFFFFF" stroke-width="24" stroke-linecap="round" fill="none">
+    <path d="M496 346 C 452 282 408 246 364 226"/>
+    <path d="M528 346 C 572 282 616 246 660 226"/>
+  </g>
+  <path d="M512 322 C 546 322 554 366 550 426 L 542 712 C 540 750 526 772 512 772 C 498 772 484 750 482 712 L 474 426 C 470 366 478 322 512 322 Z" fill="#FFFFFF"/>
+  <circle cx="512" cy="326" r="36" fill="#FFFFFF"/>
+</svg>
