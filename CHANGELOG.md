@@ -30,6 +30,12 @@
 
 ## 0.2.0
 
+- Güncelleme imzası: paketler Ed25519 ile imzalanır (`scripts/update_signing.py`), uygulama yalnızca gömülü yayıncı anahtarıyla doğrulanan paketleri kabul eder; anahtar tanımlı değilse güncelleme reddedilir.
+- İhlal çözüm önerisi: ihlalli her öğrenci için kendi ihlalini gideren ve yeni ihlal yaratmayan en yakın boş yer önerilir; "Taşı ve düzelt" tek dokunuşla uygular (işlem geçmişine yazılır, geri alınabilir).
+- Erken durdurulan adaylar "Erken durduruldu" etiketiyle kaydedilir.
+- Yalnız ad/numara değişikliğinde taslak sınav adayları artık silinmez.
+- CI sağlamlaştırma: Windows'ta Python Launcher olmadan sanal ortam, UTF-8 konsol, DMG için yeniden deneme.
+
 - İhlal krokisi (Karar 55): kural ihlalinden etkilenen öğrenciler aday kartında bir kez listelenir, ihlal nedeni ve komşu öğrenci gösterilir; öğrenciye dokununca krokide yeri ve ihlale neden olan komşu yerler vurgulanır.
 - Dağıtım ilerlemesi (Karar 58): hesaplama sırasında aşamalar, geçen süre, en fazla kalan süre, bulunan çözüm sayısı ve en iyi çözümde etkilenen öğrenci sayısı gösterilir; "Durdur ve en iyi çözümü kullan" o ana kadarki en iyi geçerli çözümü aday olarak kaydeder. İlerleme ve durdurma istekleri uzun hesaplama sırasında beklemez.
 - Çözücüde grup dengesinin yanlış dersliğin koltuklarıyla hesaplanması düzeltildi.

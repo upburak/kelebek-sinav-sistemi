@@ -7,6 +7,7 @@ kontrolünü geçerse etkin kalır; geçemezse önceki dosyalar ve veritabanı k
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -21,10 +22,15 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+from kelebek import update_trust
 from kelebek.config import get_data_dir, get_database_path
 from kelebek.version import APP_VERSION
 
 MANIFEST_NAME = "manifest.json"
+SIGNATURE_NAME = "manifest.sig"
 FORMAT = "kelebek-update/1"
 MAX_PACKAGE_BYTES = 600 * 1024 * 1024
 VERIFY_TIMEOUT_SECONDS = 120
@@ -132,9 +138,11 @@ def inspect_package(stream: BinaryIO) -> tuple[str, dict]:
         package_sha256 = _sha256_file(archive)
         with zipfile.ZipFile(archive) as package:
             try:
-                manifest = _validate_manifest(json.loads(package.read(MANIFEST_NAME)))
+                manifest_bytes = package.read(MANIFEST_NAME)
             except KeyError:
                 raise UpdateError("Güncelleme paketinde manifest bulunamadı.") from None
+            key_id = verify_signature(manifest_bytes, package)
+            manifest = _validate_manifest(json.loads(manifest_bytes))
             if manifest["platform"] != current_platform():
                 raise UpdateError(f"Bu paket {manifest['platform']} içindir; bu bilgisayar {current_platform()}.")
             if manifest["from_version"] != APP_VERSION:
@@ -162,7 +170,31 @@ def inspect_package(stream: BinaryIO) -> tuple[str, dict]:
         if isinstance(error, UpdateError):
             raise
         raise UpdateError("Güncelleme paketi açılamadı veya bozuk.") from error
-    return token, _summary(manifest, package_sha256)
+    return token, {**_summary(manifest, package_sha256), "signature_key_id": key_id}
+
+
+def _key_id(public_b64: str) -> str:
+    return hashlib.sha256(base64.b64decode(public_b64)).hexdigest()[:16]
+
+
+def verify_signature(manifest_bytes: bytes, package: zipfile.ZipFile) -> str:
+    """Manifest, tüm dosyaların SHA-256 değerlerini taşır; manifest imzası tüm paketi bağlar."""
+    trusted = list(update_trust.TRUSTED_PUBLIC_KEYS)
+    if not trusted:
+        raise UpdateError("Bu kurulumda güvenilir yayıncı anahtarı tanımlı değil; güncelleme kabul edilmiyor. Tam kurulum paketini kullanın.")
+    try:
+        signature = base64.b64decode(package.read(SIGNATURE_NAME).strip(), validate=True)
+    except KeyError:
+        raise UpdateError("Paket imzasız. Yalnızca yayıncı anahtarınızla imzalanmış güncellemeler kabul edilir.") from None
+    except ValueError:
+        raise UpdateError("Paket imzası okunamadı.") from None
+    for public_b64 in trusted:
+        try:
+            Ed25519PublicKey.from_public_bytes(base64.b64decode(public_b64)).verify(signature, manifest_bytes)
+            return _key_id(public_b64)
+        except (InvalidSignature, ValueError):
+            continue
+    raise UpdateError("İmza doğrulanamadı: paket sizin yayıncı anahtarınızla imzalanmamış veya değiştirilmiş.")
 
 
 def _stage_dir(token) -> Path:
@@ -193,7 +225,8 @@ def last_result() -> dict | None:
 def status() -> dict:
     root = install_root()
     return {"current_version": APP_VERSION, "platform": current_platform(),
-            "can_apply": root is not None, "last_result": last_result()}
+            "can_apply": root is not None, "last_result": last_result(),
+            "trusted_key_ids": [_key_id(item) for item in update_trust.TRUSTED_PUBLIC_KEYS]}
 
 
 def _launch_command(root: Path) -> list[str]:

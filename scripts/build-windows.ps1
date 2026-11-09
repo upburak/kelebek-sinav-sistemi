@@ -3,7 +3,14 @@ $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $Root
 
-if (-not (Test-Path ".venv\Scripts\python.exe")) { & "$PSScriptRoot\setup-windows.ps1" }
+if (-not (Test-Path ".venv\Scripts\python.exe")) {
+  # CI'da Python Launcher (py) bulunmayabilir; PATH'teki Python 3.12 kullanılır.
+  if (Get-Command py -ErrorAction SilentlyContinue) { py -3.12 -m venv .venv }
+  if (-not (Test-Path ".venv\Scripts\python.exe")) { python -m venv .venv }
+  & ".venv\Scripts\python.exe" -m pip install --upgrade pip
+  & ".venv\Scripts\python.exe" -m pip install -e .
+  if ($LASTEXITCODE -ne 0) { throw "Bağımlılıklar kurulamadı." }
+}
 $Python = Join-Path $Root ".venv\Scripts\python.exe"
 & $Python -m pip install --quiet "pyinstaller>=6.10,<7"
 npm --prefix frontend ci

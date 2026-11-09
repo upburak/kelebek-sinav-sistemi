@@ -104,7 +104,11 @@ def main() -> None:
     url = f"http://127.0.0.1:{port}"
     if not os.environ.get("KELEBEK_NO_BROWSER"):
         threading.Timer(0.8, webbrowser.open, args=(url,)).start()
-    print(f"Kelebek Sınav Sistemi çalışıyor: {url}  (kapatmak için bu pencereyi kapatın)")
+    if sys.stdout is not None:
+        try:
+            print(f"Kelebek Sınav Sistemi çalışıyor: {url}  (kapatmak için bu pencereyi kapatın)", flush=True)
+        except (UnicodeEncodeError, OSError):
+            pass
     try:
         server.run()
     except (KeyboardInterrupt, OSError):

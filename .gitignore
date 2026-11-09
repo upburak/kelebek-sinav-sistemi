@@ -56,3 +56,7 @@ Desktop.ini
 *.env
 credentials.json
 .credentials
+
+# Güncelleme imzalama anahtarları asla depoya girmez
+*.pem
+.kelebek-signing/

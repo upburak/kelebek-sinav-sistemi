@@ -9,7 +9,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from kelebek import create_app
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from kelebek import create_app, update_trust
 from kelebek.services import app_update
 from kelebek.version import APP_VERSION
 
@@ -38,24 +41,37 @@ class AppUpdateTests(unittest.TestCase):
         (self.new / "lib" / "same.txt").write_text("aynı")
         (self.new / "lib" / "changed.txt").write_text("yeni")
         (self.new / "lib" / "added.txt").write_text("eklendi")
+        self.key_path = base / "signing.pem"
+        self._write_key(self.key_path)
+        self.other_key = base / "other.pem"
+        self._write_key(self.other_key)
+        self.original_keys = update_trust.TRUSTED_PUBLIC_KEYS
+        update_trust.TRUSTED_PUBLIC_KEYS = [make_update_package.update_signing.public_key_b64(
+            make_update_package.update_signing.load_private_key(self.key_path))]
         self.app = create_app()
         self.client = self.app.test_client()
         os.environ["KELEBEK_INSTALL_ROOT"] = str(self.install)
 
+    @staticmethod
+    def _write_key(path):
+        path.write_bytes(Ed25519PrivateKey.generate().private_bytes(
+            serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+
     def tearDown(self):
+        update_trust.TRUSTED_PUBLIC_KEYS = self.original_keys
         self.app.extensions["kelebek_engine"].dispose()
         os.environ.pop("KELEBEK_INSTALL_ROOT", None)
         os.environ.pop("KELEBEK_DATA_DIR", None)
         self.temp.cleanup()
 
-    def _package(self, launcher: str, from_version=APP_VERSION) -> Path:
+    def _package(self, launcher: str, from_version=APP_VERSION, key=None) -> Path:
         (self.new / "KelebekSinavSistemi").write_text(launcher)
         (self.new / "KelebekSinavSistemi").chmod(0o755)
         (self.install / "KelebekSinavSistemi").write_text(LAUNCH_OK)
         (self.install / "KelebekSinavSistemi").chmod(0o755)
         (self.old / "KelebekSinavSistemi").write_text(LAUNCH_OK)
         return make_update_package.build(self.old, self.new, app_update.current_platform(), from_version, "9.9.9",
-                                         Path(self.temp.name) / "out")
+                                         Path(self.temp.name) / "out", sign_key=key or self.key_path)
 
     def _inspect(self, package: Path):
         with package.open("rb") as handle:
@@ -78,6 +94,7 @@ class AppUpdateTests(unittest.TestCase):
         summary = response.get_json()["summary"]
         self.assertEqual(summary["changed_file_count"], 2)
         self.assertEqual(summary["removed_file_count"], 1)
+        self.assertEqual(len(summary["signature_key_id"]), 16)
         result = self._run_updater(response.get_json()["token"])
         self.assertEqual(result["status"], "success", result)
         self.assertEqual((self.install / "lib" / "changed.txt").read_text(), "yeni")
@@ -113,6 +130,30 @@ class AppUpdateTests(unittest.TestCase):
         response = self._inspect(tampered)
         self.assertEqual(response.status_code, 400)
         self.assertIn("doğrulaması", response.get_json()["error"])
+
+
+
+@unittest.skipIf(sys.platform == "win32", "POSIX güncelleyici testi")
+class UpdateSignatureTests(AppUpdateTests):
+    test_package_contains_only_changes_and_applies_successfully = None
+    test_failed_start_rolls_back_files_and_database = None
+    test_wrong_version_and_tampered_files_are_rejected = None
+
+    def test_foreign_key_unsigned_and_untrusted_install_are_rejected(self):
+        foreign = self._package(LAUNCH_OK, key=self.other_key)
+        response = self._inspect(foreign)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("İmza doğrulanamadı", response.get_json()["error"])
+        import zipfile
+        signed = self._package(LAUNCH_OK)
+        unsigned = signed.with_name("unsigned.zip")
+        with zipfile.ZipFile(signed) as source, zipfile.ZipFile(unsigned, "w") as target:
+            for item in source.infolist():
+                if item.filename != "manifest.sig":
+                    target.writestr(item, source.read(item))
+        self.assertIn("imzasız", self._inspect(unsigned).get_json()["error"])
+        update_trust.TRUSTED_PUBLIC_KEYS = []
+        self.assertIn("güvenilir yayıncı anahtarı", self._inspect(signed).get_json()["error"])
 
 
 if __name__ == "__main__":

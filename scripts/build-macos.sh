@@ -18,7 +18,11 @@ rm -f "$DMG"
 STAGE="$(mktemp -d)"
 cp -R "dist/Kelebek Sınav Sistemi.app" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "Kelebek Sınav Sistemi" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+for attempt in 1 2 3; do
+  hdiutil create -volname "Kelebek Sınav Sistemi" -srcfolder "$STAGE" -ov -format UDZO "$DMG" && break
+  echo "DMG oluşturma yeniden deneniyor ($attempt)…"; sleep 5
+done
+[[ -f "$DMG" ]] || { echo "DMG oluşturulamadı."; exit 1; }
 rm -rf "$STAGE"
 (cd dist && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256")
 echo "Hazır: $DMG"

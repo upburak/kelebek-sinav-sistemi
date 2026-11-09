@@ -1033,3 +1033,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .update-card > p { font-size: 12px; line-height: 1.7; }
 .update-secondary-button { min-height: 38px; padding: 0 14px; border: 1px solid #d2dfdb; border-radius: 9px; background: #fff; color: #34505a; font: inherit; font-weight: 700; cursor: pointer; }
 .update-actions { align-items: center; }
+.candidate-violation-item { display: grid; gap: 5px; align-content: start; }
+.violation-suggestion { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 7px; background: #eef7f2; color: #2f6b4d; font-size: 10px; }
+.violation-suggestion.none { background: #f6f1ec; color: #8a6040; }
+.exam-candidate-result .violation-suggestion button { padding: 4px 9px; border: 1px solid #8cc3a6; border-radius: 6px; background: #fff; color: #23704a; font: inherit; font-weight: 700; cursor: pointer; }
+.exam-candidate-result .violation-suggestion small { padding: 0; border: 0; background: none; color: #6a7b72; }
+.candidate-stopped-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #fff1d6; color: #8a5a00; font-size: 10px; font-style: normal; font-weight: 700; vertical-align: middle; }

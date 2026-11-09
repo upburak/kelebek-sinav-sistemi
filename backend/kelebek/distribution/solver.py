@@ -84,6 +84,41 @@ def evaluate_assignments(participants: list[dict], seat_pairs: dict, rules: dict
             "violations": list(violations.values())}
 
 
+def suggest_violation_fixes(participants: list[dict], seat_pairs: dict, rules: dict, assignments: dict[str, str],
+                            seat_info: dict, violations: list[dict], limit: int = 3) -> dict:
+    """İhlalli her öğrenci için, taşındığında kendi ihlallerini giderip yeni ihlal yaratmayan boş yerleri öner."""
+    by_participant = {item["id"]: item for item in participants}
+    by_seat = {seat_id: participant_id for participant_id, seat_id in assignments.items()}
+    neighbors: dict[str, list[tuple[str, str]]] = {}
+    for relation in ("adjacent", "front_back"):
+        for first, second in seat_pairs[relation]:
+            neighbors.setdefault(first, []).append((second, relation))
+            neighbors.setdefault(second, []).append((first, relation))
+    free_seats = [seat_id for seat_id in seat_info if seat_id not in by_seat]
+    affected = {item["first_participant_id"] for item in violations} | {item["second_participant_id"] for item in violations}
+    suggestions = {}
+    for participant_id in sorted(affected):
+        current = seat_info.get(assignments.get(participant_id), {})
+        options = []
+        for seat_id in free_seats:
+            clash = any(
+                (other := by_seat.get(neighbor)) and other != participant_id
+                and _conflict_reason(by_participant[participant_id], by_participant[other], rules, relation)
+                for neighbor, relation in neighbors.get(seat_id, [])
+            )
+            if clash:
+                continue
+            info = seat_info[seat_id]
+            same_room = info["classroom_id"] == current.get("classroom_id")
+            distance = ((info["x"] - current.get("x", 0)) ** 2 + (info["y"] - current.get("y", 0)) ** 2) ** 0.5 if same_room else 10_000
+            options.append((not same_room, distance, info["classroom_name"], info["seat_number"], seat_id))
+        suggestions[participant_id] = [
+            {"seat_id": seat_id, "classroom_name": room, "seat_number": number, "same_room": not other_room}
+            for other_room, _distance, room, number, seat_id in sorted(options)[:limit]
+        ]
+    return suggestions
+
+
 def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dict, rules: dict, time_limit: float = 12.0, previous_assignments: list[dict] | None = None, fixed_assignments: dict[str, str] | None = None, progress=None) -> dict:
     """Assign every participant uniquely, balancing room use and limiting conflicts to five people."""
     if not participants:

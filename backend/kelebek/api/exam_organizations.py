@@ -16,7 +16,7 @@ from kelebek.models import (
 )
 from kelebek.distribution.neighbors import build_neighbor_pairs
 from kelebek.distribution import progress as distribution_progress
-from kelebek.distribution.solver import DistributionError, evaluate_assignments, solve_candidate
+from kelebek.distribution.solver import DistributionError, evaluate_assignments, solve_candidate, suggest_violation_fixes
 from kelebek.services.exam_organizer import (
     ExamOrganizerError,
     create_organization,
@@ -163,14 +163,19 @@ def _review_selected_candidate(session, organization, candidate_id=None):
     seat_pairs = {"adjacent": [], "front_back": []}
     available_seat_ids = set()
     room_capacities = []
+    seat_info = {}
     for _selection, _classroom, layout in selections:
         desks = session.scalars(select(Desk).where(Desk.layout_id == layout.id)).all()
+        desk_positions = {desk.id: (desk.x, desk.y) for desk in desks}
         seats_by_desk = {}
         seats = session.scalars(select(Seat).where(Seat.layout_id == layout.id)).all()
         for seat in seats:
             seats_by_desk.setdefault(seat.desk_id, []).append(seat)
             if seat.is_available:
                 available_seat_ids.add(seat.id)
+                x, y = desk_positions.get(seat.desk_id, (0.0, 0.0))
+                seat_info[seat.id] = {"classroom_id": _classroom.id, "classroom_name": _classroom.name,
+                                      "seat_number": seat.seat_number, "x": x + seat.seat_index * 0.3, "y": y}
         graph = build_neighbor_pairs([{
             "id": desk.id, "x": desk.x, "y": desk.y, "block_label": desk.block_label,
             "seats": [{"id": seat.id, "seat_index": seat.seat_index, "is_available": seat.is_available} for seat in seats_by_desk.get(desk.id, [])],
@@ -194,9 +199,12 @@ def _review_selected_candidate(session, organization, candidate_id=None):
         raise ValueError("Adayda seçili olmayan veya kullanım dışı bir koltuk var. Yeniden dağıtım yapın.")
     rules = {name: getattr(organization, name) for name in RULE_NAMES}
     seated_assignments = {participant_id: seat_id for participant_id, seat_id in assignment_map.items() if seat_id is not None}
-    evaluation = evaluate_assignments([{
+    participant_payloads = [{
         "id": item.id, "class_level": item.class_level, "section": item.section, "area": item.area,
-    } for item in participants], seat_pairs, rules, seated_assignments)
+    } for item in participants]
+    evaluation = evaluate_assignments(participant_payloads, seat_pairs, rules, seated_assignments)
+    evaluation["suggestions"] = suggest_violation_fixes(
+        participant_payloads, seat_pairs, rules, seated_assignments, seat_info, evaluation["violations"])
     assigned_by_room = {}
     seat_room = {seat.id: classroom.id for selection, classroom, layout in selections
                  for seat in session.scalars(select(Seat).where(Seat.layout_id == layout.id)).all()}
@@ -313,18 +321,21 @@ def _serialize_candidate(session, organization, candidate):
         "available_seats": available_seats,
         "assignments": assignments,
         "plan": plan,
-        "violations": _candidate_violations(session, organization, candidate),
+        "violations": (violation_review := _candidate_violations(session, organization, candidate))["violations"],
+        "violation_suggestions": violation_review["suggestions"],
     }
 
 
 def _candidate_violations(session, organization, candidate):
+    empty = {"violations": [], "suggestions": {}}
     run = session.get(DistributionRun, candidate.run_id)
     if run is None or run.config_hash != _distribution_fingerprint(session, organization):
-        return []
+        return empty
     try:
-        return _review_selected_candidate(session, organization, candidate.id)["violations"]
+        review = _review_selected_candidate(session, organization, candidate.id)
     except ValueError:
-        return []
+        return empty
+    return {"violations": review["violations"], "suggestions": review["suggestions"]}
 
 
 @exam_organizations_api.get("/courses")
@@ -524,7 +535,7 @@ def create_distribution_candidate(organization_id: str):
             progress.set_stage("save")
             stopped_early = result["stopped"]
             candidate = DistributionCandidate(
-                run_id=run.id, status=result["status"],
+                run_id=run.id, status="stopped" if stopped_early else result["status"],
                 affected_student_count=result["affected_student_count"],
                 objective_value=result["objective"],
                 generation_index=generation_index,

@@ -38,14 +38,16 @@ CI'da her paket üretildikten sonra `packaging/smoke_test.py` paketlenmiş uygul
 
 ## Artımlı güncelleme
 
-Yeni sürümün tam paketi üretildikten sonra yalnızca değişen dosyaları içeren güncelleme paketi hazırlanır:
+**İlk kez (bir defa):** Paketleri ürettiğiniz bilgisayarda `python scripts/update_signing.py init` çalıştırın. Gizli imzalama anahtarı `~/.kelebek-signing/update_signing_key.pem` dosyasına yazılır, açık anahtar `backend/kelebek/update_trust.py` dosyasına eklenir. Bu değişikliği kaydedip yeni **tam kurulum paketini** üretin ve kurun; bundan sonra kurulum yalnızca bu anahtarla imzalanmış güncellemeleri kabul eder. Gizli anahtarı Git'e eklemeyin, kimseyle paylaşmayın ve güvenli bir yere yedekleyin; kaybolursa yeni anahtar için yine tam kurulum gerekir. Yayıncı anahtarı tanımlı olmayan kurulumlar hiçbir güncelleme paketini kabul etmez.
+
+Yeni sürümün tam paketi üretildikten sonra yalnızca değişen dosyaları içeren, imzalı güncelleme paketi hazırlanır:
 
 ```bash
 python scripts/make_update_package.py --old "<eski sürüm>/Kelebek Sınav Sistemi.app" --new "dist/Kelebek Sınav Sistemi.app" \
   --platform macos-arm64 --from-version 0.2.0 --to-version 0.3.0 --out dist
 ```
 
-Windows için `--old`/`--new` olarak `KelebekSinavSistemi` klasörlerini ve `--platform windows-x64` verin. Paket `manifest.json` (sürümler, platform, değişen/kaldırılan dosyalar, SHA-256, migration aralığı) ve yanında `.sha256` özet dosyası içerir.
+Windows için `--old`/`--new` olarak `KelebekSinavSistemi` klasörlerini ve `--platform windows-x64` verin. Paket `manifest.json` (sürümler, platform, değişen/kaldırılan dosyalar, SHA-256, migration aralığı), manifestin Ed25519 imzası `manifest.sig` ve yanında `.sha256` özet dosyası içerir. Uygulama imzayı gömülü açık anahtarla doğrular; imzasız, başka anahtarla imzalanmış veya sonradan değiştirilmiş paketleri reddeder.
 
 Uygulamada **Yedek ve arşiv → Uygulama güncellemesi** bölümünde paket seçilir: sürüm ve platform kontrol edilir, tüm dosyalar geçici klasörde hash ile doğrulanır ve özet gösterilir. Onaydan sonra güvenlik yedeği alınır, uygulama kapanır; dış güncelleyici değişen dosyaların ve veritabanının kopyasını ayırıp yeni dosyaları yerleştirir. Yeni sürüm migration'ları uygulayıp açılış kontrolünü geçerse etkin kalır; geçemezse önceki dosyalar ve veritabanı otomatik geri yüklenir ve eski sürüm açılır. Sonuç aynı bölümde gösterilir. Uygulama klasör yapısı değiştiren büyük sürümlerde tam kurulum paketi kullanın.
 
