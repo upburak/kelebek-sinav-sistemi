@@ -45,7 +45,7 @@ def evaluate_assignments(participants: list[dict], seat_pairs: dict, rules: dict
     return {"affected_student_count": len(affected), "violation_count": len(violations)}
 
 
-def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dict, rules: dict, time_limit: float = 12.0, previous_assignments: list[dict] | None = None) -> dict:
+def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dict, rules: dict, time_limit: float = 12.0, previous_assignments: list[dict] | None = None, fixed_assignments: dict[str, str] | None = None) -> dict:
     """Assign every participant uniquely, balancing room use and limiting conflicts to five people."""
     if not participants:
         raise DistributionError("Dağıtılacak öğrenci bulunamadı.")
@@ -66,14 +66,23 @@ def solve_candidate(participants: list[dict], rooms: list[dict], seat_pairs: dic
         model.add_at_most_one(choices[student_index, seat_id] for student_index in range(len(participants)))
 
     participant_index = {item["id"]: index for index, item in enumerate(participants)}
+    fixed_assignments = fixed_assignments or {}
+    for participant_id, seat_id in fixed_assignments.items():
+        if participant_id not in participant_index or seat_id not in seat_by_id:
+            raise DistributionError("Sabitlenen derslikteki bir yerleşim artık geçerli değil; sabitlemeyi yenileyin.")
+        model.add(choices[participant_index[participant_id], seat_id] == 1)
+    free_count = len(participants) - len(fixed_assignments)
+    if free_count <= 0:
+        raise DistributionError("Yeniden dağıtılacak öğrenci kalmadı; en az bir dersliği sabitlemeden bırakın.")
     for prior in previous_assignments or []:
         retained = [
             choices[participant_index[item["participant_id"]], item["seat_id"]]
             for item in prior
             if item["participant_id"] in participant_index and item["seat_id"] in seat_by_id
+            and item["participant_id"] not in fixed_assignments
         ]
         if retained:
-            model.add(sum(retained) <= len(participants) - max(1, ceil(len(participants) * 0.2)))
+            model.add(sum(retained) <= free_count - max(1, ceil(free_count * 0.2)))
 
     room_counts = {}
     for room_index, room in enumerate(rooms):

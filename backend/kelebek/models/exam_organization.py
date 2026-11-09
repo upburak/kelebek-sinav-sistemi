@@ -32,6 +32,8 @@ class ExamOrganization(Base):
     prevent_different_grade_same_area_front_back: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     prevent_same_grade_area_adjacent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     prevent_same_grade_area_front_back: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    copied_from_organization_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

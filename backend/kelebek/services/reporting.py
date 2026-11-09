@@ -68,6 +68,7 @@ REPORT_FIELD_LABELS = {
     "status": "Durum", "courses": "Dersler",
 }
 
+HEADER_PARTS = ("school", "title", "exam", "date", "course", "room")
 PAPER_SIZES = {"A4": A4, "A3": A3, "A5": A5, "LETTER": LETTER, "LEGAL": LEGAL}
 
 
@@ -87,8 +88,28 @@ def resolve_pdf_options(params=None, *, default_orientation="portrait") -> dict:
         raise ValueError("Kenar boşluğu 5–30 mm arasında olmalı.")
     size = PAPER_SIZES[paper]
     page_size = landscape(size) if orientation == "landscape" else portrait(size)
+    raw_header = params.get("header")
+    header_parts = HEADER_PARTS if raw_header is None else tuple(
+        item.strip() for item in str(raw_header).split(",") if item.strip()
+    )
+    if set(header_parts) - set(HEADER_PARTS):
+        raise ValueError("Rapor üst bilgisinde desteklenmeyen bir alan seçildi.")
+    custom_title = " ".join(str(params.get("title", "")).split())
+    if len(custom_title) > 80 or any(ord(char) < 32 for char in custom_title):
+        raise ValueError("Rapor başlığı en fazla 80 karakter olmalı.")
+    try:
+        scale_percent = int(params.get("scale", "100"))
+    except (TypeError, ValueError) as error:
+        raise ValueError("Yazı ölçeği %80–%130 arasında olmalı.") from error
+    if not 80 <= scale_percent <= 130:
+        raise ValueError("Yazı ölçeği %80–%130 arasında olmalı.")
     return {"paper": paper, "orientation": orientation, "margin_points": margin_mm * 72 / 25.4,
-            "page_size": page_size}
+            "page_size": page_size, "header_parts": header_parts, "custom_title": custom_title,
+            "scale": scale_percent / 100}
+
+
+def _row_height(options) -> float:
+    return 22 * options.get("scale", 1)
 
 
 def resolve_report_fields(params, report_type: str) -> tuple[str, ...]:
@@ -149,6 +170,7 @@ def _register_fonts() -> tuple[str, str]:
         candidates = [
             ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
             ("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"),
+            ("/usr/share/fonts/truetype/freefont/FreeSans.ttf", "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"),
         ]
 
     for regular_path, bold_path in candidates:
@@ -368,19 +390,29 @@ def _draw_table_page(pdf, organization, school_name, course_names, classroom, la
     width, height = page_size
     margin = options["margin_points"]
     vertical_offset = margin - 32
+    parts = set(options.get("header_parts", HEADER_PARTS))
+    report_title = options.get("custom_title") or report_title
+    scale = options.get("scale", 1)
     pdf.setFillColor(HexColor("#183943"))
-    _draw_fitted_text(pdf, school_name, margin, height - 34 - vertical_offset, width - 2 * margin, bold, 14, 8)
-    pdf.setFont(bold, 11)
-    pdf.drawString(margin, height - 54 - vertical_offset, report_title)
+    if "school" in parts:
+        _draw_fitted_text(pdf, school_name, margin, height - 34 - vertical_offset, width - 2 * margin, bold, 14, 8)
+    if "title" in parts:
+        pdf.setFont(bold, 11)
+        pdf.drawString(margin, height - 54 - vertical_offset, report_title)
     pdf.setFillColor(HexColor("#52636A"))
-    _draw_fitted_text(pdf, organization.name, width - margin, height - 54 - vertical_offset,
-                      width - 2 * margin, regular, 8.5, 5, "right")
+    if "exam" in parts:
+        _draw_fitted_text(pdf, organization.name, width - margin, height - 54 - vertical_offset,
+                          width - 2 * margin, regular, 8.5, 5, "right")
     course_label = " · ".join(course_names) if course_names else "Genel sınav"
-    _draw_fitted_text(pdf, f"{organization.exam_date.strftime('%d.%m.%Y')}  ·  {course_label}",
-                      margin, height - 70 - vertical_offset, width - 2 * margin, regular, 8, 5)
+    date_course = [item for key, item in (("date", organization.exam_date.strftime('%d.%m.%Y')),
+                                          ("course", course_label)) if key in parts]
+    if date_course:
+        _draw_fitted_text(pdf, "  ·  ".join(date_course),
+                          margin, height - 70 - vertical_offset, width - 2 * margin, regular, 8, 5)
     pdf.setFillColor(HexColor("#245B52"))
-    _draw_fitted_text(pdf, f"{classroom.name}  ·  {layout.name}", margin, height - 91 - vertical_offset,
-                      width - 2 * margin, bold, 10, 6)
+    if "room" in parts:
+        _draw_fitted_text(pdf, f"{classroom.name}  ·  {layout.name}", margin, height - 91 - vertical_offset,
+                          width - 2 * margin, bold, 10, 6)
     table_top = height - 108 - vertical_offset
     available_width = width - 2 * margin
     weights = {"room": 90, "seat": 42, "school_number": 82, "name": 220,
@@ -395,9 +427,9 @@ def _draw_table_page(pdf, organization, school_name, course_names, classroom, la
     pdf.setFillColor(HexColor("#183943"))
     for index, header in enumerate(headers):
         _draw_fitted_text(pdf, header, x_positions[index] + 4, table_top - 14,
-                          col_widths[index] - 7, bold, 7.2, 5)
+                          col_widths[index] - 7, bold, 7.2 * scale, 5)
     y = table_top - 22
-    row_height = 22
+    row_height = _row_height(options)
     available_rows = max(1, int((table_top - margin - 10) / row_height))
     row_start = (page_number - 1) * available_rows
     for row_index, row in enumerate(rows[row_start:row_start + available_rows]):
@@ -420,13 +452,13 @@ def _draw_table_page(pdf, organization, school_name, course_names, classroom, la
                 name_lines, name_size = _fit_name(value[0], value[1], cell_width - 8, regular)
                 text_y = row_y + row_height - 8
                 for line in name_lines:
-                    font_size = min(7.2, name_size)
+                    font_size = min(7.2, name_size) * scale
                     pdf.setFont(regular, font_size)
                     pdf.drawString(cell_x + 4, text_y, line)
                     text_y -= font_size + 1
             else:
-                _draw_fitted_text(pdf, str(value), cell_x + 4, row_y + 6,
-                                  cell_width - 7, regular, 7.2, 5)
+                _draw_fitted_text(pdf, str(value), cell_x + 4, row_y + 6 * scale,
+                                  cell_width - 7, regular, 7.2 * scale, 5)
     pdf.setStrokeColor(HexColor("#D8E0E2"))
     footer_line_y = max(17, margin - 6)
     pdf.line(margin, footer_line_y, width - margin, footer_line_y)
@@ -475,8 +507,7 @@ def _build_room_report_pdf(session, organization, candidate_id, report_type, opt
         margin_offset = options["margin_points"] - 32
         table_top = page_size[1] - 108 - margin_offset
         content_height = table_top - options["margin_points"] - 10
-        row_height = 22
-        rows_per_page = max(1, int(content_height / row_height))
+        rows_per_page = max(1, int(content_height / _row_height(options)))
         page_count = max(1, (len(rows) + rows_per_page - 1) // rows_per_page)
         for page_index in range(page_count):
             pages.append((classroom, layout, rows, page_index + 1, page_count))
@@ -543,7 +574,7 @@ def build_class_student_list_pdf(session, organization, candidate_id: str, optio
     page_size = options["page_size"]
     margin_offset = options["margin_points"] - 32
     table_top = page_size[1] - 108 - margin_offset
-    rows_per_page = max(1, int((table_top - options["margin_points"] - 10) / 22))
+    rows_per_page = max(1, int((table_top - options["margin_points"] - 10) / _row_height(options)))
     pages = []
     for class_group, rows in sorted(grouped.items(), key=lambda item: (int(item[0][0]), item[0][1])):
         name_index = fields.index("name") if "name" in fields else None

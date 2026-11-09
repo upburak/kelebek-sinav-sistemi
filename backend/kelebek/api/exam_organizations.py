@@ -289,6 +289,7 @@ def _serialize_candidate(session, organization, candidate):
         "run_id": candidate.run_id,
         "generation_index": candidate.generation_index,
         "derived_from_candidate_id": candidate.derived_from_candidate_id,
+        "pinned_classroom_ids": json.loads(candidate.pinned_classroom_ids) if candidate.pinned_classroom_ids else [],
         "status": candidate.status,
         "affected_student_count": candidate.affected_student_count,
         "events": [{
@@ -399,6 +400,12 @@ def create_distribution_candidate(organization_id: str):
     if not isinstance(payload, dict):
         return jsonify({"error": "Aday bilgileri geçersiz."}), 400
     requested_run_id = payload.get("run_id")
+    base_candidate_id = payload.get("base_candidate_id")
+    pinned_classroom_ids = payload.get("pinned_classroom_ids") or []
+    if not isinstance(pinned_classroom_ids, list) or any(not isinstance(item, str) for item in pinned_classroom_ids):
+        return jsonify({"error": "Sabitlenecek derslik seçimi geçersiz."}), 400
+    if pinned_classroom_ids and (not isinstance(base_candidate_id, str) or not requested_run_id):
+        return jsonify({"error": "Derslik sabitlemek için önce mevcut bir adayı seçin."}), 400
     session_factory = current_app.extensions["kelebek_session_factory"]
     try:
         with session_factory.begin() as session:
@@ -462,21 +469,44 @@ def create_distribution_candidate(organization_id: str):
                     } for row in session.scalars(
                         select(SeatAssignment).where(SeatAssignment.candidate_id == previous_candidate.id)
                     ).all()])
-                generation_index = len(previous_candidates) + 1
+                generation_index = (max((item.generation_index for item in previous_candidates), default=0)) + 1
             else:
                 run = DistributionRun(organization_id=organization.id, status="completed", config_hash=config_hash)
                 session.add(run); session.flush()
                 generation_index = 1
+            fixed_assignments = {}
+            if pinned_classroom_ids:
+                base = session.get(DistributionCandidate, base_candidate_id)
+                if base is None or base.run_id != run.id:
+                    return jsonify({"error": "Sabitleme için seçilen aday bu dağıtım çalışmasına ait değil."}), 409
+                selected_room_ids = {room["id"] for room in rooms}
+                if set(pinned_classroom_ids) - selected_room_ids:
+                    return jsonify({"error": "Sabitlenecek derslik bu sınavda seçili değil."}), 409
+                if set(pinned_classroom_ids) == selected_room_ids:
+                    return jsonify({"error": "Tüm derslikler sabitlenemez; en az bir dersliği yeniden dağıtıma bırakın."}), 409
+                active_ids = {item.id for item in participants}
+                for row in session.scalars(select(SeatAssignment).where(SeatAssignment.candidate_id == base.id)).all():
+                    if row.seat_id and row.participant_id in active_ids and seat_labels.get(row.seat_id, {}).get("classroom_id") in pinned_classroom_ids:
+                        fixed_assignments[row.participant_id] = row.seat_id
+                fixed_seats = set(fixed_assignments.values())
+                for room in rooms:
+                    if room["id"] in pinned_classroom_ids:
+                        room["seats"] = [{**seat, "is_available": seat["is_available"] and seat["id"] in fixed_seats} for seat in room["seats"]]
+                        if not room["seats"] or not any(seat["is_available"] for seat in room["seats"]):
+                            rooms = [item for item in rooms if item["id"] != room["id"]]
             result = solve_candidate([{
                 "id": item.id, "class_level": item.class_level, "section": item.section,
                 "area": item.area, "first_name": item.first_name,
                 "last_name": item.last_name, "school_number": item.school_number,
-            } for item in participants], rooms, all_pairs, rules, previous_assignments=previous_assignments)
+            } for item in participants], rooms, all_pairs, rules, previous_assignments=previous_assignments,
+               fixed_assignments=fixed_assignments)
             candidate = DistributionCandidate(
                 run_id=run.id, status=result["status"],
                 affected_student_count=result["affected_student_count"],
                 objective_value=result["objective"],
                 generation_index=generation_index,
+                derived_from_candidate_id=base_candidate_id if pinned_classroom_ids else None,
+                pinned_classroom_ids=json.dumps(sorted(pinned_classroom_ids)) if pinned_classroom_ids else None,
             )
             session.add(candidate); session.flush()
             for assignment in result["assignments"]:

@@ -177,6 +177,8 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
             ),
             "rules": _serialize_rules(item),
             "selected_candidate_id": item.selected_candidate_id,
+            "archived_at": item.archived_at.isoformat() if item.archived_at else None,
+            "copied_from_organization_id": item.copied_from_organization_id,
             "report_status": report_status_by_org[item.id].get("seating_plan_pdf", {}).get("report_status", "not_generated"),
             "report_updated_at": report_status_by_org[item.id].get("seating_plan_pdf", {}).get("report_updated_at"),
             "report_statuses": report_status_by_org[item.id],
@@ -414,4 +416,6 @@ def create_organization(session: Session, payload: dict) -> dict:
         "capacity_deficit": len(participants_by_enrollment),
         "rules": {field: True for field in RULE_FIELDS},
         "selected_candidate_id": None,
+        "archived_at": None,
+        "copied_from_organization_id": None,
     }

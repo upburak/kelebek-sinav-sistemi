@@ -131,6 +131,8 @@ const areaOptions = ['Sayısal', 'Eşit Ağırlık', 'Sözel', 'Dil']
 
 export default function App() {
   const [health, setHealth] = useState<HealthState>('checking')
+  const [desktop, setDesktop] = useState(false)
+  const [stopped, setStopped] = useState(false)
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([])
   const [activeYearId, setActiveYearId] = useState<string | null>(null)
   const [draftYearId, setDraftYearId] = useState<string | null>(null)
@@ -173,7 +175,7 @@ export default function App() {
         if (!response.ok) throw new Error('API yanıt vermedi')
         return response.json()
       })
-      .then(() => setHealth('online'))
+      .then((data: { desktop?: boolean }) => { setHealth('online'); setDesktop(Boolean(data.desktop)) })
       .catch((error: unknown) => {
         if (error instanceof Error && error.name === 'AbortError') return
         setHealth('offline')
@@ -657,6 +659,7 @@ export default function App() {
             <span className="status-dot" />
             {statusText}
           </span>
+          {desktop && <button type="button" className="confirm-year" data-testid="app-shutdown-btn" disabled={stopped} onClick={() => { if (window.confirm('Uygulama kapatılsın mı? Tüm veriler kaydedildi.')) void fetch('/api/app/shutdown', { method: 'POST' }).then(() => setStopped(true)) }}>{stopped ? 'Kapatıldı · sekmeyi kapatabilirsiniz' : 'Uygulamayı kapat'}</button>}
         </div>
       </header>
 

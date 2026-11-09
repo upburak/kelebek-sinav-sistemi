@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '127.0.0.1',
+    allowedHosts: process.env.KELEBEK_ALLOWED_HOSTS ? true : undefined,
     proxy: {
       '/api': apiProxyTarget,
     },

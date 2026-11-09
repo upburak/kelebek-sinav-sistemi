@@ -200,6 +200,9 @@ class BackupRestoreTests(unittest.TestCase):
             with sqlite3.connect(older_database.name) as database:
                 database.execute("ALTER TABLE distribution_reports DROP COLUMN file_sha256")
                 database.execute("ALTER TABLE exam_participants DROP COLUMN is_active")
+                database.execute("ALTER TABLE exam_organizations DROP COLUMN archived_at")
+                database.execute("ALTER TABLE exam_organizations DROP COLUMN copied_from_organization_id")
+                database.execute("ALTER TABLE distribution_candidates DROP COLUMN pinned_classroom_ids")
                 database.execute(
                     "UPDATE alembic_version SET version_num=?",
                     ("0014_completed_distribution_edits",),
@@ -224,7 +227,7 @@ class BackupRestoreTests(unittest.TestCase):
         preview = response.get_json()["preview"]
         self.assertTrue(preview["migration_required"])
         self.assertEqual(preview["schema_revision"], "0014_completed_distribution_edits")
-        self.assertEqual(preview["target_schema_revision"], "0016_exam_participant_active")
+        self.assertEqual(preview["target_schema_revision"], "0017_exam_archive_and_pins")
 
         restored = self.client.post(
             "/api/backups/restore/confirm",
@@ -235,7 +238,7 @@ class BackupRestoreTests(unittest.TestCase):
         with sqlite3.connect(database_uri, uri=True) as database:
             self.assertEqual(
                 database.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                "0016_exam_participant_active",
+                "0017_exam_archive_and_pins",
             )
             self.assertIn("file_sha256", {
                 row[1] for row in database.execute("PRAGMA table_info(distribution_reports)")

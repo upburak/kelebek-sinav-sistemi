@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import ExamLifecyclePanel from './ExamLifecyclePanel'
+import { subscribeLocks, takeOverEditing, type EditLocks } from './editSession'
 
 type GroupOption = {
   class_level: string
@@ -12,7 +14,7 @@ type CourseDraft = { id: number; name: string; groupKeys: string[] }
 type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back'
 type RuleSet = Record<RuleKey, boolean>
 type CandidateAssignment = { participant_id: string; seat_id: string | null; seat_number: number | null; classroom_id: string | null; classroom_name: string | null; first_name: string; last_name: string; school_number: string; class_level: string; section: string; area: string | null }
-type CandidatePreview = { candidate_id: string; run_id: string; generation_index: number; derived_from_candidate_id: string | null; status: string; affected_student_count: number; events: { id: string; event_type: string; participant_id: string; participant_name: string; school_number: string; displaced_participant_id: string | null; from_seat_id: string | null; to_seat_id: string | null; related_event_id: string | null; created_at: string }[]; history: { can_undo: boolean; can_redo: boolean; undo_count: number; redo_count: number; undo_event_id: string | null; redo_event_id: string | null }; report_status?: 'not_generated' | 'current' | 'stale'; report_statuses?: Partial<Record<ReportKind, { report_status: ReportStatus; report_updated_at: string | null }>>; available_seats: { seat_id: string; seat_number: number; classroom_id: string; classroom_name: string }[]; summary: { groups: { class_level: string; section: string; area: string | null; student_count: number }[]; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[]; waiting_count: number }; assignments: CandidateAssignment[]; plan: { classroom_id: string; classroom_name: string; layout_id: string; layout_name: string; desks: { desk_id: string; label: string; block_label: string; x: number; y: number; seats: { seat_id: string; seat_number: number; seat_index: number; x: number | null; y: number | null; is_available: boolean; student: CandidateAssignment | null }[] }[] }[] }
+type CandidatePreview = { candidate_id: string; run_id: string; generation_index: number; derived_from_candidate_id: string | null; pinned_classroom_ids?: string[]; status: string; affected_student_count: number; events: { id: string; event_type: string; participant_id: string; participant_name: string; school_number: string; displaced_participant_id: string | null; from_seat_id: string | null; to_seat_id: string | null; related_event_id: string | null; created_at: string }[]; history: { can_undo: boolean; can_redo: boolean; undo_count: number; redo_count: number; undo_event_id: string | null; redo_event_id: string | null }; report_status?: 'not_generated' | 'current' | 'stale'; report_statuses?: Partial<Record<ReportKind, { report_status: ReportStatus; report_updated_at: string | null }>>; available_seats: { seat_id: string; seat_number: number; classroom_id: string; classroom_name: string }[]; summary: { groups: { class_level: string; section: string; area: string | null; student_count: number }[]; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[]; waiting_count: number }; assignments: CandidateAssignment[]; plan: { classroom_id: string; classroom_name: string; layout_id: string; layout_name: string; desks: { desk_id: string; label: string; block_label: string; x: number; y: number; seats: { seat_id: string; seat_number: number; seat_index: number; x: number | null; y: number | null; is_available: boolean; student: CandidateAssignment | null }[] }[] }[] }
 type ReportStatus = 'not_generated' | 'current' | 'stale'
 type ReportKind = 'seating_plan_pdf' | 'attendance_pdf' | 'room_student_list_pdf'
 type FinalReview = { candidate_id: string; participant_count: number; seated_count: number; unassigned_count: number; available_capacity: number; empty_seats: number; affected_student_count: number; violation_count: number; can_finalize: boolean; rooms: { classroom_id: string; classroom_name: string; available_seats: number; assigned_students: number; empty_seats: number }[] }
@@ -52,6 +54,8 @@ type ExamOrganization = {
   capacity_deficit: number
   rules: RuleSet
   selected_candidate_id: string | null
+  archived_at: string | null
+  copied_from_organization_id: string | null
 }
 
 type Props = {
@@ -82,6 +86,8 @@ function historyEventLabel(eventType: string) {
   if (eventType === 'seat_to_pool') return 'Havuza alma'
   if (eventType === 'undo') return 'Geri alma'
   if (eventType === 'redo') return 'Yineleme'
+  if (eventType === 'student_refresh') return 'Güncel bilgiyle havuza alma'
+  if (eventType === 'participant_removed') return 'Listeden çıkarma'
   return 'Değişiklik'
 }
 
@@ -110,7 +116,11 @@ function GroupSelector({
   </div>
 }
 
-export default function ExamOrganizer({ academicYearId, academicYearLabel, readOnly, onStudents, onClassrooms }: Props) {
+export default function ExamOrganizer({ academicYearId, academicYearLabel, readOnly: yearReadOnly, onStudents, onClassrooms }: Props) {
+  const readOnly = yearReadOnly
+  const [reloadKey, setReloadKey] = useState(0)
+  const [locks, setLocks] = useState<EditLocks>({})
+  useEffect(() => subscribeLocks(setLocks), [])
   const [organizations, setOrganizations] = useState<ExamOrganization[]>([])
   const [groups, setGroups] = useState<GroupOption[]>([])
   const [courseCatalog, setCourseCatalog] = useState<CourseOption[]>([])
@@ -194,7 +204,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [academicYearId])
+  }, [academicYearId, reloadKey])
 
   const selectedGroupKeys = useMemo(() => withCourses
     ? Array.from(new Set(courses.flatMap((course) => course.groupKeys)))
@@ -649,10 +659,12 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       {organizations.map((organization) => {
         const selectedRoomCount = organization.room_selections?.length ?? 0
         const roomEditorOpen = activeRoomOrganizationId === organization.id
-        return <article className="exam-organization-card-wrap" key={organization.id}>
+        const lockedByOther = Boolean(locks[organization.id] && !locks[organization.id].mine)
+        const readOnly = yearReadOnly || lockedByOther || Boolean(organization.archived_at)
+        return <article className="exam-organization-card-wrap" key={organization.id} data-testid={`exam-card-${organization.id}`}>
           <div className="exam-organization-card">
             <div className="exam-date-block"><strong>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { day: '2-digit' })}</strong><span>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { month: 'short' })}</span></div>
-            <div className="exam-organization-copy"><span className="exam-status">{organization.status === 'completed' ? 'Tamamlandı' : 'Taslak'}</span><h3>{organization.name}</h3><p>{organization.course_names.length ? organization.course_names.join(' · ') : 'Genel sınav'} · {organization.participant_count} öğrenci</p></div>
+            <div className="exam-organization-copy"><span className="exam-status" data-testid={`exam-status-${organization.id}`}>{organization.archived_at ? 'Tamamlandı · Arşiv' : organization.status === 'completed' ? 'Kesinleşti' : organization.copied_from_organization_id ? 'Taslak · Kopya' : 'Taslak'}</span><h3>{organization.name}</h3><p>{organization.course_names.length ? organization.course_names.join(' · ') : 'Genel sınav'} · {organization.participant_count} öğrenci</p></div>
             <div className="exam-organization-meta"><small>{organization.course_count} ders</small><small>{organization.exam_date}</small><small>{selectedRoomCount ? `${selectedRoomCount} derslik · ${organization.available_capacity} kullanılabilir yer` : 'Derslik seçilmedi'}</small></div>
             <button className="exam-room-open" type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRoomEditor(organization)}>{roomEditorOpen ? 'Derslik seçimini kapat' : selectedRoomCount ? 'Derslikleri düzenle' : 'Derslik seç'}</button>
             {organization.status === 'completed' && <div className="exam-report-action exam-report-actions">{([
@@ -665,6 +677,8 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
             })}</div>}
           </div>
           {reportError && reportErrorId === organization.id && <p className="exam-error" role="alert">{reportError}</p>}
+          {lockedByOther && <div className="edit-lock-banner" role="status" data-testid={`edit-lock-banner-${organization.id}`}><span><strong>Önizleme modu · salt okunur</strong>Bu sınav başka bir sekmede düzenleniyor. Burada yalnızca görüntüleyebilirsin.</span><button type="button" data-testid={`edit-lock-takeover-${organization.id}`} onClick={() => void takeOverEditing(organization.id)}>Düzenlemeyi bu sekmeye al</button></div>}
+          <ExamLifecyclePanel organization={organization} candidates={candidates[organization.id] ?? []} readOnly={readOnly} yearReadOnly={yearReadOnly} onReload={() => setReloadKey((key) => key + 1)} />
           {roomEditorOpen && <div className="exam-room-panel">
             <div className="exam-room-panel-heading"><div><strong>Adım 02 · Derslik ve kapasite</strong><small>Her fiziksel derslikten bir düzen seç. Kullanım dışı yerler kapasiteye sayılmaz.</small></div><span>{organization.participant_count} öğrenci</span></div>
             {!roomOptionsByClassroom.length ? <div className="exam-empty room-empty"><strong>Bu eğitim yılı için oturma düzeni yok.</strong><span>Derslik oluşturup bu eğitim yılına ait masa ve oturma yeri düzeni hazırlamalısın.</span><button type="button" onClick={onClassrooms}>Derslik düzenlerine git</button></div> : <div className="exam-room-options">
@@ -695,7 +709,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
               && (organization.status === 'draft' || organization.status === 'completed')
               && organization.selected_candidate_id === candidate.candidate_id
             return <div className={`exam-candidate-result ${organization.selected_candidate_id === candidate.candidate_id ? 'selected' : ''}`} key={candidate.candidate_id}>
-            <strong>Aday {candidateIndex + 1}{candidate.derived_from_candidate_id ? ' · Manuel sürüm' : candidateIndex === 0 ? ' · İlk dağıtım' : ' · Alternatif'}</strong>
+            <strong>Aday {candidateIndex + 1}{candidate.pinned_classroom_ids?.length ? ` · Sabitlemeli alternatif (${candidate.pinned_classroom_ids.length} derslik korundu)` : candidate.derived_from_candidate_id ? ' · Manuel sürüm' : candidateIndex === 0 ? ' · İlk dağıtım' : ' · Alternatif'}</strong>
             <span>{candidate.assignments.length} öğrenci · {candidate.summary.waiting_count} bekleyen · {candidate.affected_student_count} kural ihlalinden etkilenen öğrenci · {candidate.status === 'optimal' ? 'Denge açısından en iyi bulundu' : candidate.status === 'manual' ? 'Manuel değişiklik' : 'Geçerli aday'}</span>
             <div className="candidate-room-summary">{candidate.summary.rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students} öğrenci / {room.available_seats} yer · {room.empty_seats} boş</small>)}</div>
             <div className="candidate-group-summary">{candidate.summary.groups.map((group) => <small key={`${group.class_level}-${group.section}-${group.area ?? ''}`}>{group.class_level}/{group.section}{group.area ? ` · ${group.area}` : ''}: {group.student_count} öğrenci</small>)}</div>

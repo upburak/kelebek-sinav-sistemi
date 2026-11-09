@@ -964,3 +964,28 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .administrator-row { grid-template-columns: 1fr; }
   .administrator-section .section-heading { align-items: flex-start; flex-direction: column; }
 }
+
+.edit-lock-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 18px 12px; padding: 12px 14px; border: 1px solid #f0d9a8; border-radius: 10px; background: #fff8e8; color: #7a5a17; font-size: 11px; }
+.edit-lock-banner span { display: grid; gap: 3px; }
+.edit-lock-banner button, .lifecycle-block button { justify-self: start; padding: 7px 12px; border: 1px solid #d8d4f4; border-radius: 8px; background: #fff; color: #4b40c0; font-size: 11px; font-weight: 700; cursor: pointer; }
+.lifecycle-block button:disabled { color: #9aa1ad; cursor: not-allowed; }
+.lifecycle-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 18px 14px; }
+.lifecycle-block { display: grid; gap: 8px; align-content: start; padding: 13px; border: 1px solid #e3e8ee; border-radius: 10px; background: #fbfcfd; color: #4f5d6b; font-size: 11px; }
+.exam-organization-card-wrap > .lifecycle-block { margin: 0 18px 14px; }
+.lifecycle-block > strong { color: #263449; font-size: 12px; }
+.lifecycle-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.lifecycle-chips label { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid #e0e4ec; border-radius: 999px; background: #fff; cursor: pointer; }
+.lifecycle-chips label.selected { border-color: #9c94ea; background: #f2f0ff; }
+.lifecycle-changes { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.lifecycle-changes label { display: flex; gap: 8px; align-items: flex-start; }
+.lifecycle-changes span { display: grid; gap: 2px; }
+.lifecycle-changes small { color: #a0521f; }
+.lifecycle-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.lifecycle-row input { padding: 6px 8px; border: 1px solid #dfe6f0; border-radius: 7px; font: inherit; }
+.lifecycle-ok { color: #2f7a52; }
+.report-header-settings { flex-wrap: wrap; }
+.report-header-parts { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; }
+.report-header-parts label { display: inline-flex; gap: 5px; align-items: center; }
+.report-ready { display: grid; gap: 7px; margin: 14px 0; padding: 14px 16px; border: 1px solid #f0d9a8; border-radius: 12px; background: #fffaf0; color: #6d5520; font-size: 12px; }
+.report-ready label { display: flex; gap: 8px; align-items: center; }
+@media (max-width: 800px) { .lifecycle-panel { grid-template-columns: 1fr; } }

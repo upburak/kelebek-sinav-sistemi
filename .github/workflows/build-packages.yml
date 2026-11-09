@@ -1,0 +1,44 @@
+name: Paketleri oluştur
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            script: ./scripts/build-macos.sh
+            shell: bash
+          - os: windows-latest
+            script: ./scripts/build-windows.ps1
+            shell: pwsh
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Windows için Inno Setup
+        if: runner.os == 'Windows'
+        run: choco install innosetup -y --no-progress
+      - name: Paketle
+        shell: ${{ matrix.shell }}
+        run: ${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kelebek-${{ runner.os }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.sha256
+            dist/SHA256SUMS.txt
+          if-no-files-found: error

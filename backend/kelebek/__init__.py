@@ -1,12 +1,14 @@
 """Kelebek Sınav Sistemi Flask uygulaması."""
 
 import threading
+from pathlib import Path
 
-from flask import Flask, g, jsonify, request
+from flask import Flask, g, jsonify, request, send_from_directory
 
 from kelebek.api.academic_years import academic_year_api
 from kelebek.api.backups import backups_api
 from kelebek.api.classrooms import classrooms_api
+from kelebek.api.exam_lifecycle import exam_lifecycle_api, guard_exam_writes
 from kelebek.api.exam_organizations import exam_organizations_api
 from kelebek.api.health import health_api
 from kelebek.api.school_profile import school_profile_api
@@ -24,7 +26,22 @@ from kelebek.services.backup_restore import (
 _api_request_lock = threading.RLock()
 
 
-def create_app() -> Flask:
+def _register_frontend(app: Flask, frontend_dist: Path) -> None:
+    """Paketlenmiş uygulamada derlenmiş arayüzü aynı yerel adresten sun."""
+    index = frontend_dist / "index.html"
+
+    @app.get("/", defaults={"path": ""})
+    @app.get("/<path:path>")
+    def frontend(path: str):
+        if path.startswith("api/"):
+            return jsonify({"error": "Bulunamadı."}), 404
+        target = frontend_dist / path
+        if path and target.is_file() and frontend_dist in target.resolve().parents:
+            return send_from_directory(frontend_dist, path)
+        return send_from_directory(frontend_dist, index.name)
+
+
+def create_app(frontend_dist: Path | None = None, allowed_hosts: set[str] | None = None) -> Flask:
     """Uygulamayı oluştur, veritabanını güncelle ve API uç noktalarını kaydet."""
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 513 * 1024 * 1024
@@ -37,6 +54,15 @@ def create_app() -> Flask:
         ensure_daily_backup()
     except Exception:
         app.logger.exception("Günlük otomatik yedek alınamadı; uygulama açılmaya devam ediyor.")
+
+    if allowed_hosts:
+        @app.before_request
+        def reject_foreign_hosts():
+            if request.host not in allowed_hosts:
+                return jsonify({"error": "Yalnızca bu bilgisayardan erişilebilir."}), 403
+            origin = request.headers.get("Origin")
+            if origin and origin.split("://", 1)[-1] not in allowed_hosts:
+                return jsonify({"error": "Yalnızca bu bilgisayardan erişilebilir."}), 403
 
     @app.before_request
     def ensure_daily_backup_for_active_day():
@@ -62,6 +88,10 @@ def create_app() -> Flask:
     app.register_blueprint(student_import_api, url_prefix="/api")
     app.register_blueprint(students_api, url_prefix="/api")
     app.register_blueprint(exam_organizations_api, url_prefix="/api")
+    app.register_blueprint(exam_lifecycle_api, url_prefix="/api")
+    app.before_request(guard_exam_writes)
+    if frontend_dist and (frontend_dist / "index.html").is_file():
+        _register_frontend(app, frontend_dist)
 
     @app.errorhandler(413)
     def request_too_large(_error):
