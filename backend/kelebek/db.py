@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from contextlib import closing
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -40,7 +41,9 @@ def _backup_database(db_path: Path) -> Path:
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     backup_path = backup_dir / f"pre-migration-{timestamp}.sqlite3"
 
-    with sqlite3.connect(db_path) as source, sqlite3.connect(backup_path) as destination:
+    # Bağlantılar açıkça kapatılır; `with sqlite3.connect(...)` yalnızca işlemi
+    # tamamlar, dosyayı serbest bırakmaz ve Windows'ta kilit bırakır.
+    with closing(sqlite3.connect(db_path)) as source, closing(sqlite3.connect(backup_path)) as destination:
         source.backup(destination)
 
     logger.info("Migration öncesi yerel veritabanı yedeği oluşturuldu.")

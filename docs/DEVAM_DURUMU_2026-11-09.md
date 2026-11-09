@@ -8,7 +8,7 @@ değiştirilmedi. Bu oturumda yeni özellik eklenmedi; amaç projeyi macOS ve Wi
 
 ## Bu oturumda yapılan testler
 
-- Birim testleri: 29 → 38 test (yeni gerileme testleri eklendi), tamamı geçiyor.
+- Birim testleri: 29 → 41 benzersiz test (yeni gerileme testleri; çifte koşum giderildi), tamamı geçiyor.
 - Uçtan uca API testleri: 53 test, elle hazırlık gerekmeden geçiyor.
 - Arayüz: `npm run build` (TypeScript + Vite) başarılı.
 - Lint: `ruff` ile 117 bulgu vardı, tamamı giderildi; kural kümesi `pyproject.toml` içinde sabitlendi.
@@ -35,6 +35,23 @@ değiştirilmedi. Bu oturumda yeni özellik eklenmedi; amaç projeyi macOS ve Wi
 4. **Kurulum yalnızca Python 3.12 ile çalışıyordu.** `pyproject.toml` ">=3.12" demesine karşın
    betikler tam olarak `python3.12` veya Windows Python Launcher'ı arıyordu. İki betik de artık
    3.12 ve üzeri herhangi bir sürümü buluyor; `build-windows.ps1` aynı kurulum yolunu kullanıyor.
+
+## CI'ın yakaladığı Windows hataları
+
+Yeni iş akışının ilk koşusunda macOS, Ubuntu, uçtan uca ve arayüz işleri geçti;
+**Windows birim testleri kırmızı yandı.** Yani iş akışı ilk gününde işini yaptı.
+
+5. **İptal edilen geri yükleme önizlemesi kullanıcının veritabanı kopyasını geride
+   bırakıyordu.** `discard_pending_restore` `ignore_errors=True` ile siliyor, silemese
+   bile "iptal edildi" diyordu. Silme artık yeniden denenir ve sonucu dürüstçe günlüğe
+   yazılır. Gerileme testi: `backend/tests/test_restore_staging_cleanup.py`.
+6. **Üç yerde SQLite bağlantısı kapatılmıyordu.** `with sqlite3.connect(...)` bağlantıyı
+   kapatmaz, yalnızca işlemi tamamlar; Windows'ta bu dosya kilidi demek. Geri yükleme
+   şema doğrulaması, bütünlük kontrolü ve migration öncesi yedek `contextlib.closing`
+   ile düzeltildi.
+7. **Testlerin bir bölümü iki kez çalışıyordu.** İki dosya başka bir test sınıfını modül
+   düzeyinde içe aktardığı için `unittest` onları ikinci kez topluyordu; `BackupRestoreTests`
+   her koşuda 8 yerine 16 test çalıştırıyordu. Süit artık 41 benzersiz test.
 
 ## Kullanışsız olup düzeltilen bölümler
 

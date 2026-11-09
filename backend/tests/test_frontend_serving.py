@@ -49,7 +49,10 @@ class FrontendServingTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _client(self, dist: Path):
-        return create_app(frontend_dist=dist).test_client()
+        app = create_app(frontend_dist=dist)
+        # Windows açık SQLite dosyasını silmeye izin vermez; motor testin sonunda kapatılır.
+        self.addCleanup(app.extensions["kelebek_engine"].dispose)
+        return app.test_client()
 
     def _assert_serves_assets(self, dist: Path, label: str):
         client = self._client(dist)

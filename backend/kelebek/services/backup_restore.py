@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import shutil
@@ -13,6 +14,7 @@ import sqlite3
 import threading
 import time
 import zipfile
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -33,6 +35,8 @@ from kelebek.services.backup import (
     _prune_backups,
     _store_package,
 )
+
+logger = logging.getLogger("kelebek.backup_restore")
 
 MAX_BACKUP_BYTES = 512 * 1024 * 1024
 MAX_BACKUP_FILES = 4096
@@ -212,7 +216,10 @@ def _upgrade_and_check_database(database_path: Path, schema_revision: str) -> tu
             command.upgrade(config, "head")
             connection.commit()
 
-        with sqlite3.connect(_read_only_sqlite_uri(database_path), uri=True) as database:
+        # `with sqlite3.connect(...)` bağlantıyı KAPATMAZ, yalnızca işlemi tamamlar.
+        # Açık kalan bağlantı Windows'ta dosyayı kilitler; önizleme iptal edildiğinde
+        # hazırlık klasörü silinemez ve kullanıcının veritabanı kopyası geride kalır.
+        with closing(sqlite3.connect(_read_only_sqlite_uri(database_path), uri=True)) as database:
             integrity = database.execute("PRAGMA integrity_check").fetchone()
             foreign_key_error = database.execute("PRAGMA foreign_key_check").fetchone()
             revision_row = database.execute(
@@ -420,18 +427,46 @@ def inspect_uploaded_backup(upload_stream) -> tuple[str, dict]:
         raise
 
 
+def _remove_stage_dir(stage_dir: Path) -> bool:
+    """Hazırlık klasörünü gerçekten sil; silinemezse bunu gizlemeyip bildir.
+
+    Windows bir dosyayı açık tutan son tutamak bırakılana kadar silinmesine izin
+    vermez; tutamak genelde birkaç yüz milisaniyede serbest kalır. Bu yüzden kısa
+    aralıklarla yeniden denenir. Yine de silinemezse klasör bir sonraki açılışta
+    ``cleanup_stale_restore_staging`` ile temizlenir ve burada günlüğe yazılır:
+    klasör kullanıcının veritabanının bir kopyasını taşıdığı için sessizce
+    geride bırakılmamalıdır.
+    """
+    for attempt in range(6):
+        try:
+            shutil.rmtree(stage_dir)
+        except FileNotFoundError:
+            return True
+        except OSError:
+            if attempt < 5:
+                time.sleep(0.2)
+                continue
+        if not stage_dir.exists():
+            return True
+    logger.warning(
+        "Geri yükleme hazırlık klasörü şimdi silinemedi; bir sonraki açılışta temizlenecek."
+    )
+    return False
+
+
 def discard_pending_restore(token: str) -> bool:
     """Remove an unconfirmed staged package and its private temporary data."""
     with _pending_lock:
         pending = _pending_restores.pop(token, None)
     if pending is None:
         return False
-    shutil.rmtree(pending.stage_dir, ignore_errors=True)
+    # Önizleme her durumda iptal edilmiştir; klasör silinemezse yalnızca günlüğe yazılır.
+    _remove_stage_dir(pending.stage_dir)
     return True
 
 
 def _integrity_check(path: Path) -> None:
-    with sqlite3.connect(_read_only_sqlite_uri(path), uri=True) as database:
+    with closing(sqlite3.connect(_read_only_sqlite_uri(path), uri=True)) as database:
         result = database.execute("PRAGMA integrity_check").fetchone()
         foreign_key_error = database.execute("PRAGMA foreign_key_check").fetchone()
     if not result or result[0] != "ok" or foreign_key_error:
@@ -448,7 +483,7 @@ def apply_confirmed_restore(token: str, confirmed: bool, engine) -> dict:
             raise ValueError("Önizleme süresi dolmuş. Yedek dosyasını yeniden seçin.")
         if time.monotonic() - pending.created_at > PENDING_RESTORE_TTL_SECONDS:
             _pending_restores.pop(token, None)
-            shutil.rmtree(pending.stage_dir, ignore_errors=True)
+            _remove_stage_dir(pending.stage_dir)
             raise ValueError("Önizleme süresi dolmuş. Yedek dosyasını yeniden seçin.")
         _pending_restores.pop(token, None)
 

@@ -30,6 +30,29 @@ yapılan testlerde bulunan hataları giderir ve doğrulamayı sürekli hale geti
   herhangi bir sürümü buluyor; Windows derlemesi de aynı kurulum yolunu kullanıyor.
 - Raporlarda ölü değişken ve kod temizliği; tüm depoda `ruff` uyarısı kalmadı.
 
+### CI'ın yakaladığı Windows hataları
+
+Yeni test iş akışının ilk koşusu Windows'ta kırmızı yandı; macOS, Ubuntu, uçtan uca
+ve arayüz işleri geçti. Çıkan iki sorun giderildi:
+
+- **İptal edilen geri yükleme önizlemesi veri klasöründe kopya bırakıyordu.**
+  `discard_pending_restore` silme işlemini `ignore_errors=True` ile yapıyor ve
+  silemese bile kullanıcıya "iptal edildi" diyordu. Windows, dosyayı açık tutan
+  tutamak serbest kalana kadar silmeye izin vermediği için klasör kalıyordu — içinde
+  kullanıcının veritabanının bir kopyası vardı. Silme artık kısa aralıklarla yeniden
+  denenir, başarısız olursa günlüğe yazılır ve bir sonraki açılışta temizlenir.
+- **Kapatılmayan SQLite bağlantıları.** `with sqlite3.connect(...)` bağlantıyı
+  kapatmaz, yalnızca işlemi tamamlar. Üç yerde (geri yükleme şema doğrulaması,
+  geri yüklenen veritabanının bütünlük kontrolü ve migration öncesi yedek)
+  bağlantılar açık kalıyordu; Windows'ta dosya kilidi, her yerde tutamak sızıntısı
+  anlamına geliyordu. Hepsi `contextlib.closing` ile kapatıldı.
+- Testler artık `unittest` geçici klasörünü silemeden kalmıyor; uygulama motoru
+  her testin sonunda kapatılıyor.
+- **Testlerin bir bölümü iki kez çalışıyordu:** iki test dosyası başka bir test
+  sınıfını modül düzeyinde içe aktardığı için `unittest` onları ikinci kez topluyordu
+  (`BackupRestoreTests`'in 8 testi her koşuda 16 kez çalışıyordu). Giderildi;
+  süit 41 benzersiz test.
+
 ### Test ve doğrulama
 
 - **Otomatik test iş akışı eklendi** (`.github/workflows/tests.yml`): her gönderimde
