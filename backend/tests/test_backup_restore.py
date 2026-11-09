@@ -241,7 +241,9 @@ class BackupRestoreTests(unittest.TestCase):
         )
         self.assertEqual(restored.status_code, 200, restored.get_json())
         database_uri = (self.data_dir / "kelebek.sqlite3").as_uri() + "?mode=ro"
-        with sqlite3.connect(database_uri, uri=True) as database:
+        # closing() olmadan bağlantı açık kalır ve Windows veri klasörünün
+        # silinmesine izin vermez (`with` yalnızca işlemi tamamlar).
+        with closing(sqlite3.connect(database_uri, uri=True)) as database:
             self.assertEqual(
                 database.execute("SELECT version_num FROM alembic_version").fetchone()[0],
                 "0017_exam_archive_and_pins",
