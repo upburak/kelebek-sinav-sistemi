@@ -1039,3 +1039,13 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .exam-candidate-result .violation-suggestion button { padding: 4px 9px; border: 1px solid #8cc3a6; border-radius: 6px; background: #fff; color: #23704a; font: inherit; font-weight: 700; cursor: pointer; }
 .exam-candidate-result .violation-suggestion small { padding: 0; border: 0; background: none; color: #6a7b72; }
 .candidate-stopped-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #fff1d6; color: #8a5a00; font-size: 10px; font-style: normal; font-weight: 700; vertical-align: middle; }
+.exam-candidate-result .candidate-violations > .violation-fix-all { justify-self: start; padding: 6px 12px; border: 1px solid #d9473b; border-radius: 8px; background: #d9473b; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.exam-candidate-result .candidate-violations > .violation-fix-all:disabled { opacity: .6; cursor: wait; }
+.whats-new-backdrop { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: rgba(18, 34, 44, .45); backdrop-filter: blur(6px); }
+.whats-new-card { display: grid; gap: 12px; width: min(480px, calc(100vw - 40px)); padding: 28px 30px; border-radius: 16px; background: #fff; box-shadow: 0 30px 80px rgba(16, 32, 44, .3); color: #34465a; font-size: 13px; animation: whats-new-in .35s ease-out; }
+.whats-new-card h2 { margin: 0; color: #1d2c3c; font-size: 20px; }
+.whats-new-card ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.8; }
+.whats-new-card p { margin: 0; color: #6a7885; font-size: 12px; }
+.whats-new-card button { justify-self: start; padding: 10px 16px; border: 0; border-radius: 9px; background: #1f6a5a; color: #fff; font-weight: 700; cursor: pointer; transition: background-color .15s; }
+.whats-new-card button:hover { background: #185447; }
+@keyframes whats-new-in { from { opacity: 0; transform: translateY(12px); } }

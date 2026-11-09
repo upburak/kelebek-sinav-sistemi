@@ -30,6 +30,10 @@
 
 ## 0.2.0
 
+- Tek komutla sürüm: `scripts/release.py` sürüm/notları günceller, tam kurulum paketini ve önceki sürüme göre imzalı güncelleme paketini birlikte üretir.
+- "Tümünü düzelt": ihlalli öğrencileri önerilen ihlalsiz yerlere tek seferde taşır (taslakta yeni manuel sürüm, kesinleşmişte işlem geçmişiyle).
+- Yenilikler penceresi: güncellemeden sonraki ilk açılışta yeni sürümün notları gösterilir (`kelebek/release_notes.py`).
+
 - Güncelleme imzası: paketler Ed25519 ile imzalanır (`scripts/update_signing.py`), uygulama yalnızca gömülü yayıncı anahtarıyla doğrulanan paketleri kabul eder; anahtar tanımlı değilse güncelleme reddedilir.
 - İhlal çözüm önerisi: ihlalli her öğrenci için kendi ihlalini gideren ve yeni ihlal yaratmayan en yakın boş yer önerilir; "Taşı ve düzelt" tek dokunuşla uygular (işlem geçmişine yazılır, geri alınabilir).
 - Erken durdurulan adaylar "Erken durduruldu" etiketiyle kaydedilir.

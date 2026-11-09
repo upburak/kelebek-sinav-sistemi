@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import ClassroomManager from './ClassroomManager'
 import BackupManager from './BackupManager'
 import UpdateManager from './UpdateManager'
+import WhatsNewDialog from './WhatsNewDialog'
 import ExamOrganizer from './ExamOrganizer'
 import ReportCenter from './ReportCenter'
 
@@ -778,6 +779,7 @@ export default function App() {
         />}
 
         {activeSection === 'backup' && <><BackupManager /><UpdateManager /></>}
+        <WhatsNewDialog />
 
         {activeSection === 'reports' && <ReportCenter
           academicYearId={activeYearId}

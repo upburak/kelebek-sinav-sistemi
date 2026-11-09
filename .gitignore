@@ -60,3 +60,6 @@ credentials.json
 # Güncelleme imzalama anahtarları asla depoya girmez
 *.pem
 .kelebek-signing/
+
+# Sürüm kopyaları (artımlı güncelleme için yerelde saklanır)
+releases/

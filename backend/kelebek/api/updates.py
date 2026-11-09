@@ -1,12 +1,16 @@
 """Artımlı güncelleme API'si: paket önizleme, iptal ve onaylı uygulama."""
 
+import json
 import logging
 import threading
 
 from flask import Blueprint, current_app, jsonify, request
 
+from kelebek.config import get_data_dir
+from kelebek.release_notes import RELEASE_NOTES
 from kelebek.services import app_update
 from kelebek.services.backup import create_safety_backup
+from kelebek.version import APP_VERSION
 
 updates_api = Blueprint("updates", __name__)
 logger = logging.getLogger(__name__)
@@ -15,6 +19,43 @@ logger = logging.getLogger(__name__)
 @updates_api.get("/updates/status")
 def get_update_status():
     return jsonify(app_update.status())
+
+
+def _ui_state_path():
+    return get_data_dir() / "ui_state.json"
+
+
+def _parse_version(value: str) -> tuple[int, ...]:
+    try:
+        return tuple(int(part) for part in value.split("."))
+    except (AttributeError, ValueError):
+        return (0,)
+
+
+@updates_api.get("/app/whats-new")
+def get_whats_new():
+    """Güncellemeden sonraki ilk açılışta, görülmemiş sürümlerin notlarını döndür."""
+    try:
+        state = json.loads(_ui_state_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = {}
+    last_seen = state.get("last_seen_version")
+    if last_seen is None:
+        _ui_state_path().write_text(json.dumps({**state, "last_seen_version": APP_VERSION}), encoding="utf-8")
+        return jsonify({"show": False, "current_version": APP_VERSION, "notes": []})
+    notes = [item for item in RELEASE_NOTES
+             if _parse_version(last_seen) < _parse_version(item["version"]) <= _parse_version(APP_VERSION)]
+    return jsonify({"show": bool(notes), "current_version": APP_VERSION, "previous_version": last_seen, "notes": notes})
+
+
+@updates_api.post("/app/whats-new/seen")
+def mark_whats_new_seen():
+    try:
+        state = json.loads(_ui_state_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = {}
+    _ui_state_path().write_text(json.dumps({**state, "last_seen_version": APP_VERSION}), encoding="utf-8")
+    return jsonify({"seen": APP_VERSION})
 
 
 @updates_api.post("/updates/inspect")

@@ -439,17 +439,22 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     }
   }
 
-  async function moveCandidateStudent(organizationId: string, candidateId: string, participantId: string, targetSeatId: string) {
+  async function moveCandidateStudent(organizationId: string, candidateId: string, participantId: string, targetSeatId: string, fixAll = false) {
     setMovingCandidateId(candidateId)
     setCandidateError('')
     setCandidateErrorId(null)
     try {
-      const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organizationId)}/distribution-candidates/${encodeURIComponent(candidateId)}/moves`, {
+      const base = `/api/exam-organizations/${encodeURIComponent(organizationId)}/distribution-candidates/${encodeURIComponent(candidateId)}`
+      const response = await fetch(fixAll ? `${base}/fix-violations` : `${base}/moves`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participant_id: participantId, target_seat_id: targetSeatId }),
+        body: JSON.stringify(fixAll ? {} : { participant_id: participantId, target_seat_id: targetSeatId }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Öğrenci taşınamadı.')
+      if (data.candidate.fix_summary) {
+        const summary = data.candidate.fix_summary as { moved: number; affected_before: number; affected_after: number }
+        setNotice(`${summary.moved} öğrenci taşındı · ihlalden etkilenen öğrenci ${summary.affected_before} → ${summary.affected_after}.${summary.affected_after ? ' Kalanlar için ihlalsiz boş yer yok; krokiden yer değiştirin.' : ''}`)
+      }
       const child = data.candidate as CandidatePreview
       setCandidates((current) => {
         const existing = current[organizationId] ?? []
@@ -739,6 +744,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
             <div className="candidate-group-summary">{candidate.summary.groups.map((group) => <small key={`${group.class_level}-${group.section}-${group.area ?? ''}`}>{group.class_level}/{group.section}{group.area ? ` · ${group.area}` : ''}: {group.student_count} öğrenci</small>)}</div>
             {violatingStudents.length > 0 && <div className="candidate-violations" data-testid={`candidate-violations-${candidate.candidate_id}`}>
               <strong>Kural ihlalinden etkilenen öğrenciler · {violatingStudents.length}</strong>
+              {planEditingEnabled && violatingStudents.some(({ assignment }) => candidate.violation_suggestions?.[assignment!.participant_id]?.length) && <button type="button" className="violation-fix-all" data-testid={`violation-fix-all-${candidate.candidate_id}`} disabled={movingCandidateId === candidate.candidate_id} onClick={() => void moveCandidateStudent(organization.id, candidate.candidate_id, '', '', true)}>{movingCandidateId === candidate.candidate_id ? 'Düzeltiliyor…' : 'Tümünü düzelt'}</button>}
               <small>Öğrenciye dokun: krokide yeri ve ihlale neden olan komşu yerler vurgulanır. Çiftteki öğrencilerden birini taşımak diğerinin ihlalini de giderir.</small>
               <div>{violatingStudents.map(({ assignment, details }) => {
                 const suggestion = candidate.violation_suggestions?.[assignment!.participant_id]?.[0]

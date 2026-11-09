@@ -38,6 +38,14 @@ CI'da her paket üretildikten sonra `packaging/smoke_test.py` paketlenmiş uygul
 
 ## Artımlı güncelleme
 
+**Tek komutla sürüm (önerilen):** Paketleri ürettiğiniz bilgisayarda
+
+```bash
+.venv/bin/python scripts/release.py --version 0.3.0 --notes "Yeni özellik" --notes "Düzeltme"
+```
+
+(Windows: `.venv\Scripts\python.exe scripts\release.py ...`). Komut sürüm numarasını ve uygulama içi "Yenilikler" notlarını günceller, testleri çalıştırıp tam kurulum paketini üretir, önceki sürüm kopyası `releases/<platform>/` altında varsa imzalı güncelleme paketini de hazırlar ve bu sürümü bir sonraki için saklar. Çıktılar `dist/` içindedir. `releases/` klasörünü silmeyin; Git'e girmez. Kullanıcılar güncellemeden sonraki ilk açılışta notları kısa bir pencerede görür.
+
 **İlk kez (bir defa):** Paketleri ürettiğiniz bilgisayarda `python scripts/update_signing.py init` çalıştırın. Gizli imzalama anahtarı `~/.kelebek-signing/update_signing_key.pem` dosyasına yazılır, açık anahtar `backend/kelebek/update_trust.py` dosyasına eklenir. Bu değişikliği kaydedip yeni **tam kurulum paketini** üretin ve kurun; bundan sonra kurulum yalnızca bu anahtarla imzalanmış güncellemeleri kabul eder. Gizli anahtarı Git'e eklemeyin, kimseyle paylaşmayın ve güvenli bir yere yedekleyin; kaybolursa yeni anahtar için yine tam kurulum gerekir. Yayıncı anahtarı tanımlı olmayan kurulumlar hiçbir güncelleme paketini kabul etmez.
 
 Yeni sürümün tam paketi üretildikten sonra yalnızca değişen dosyaları içeren, imzalı güncelleme paketi hazırlanır:

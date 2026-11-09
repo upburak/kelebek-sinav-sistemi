@@ -125,6 +125,22 @@ class ExamLifecycleTests(unittest.TestCase):
         self.assertEqual([step["key"] for step in progress["steps"]], ["prepare", "model", "search", "save"])
         self.assertEqual(self.client.post(f"/api/exam-organizations/{org_id}/distribution-progress/stop").status_code, 409)
 
+    def test_fix_all_requires_violations_and_whats_new_after_update(self):
+        org_id, candidate = self._finalized()
+        response = self.client.post(f"/api/exam-organizations/{org_id}/distribution-candidates/{candidate['candidate_id']}/fix-violations", json={})
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("ihlali yok", response.get_json()["error"])
+        first = self.client.get("/api/app/whats-new").get_json()
+        self.assertFalse(first["show"])
+        import json
+        from kelebek.config import get_data_dir
+        (get_data_dir() / "ui_state.json").write_text(json.dumps({"last_seen_version": "0.1.0"}))
+        after_update = self.client.get("/api/app/whats-new").get_json()
+        self.assertTrue(after_update["show"])
+        self.assertEqual(after_update["notes"][0]["version"], after_update["current_version"])
+        self.client.post("/api/app/whats-new/seen")
+        self.assertFalse(self.client.get("/api/app/whats-new").get_json()["show"])
+
     def test_report_header_title_and_scale_options(self):
         org_id, _candidate = self._finalized()
         self._finalize(org_id)

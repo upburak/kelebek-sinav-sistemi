@@ -758,6 +758,78 @@ def move_candidate_participant(organization_id: str, candidate_id: str):
     return jsonify({"candidate": result}), 201
 
 
+@exam_organizations_api.post("/exam-organizations/<organization_id>/distribution-candidates/<candidate_id>/fix-violations")
+def fix_candidate_violations(organization_id: str, candidate_id: str):
+    """Önerileri sırayla uygula: her adımda ihlalli bir öğrenciyi ihlalsiz boş yere taşı."""
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    try:
+        with session_factory.begin() as session:
+            organization = session.get(ExamOrganization, organization_id)
+            candidate = session.get(DistributionCandidate, candidate_id)
+            if organization is None or candidate is None:
+                return jsonify({"error": "Sınav veya aday bulunamadı."}), 404
+            if organization.status not in {"draft", "completed"} or organization.selected_candidate_id != candidate.id:
+                return jsonify({"error": "Önce bu adayı incelemeye alın."}), 409
+            year = session.get(AcademicYear, organization.academic_year_id)
+            if year is None or year.start_year < current_academic_year_start():
+                return jsonify({"error": "Arşiv yılındaki kesinleşmiş dağıtım salt okunurdur."}), 403
+            run = session.get(DistributionRun, candidate.run_id)
+            if run is None or run.config_hash != _distribution_fingerprint(session, organization):
+                return jsonify({"error": "Adayın verileri güncel değil; yeni aday üretin."}), 409
+            review = _review_selected_candidate(session, organization)
+            if not review["violations"]:
+                return jsonify({"error": "Bu adayda düzeltilecek komşuluk ihlali yok."}), 409
+            before = review["affected_student_count"]
+            target = candidate
+            if organization.status == "draft":
+                target = DistributionCandidate(
+                    run_id=run.id, derived_from_candidate_id=candidate.id, status="manual",
+                    affected_student_count=before, objective_value=candidate.objective_value,
+                    generation_index=(session.scalar(select(func.max(DistributionCandidate.generation_index)).where(DistributionCandidate.run_id == run.id)) or 0) + 1,
+                )
+                session.add(target); session.flush()
+                for item in session.scalars(select(SeatAssignment).where(SeatAssignment.candidate_id == candidate.id)).all():
+                    session.add(SeatAssignment(candidate_id=target.id, participant_id=item.participant_id, seat_id=item.seat_id))
+                organization.selected_candidate_id = target.id
+                session.flush()
+            moved = 0
+            for _attempt in range(len(review["suggestions"]) * 2 + 2):
+                if not review["violations"]:
+                    break
+                counts = {}
+                for item in review["violations"]:
+                    for key in ("first_participant_id", "second_participant_id"):
+                        counts[item[key]] = counts.get(item[key], 0) + 1
+                choice = next((pid for pid in sorted(counts, key=lambda pid: -counts[pid]) if review["suggestions"].get(pid)), None)
+                if choice is None:
+                    break
+                seat_id = review["suggestions"][choice][0]["seat_id"]
+                assignment = session.scalar(select(SeatAssignment).where(
+                    SeatAssignment.candidate_id == target.id, SeatAssignment.participant_id == choice))
+                session.add(DistributionEvent(candidate_id=target.id, event_type="seat_move", participant_id=choice,
+                                              from_seat_id=assignment.seat_id, to_seat_id=seat_id))
+                assignment.seat_id = seat_id
+                session.flush()
+                moved += 1
+                review = _review_selected_candidate(session, organization)
+            if not moved:
+                raise ValueError("İhlalli öğrenciler için ihlalsiz boş yer bulunamadı; yer değiştirmeyi krokiden yapın.")
+            target.status = "manual"
+            target.affected_student_count = review["affected_student_count"]
+            session.flush()
+            result = _serialize_candidate(session, organization, target)
+            result["review"] = review
+            result["fix_summary"] = {"moved": moved, "affected_before": before, "affected_after": review["affected_student_count"]}
+            if organization.status == "completed":
+                result["report_status"] = report_status(session, organization)["report_status"]
+                result["report_statuses"] = all_report_statuses(session, organization)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 409
+    except IntegrityError:
+        return jsonify({"error": "Düzeltme kaydedilemedi; koltuk durumu değişmiş olabilir."}), 409
+    return jsonify({"candidate": result}), 201
+
+
 @exam_organizations_api.post("/exam-organizations/<organization_id>/distribution-candidates/<candidate_id>/history/<action>")
 def change_completed_distribution_history(organization_id: str, candidate_id: str, action: str):
     if action not in {"undo", "redo"}:
