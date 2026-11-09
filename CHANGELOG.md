@@ -1,5 +1,21 @@
 # Değişiklik günlüğü
 
+## Geliştirme sürümü (0.3.0 sonrası)
+
+- **Excel'den öğrenci listesi içe aktarılamıyordu.** Dosya okunuyor, sütunlar
+  eşleşiyor, kontrol raporu çıkıyor; ama **"İçe aktarmayı onayla" düğmesi hiç
+  görünmediği için liste kaydedilemiyordu.** Arka uç fark raporunu (`diff`)
+  yanıtın en üst düzeyinde döndürüyor, arayüz ise onu `validation` nesnesinin
+  içinde arıyordu; düğme `validation.diff` dolu olduğunda çizildiği için hiç
+  çizilmiyordu. `as` tip dönüşümü uyumsuzluğu TypeScript'ten gizlediği için
+  hata derleme sırasında da görünmüyordu.
+- Bu hata uçtan uca API testlerinden kaçmıştı: her uç tek tek doğru yanıt
+  veriyordu, kopukluk arayüzle arka uç arasındaydı. Bu yüzden gerçek tarayıcıda
+  akışı tıklayan bir arayüz testi eklendi
+  (`tests/e2e/test_student_import_ui_e2e.py`): dosya seçilir, kontrol çalıştırılır
+  ve onay düğmesinin göründüğü doğrulanır. Test, düzeltme geri alındığında
+  düşmektedir (doğrulandı). CI'nın uçtan uca işi artık Playwright kuruyor.
+
 ## 0.3.0
 
 Bu sürüm yeni özellik eklemez; projeyi macOS ve Windows'ta güvenle çalıştırmak için

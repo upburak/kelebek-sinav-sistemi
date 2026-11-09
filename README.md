@@ -42,6 +42,49 @@ ortama bağlanmak isterseniz `KELEBEK_PUBLIC_URL` verin; o zaman yerel servis a�
 Her gönderimde ve birleştirme isteğinde GitHub Actions *Testler* iş akışı Ubuntu, macOS ve
 Windows'ta lint ile birim testlerini, ayrıca arayüz derlemesini ve uçtan uca testleri çalıştırır.
 
+## Otomatik yedekleme (isteğe bağlı, macOS)
+
+Çalışırken belirli aralıklarla ayrı bir dala anlık görüntü gönderir. **Sizin
+çalışmanıza dokunmaz:** dalınızı değiştirmez, yarım işinizi kendi dalınıza
+commit'lemez, çalışma dizininizi ve index'inizi ellemez. Geçici bir index'te ağaç
+nesnesi oluşturup commit'i doğrudan yedek dalına gönderir, bu yüzden siz düzenleme
+yaparken arka planda çalışması sorun çıkarmaz.
+
+Önce elle deneyin:
+
+```bash
+./scripts/auto-push.sh --dry-run
+```
+
+```bash
+./scripts/auto-push.sh
+```
+
+Zamanlayıcıyı kurmak için (15 dakikada bir):
+
+```bash
+sed "s|PROJE_YOLU|$(pwd)|g" scripts/com.kelebek.autopush.plist > ~/Library/LaunchAgents/com.kelebek.autopush.plist
+```
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.kelebek.autopush.plist
+```
+
+Durdurmak için:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.kelebek.autopush.plist
+```
+
+Günlük `.git/kelebek-autopush.log` dosyasına yazılır. Hedef dal varsayılan olarak
+`otomatik-yedek/<bilgisayar adı>`; `KELEBEK_AUTOPUSH_BRANCH` ile değiştirilebilir.
+Sıklık için plist içindeki `StartInterval` değerini (saniye) güncelleyin.
+
+Betik, `.gitignore`'a ek bir güvenlik ağı taşır: anlık görüntüde veritabanı, yedek,
+tablo (`.xlsx`/`.csv`) veya gizli anahtar dosyası görürse gönderimi durdurur ve
+dosyayı bildirir. Böylece yanlışlıkla izlenmeye başlamış bir öğrenci listesi
+sessizce GitHub'a gitmez. `KELEBEK_AUTOPUSH_SKIP_SCAN=1` ile kapatılabilir.
+
 ## Kurulum paketleri (macOS ve Windows)
 
 Paketler her işletim sisteminin kendisinde üretilir (Mac'te Windows paketi, Windows'ta Mac paketi üretilmez).

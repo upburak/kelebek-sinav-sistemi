@@ -450,9 +450,13 @@ export default function App() {
     setImportCommitResult(null)
     try {
       const response = await fetch('/api/student-import/preview', { method: 'POST', body: formData })
-      const data = await response.json()
+      const data = await response.json() as { error?: string; validation?: StudentImportValidation; diff?: StudentImportValidation['diff'] }
       if (!response.ok) throw new Error(data.error ?? 'Dosya doğrulanamadı.')
-      setImportValidation(data.validation as StudentImportValidation)
+      if (!data.validation) throw new Error('Dosya kontrol sonucu alınamadı.')
+      // API fark raporunu üst düzeyde döndürür; arayüz onu kontrol sonucuyla
+      // birlikte tutar. Birleştirilmezse "İçe aktarmayı onayla" düğmesi hiç
+      // görünmez ve liste içe aktarılamaz.
+      setImportValidation({ ...data.validation, diff: data.diff ?? null })
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Dosya doğrulanamadı.')
     } finally {
