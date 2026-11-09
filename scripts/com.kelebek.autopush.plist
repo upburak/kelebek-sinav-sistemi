@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS zamanlayıcı tanımı: scripts/auto-push.sh betiğini düzenli aralıkla çalıştırır.
+  PROJE_YOLU yerine deponun tam yolunu yazın, sonra ~/Library/LaunchAgents altına kopyalayıp
+  `launchctl load` ile etkinleştirin. Kurulum adımları README'de.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.kelebek.autopush</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>PROJE_YOLU/scripts/auto-push.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>PROJE_YOLU</string>
+
+  <!-- 900 saniye = 15 dakika. Değiştirmek için bu sayıyı güncelleyin. -->
+  <key>StartInterval</key>
+  <integer>900</integer>
+
+  <!-- Bilgisayar açıldığında bir kez çalışsın. -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>PROJE_YOLU/.git/kelebek-autopush.log</string>
+  <key>StandardErrorPath</key>
+  <string>PROJE_YOLU/.git/kelebek-autopush.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <!-- Düşük öncelik: çalışırken bilgisayarı yavaşlatmasın. -->
+  <key>Nice</key>
+  <integer>5</integer>
+  <key>LowPriorityIO</key>
+  <true/>
+</dict>
+</plist>
