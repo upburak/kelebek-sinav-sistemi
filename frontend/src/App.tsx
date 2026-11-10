@@ -776,7 +776,6 @@ export default function App() {
 
         {activeSection === 'exams' && <ExamOrganizer
           academicYearId={activeYearId}
-          academicYearLabel={activeYear?.label ?? ''}
           readOnly={activeYear?.is_archive ?? false}
           onStudents={() => setActiveSection('students')}
           onClassrooms={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}

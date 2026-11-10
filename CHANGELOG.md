@@ -2,6 +2,32 @@
 
 ## Geliştirme sürümü (0.3.0 sonrası)
 
+### Tasarım ve ergonomi turu
+
+Arayüz ölçülerek incelendi (üç pencere genişliği, yedi ekran, gerçek zemine göre
+kontrast hesabı) ve bulunan sorunlar giderildi:
+
+- **Dar pencerede yatay taşma.** 820 piksel genişlikte "Uygulamayı kapat" düğmesi
+  ekranın dışına taşıyordu; kenar çubuğu sabit genişlikte olduğu için içerik alanı
+  beklenenden çok daralıyordu. Üst çubuk artık taşmak yerine alt satıra geçiyor.
+- **Okunamayacak kadar küçük yazılar.** Stil dosyasında 11 pikselin altında
+  146 kural vardı (3 tanesi 7 piksel). 13 inç ekranda çalışan bir yönetici için
+  bu ciddi bir sorun. Genel arayüzde taban 11–12 piksele, yoğun oturma krokisinde
+  10 piksele çekildi. Ayrıca tarayıcı `<small>` etiketini %83'e küçülttüğü için
+  11 piksellik yazılar 9,17 piksele düşüyordu; taban açıkça sabitlendi.
+- **Yetersiz renk kontrastı.** Ölçümde WCAG AA eşiğini geçemeyen 130 renk kullanımı
+  bulundu (en kötüsü 1,6:1 — ayraç karakterleri neredeyse görünmezdi). Tonlar korunarak
+  koyulaştırıldı; gerçek zemine göre yeniden ölçüldü. Kalan tek uyarı pasif bir düğme
+  (WCAG pasif denetimleri kapsam dışı bırakır) ve iki yanlış pozitif.
+- **Sınav listesinde asıl iş katlamanın altında kalıyordu.** Beş boş dönem başlığı
+  ekranın üst yarısını dolduruyor, kullanıcının tek sınavı aşağıda kalıyordu. Sınavı
+  olmayan dönemler artık tek satırda özetleniyor, dolu dönemler üstte.
+- **Başlık tekrarı.** "Sınav organizasyonları" aynı ekranda iki kez, eğitim yılı üç
+  yerde yazıyordu. Kart başlığı kaldırıldı (ekran okuyucu için gizli başlık korundu).
+- **Küçük tıklama hedefleri.** 14 piksel yüksekliğindeki düğmeler vardı; taban 28 piksel.
+- Dönem seçim kutusu karttan kopuk duruyordu; kartın üstüne yapışık şeride dönüştü.
+
+
 ### Sınav dönemleri (yeni)
 
 Sınavlar düz bir liste halindeydi; hangi sınavın ne için yapıldığı belli olmuyordu.
