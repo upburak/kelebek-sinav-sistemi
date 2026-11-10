@@ -39,9 +39,20 @@ type RoomOption = {
   can_select: boolean
   is_latest: boolean
 }
+type ExamPeriod = {
+  id: string
+  academic_year_id: string
+  name: string
+  display_order: number
+  exam_count: number
+  can_delete: boolean
+}
+
 type ExamOrganization = {
   id: string
   name: string
+  exam_period_id: string | null
+  exam_period_name: string | null
   exam_date: string
   status: 'draft' | 'completed'
   report_status: ReportStatus
@@ -62,8 +73,7 @@ type ExamOrganization = {
 
 type Props = {
   academicYearId: string | null
-  academicYearLabel: string
-  readOnly: boolean
+    readOnly: boolean
   onStudents: () => void
   onClassrooms: () => void
 }
@@ -118,7 +128,7 @@ function GroupSelector({
   </div>
 }
 
-export default function ExamOrganizer({ academicYearId, academicYearLabel, readOnly: yearReadOnly, onStudents, onClassrooms }: Props) {
+export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, onStudents, onClassrooms }: Props) {
   const readOnly = yearReadOnly
   const [reloadKey, setReloadKey] = useState(0)
   const [notice, setNotice] = useState('')
@@ -132,6 +142,12 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [formOpen, setFormOpen] = useState(false)
+  const [periods, setPeriods] = useState<ExamPeriod[]>([])
+  const [periodId, setPeriodId] = useState('')
+  const [periodPanelOpen, setPeriodPanelOpen] = useState(false)
+  const [newPeriodName, setNewPeriodName] = useState('')
+  const [periodError, setPeriodError] = useState('')
+  const [periodBusy, setPeriodBusy] = useState(false)
   const [name, setName] = useState('')
   const [examDate, setExamDate] = useState(localDateValue)
   const [withCourses, setWithCourses] = useState(false)
@@ -186,11 +202,13 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
       fetch(`/api/student-groups?academic_year_id=${encodeURIComponent(academicYearId)}`, { signal: controller.signal }),
       fetch('/api/courses', { signal: controller.signal }),
       fetch(`/api/exam-room-options?academic_year_id=${encodeURIComponent(academicYearId)}`, { signal: controller.signal }),
+      fetch(`/api/exam-periods?academic_year_id=${encodeURIComponent(academicYearId)}`, { signal: controller.signal }),
     ])
-      .then(async ([organizationResponse, groupResponse, courseResponse, roomResponse]) => {
-        const [organizationData, groupData, courseData, roomData] = await Promise.all([
-          organizationResponse.json(), groupResponse.json(), courseResponse.json(), roomResponse.json(),
+      .then(async ([organizationResponse, groupResponse, courseResponse, roomResponse, periodResponse]) => {
+        const [organizationData, groupData, courseData, roomData, periodData] = await Promise.all([
+          organizationResponse.json(), groupResponse.json(), courseResponse.json(), roomResponse.json(), periodResponse.json(),
         ])
+        if (!periodResponse.ok) throw new Error(periodData.error ?? 'Sınav dönemleri yüklenemedi.')
         if (!organizationResponse.ok) throw new Error(organizationData.error ?? 'Organizasyonlar yüklenemedi.')
         if (!groupResponse.ok) throw new Error(groupData.error ?? 'Öğrenci grupları yüklenemedi.')
         if (!courseResponse.ok) throw new Error(courseData.error ?? 'Ders listesi yüklenemedi.')
@@ -200,6 +218,9 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
         setGroups(groupData.groups as GroupOption[])
         setCourseCatalog(courseData.courses as CourseOption[])
         setRoomOptions(roomData.rooms as RoomOption[])
+        const loadedPeriods = periodData.periods as ExamPeriod[]
+        setPeriods(loadedPeriods)
+        setPeriodId((current) => current || loadedPeriods[0]?.id || '')
         const candidateLists = await Promise.all(loadedOrganizations.map(async (organization) => {
           const response = await fetch(`/api/exam-organizations/${encodeURIComponent(organization.id)}/distribution-candidates`, { signal: controller.signal })
           const data = await response.json()
@@ -257,6 +278,89 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     setNextCourseId((id) => id + 1)
   }
 
+  // Sınavlar dönemlere göre gruplanır; dönemi olmayan eski kayıtlar en sonda
+  // ayrı bir başlık altında toplanır ve oradan bir döneme taşınabilir.
+  const groupedOrganizations = useMemo(() => {
+    const byPeriod = new Map<string, ExamOrganization[]>()
+    const orphans: ExamOrganization[] = []
+    for (const organization of organizations) {
+      if (organization.exam_period_id && periods.some((item) => item.id === organization.exam_period_id)) {
+        const bucket = byPeriod.get(organization.exam_period_id) ?? []
+        bucket.push(organization)
+        byPeriod.set(organization.exam_period_id, bucket)
+      } else {
+        orphans.push(organization)
+      }
+    }
+    const sections = periods.map((period) => ({
+      key: period.id,
+      title: period.name,
+      items: byPeriod.get(period.id) ?? [],
+      orphan: false,
+    }))
+    if (orphans.length) {
+      sections.push({ key: '__orphan__', title: 'Dönem atanmamış', items: orphans, orphan: true })
+    }
+    // İçinde sınav olan dönemler önce gelir. Aksi halde dört boş dönem başlığı
+    // ekranı doldurup kullanıcının asıl işini katlamanın altına itiyordu.
+    return {
+      dolu: sections.filter((item) => item.items.length > 0),
+      bos: sections.filter((item) => item.items.length === 0),
+    }
+  }, [organizations, periods])
+
+  async function periodRequest(path: string, method: string, body?: unknown) {
+    setPeriodBusy(true)
+    setPeriodError('')
+    try {
+      const response = await fetch(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Dönem işlemi tamamlanamadı.')
+      const refreshed = await fetch(`/api/exam-periods?academic_year_id=${encodeURIComponent(academicYearId ?? '')}`)
+      const refreshedData = await refreshed.json()
+      if (refreshed.ok) setPeriods(refreshedData.periods as ExamPeriod[])
+      return true
+    } catch (reason) {
+      setPeriodError(reason instanceof Error ? reason.message : 'Dönem işlemi tamamlanamadı.')
+      return false
+    } finally {
+      setPeriodBusy(false)
+    }
+  }
+
+  async function renamePeriod(period: ExamPeriod) {
+    const next = window.prompt('Dönem adı', period.name)
+    if (next === null || next.trim() === period.name) return
+    await periodRequest(`/api/exam-periods/${encodeURIComponent(period.id)}`, 'PATCH', { name: next })
+  }
+
+  async function addPeriod(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!newPeriodName.trim()) return
+    const ok = await periodRequest('/api/exam-periods', 'POST', {
+      academic_year_id: academicYearId, name: newPeriodName,
+    })
+    if (ok) setNewPeriodName('')
+  }
+
+  async function deletePeriod(period: ExamPeriod) {
+    if (!window.confirm(`"${period.name}" dönemi silinsin mi? Bu işlem yalnızca dönemi siler, sınavları silmez.`)) return
+    await periodRequest(`/api/exam-periods/${encodeURIComponent(period.id)}`, 'DELETE')
+  }
+
+  async function moveOrganizationToPeriod(organizationId: string, nextPeriodId: string) {
+    if (!nextPeriodId) return
+    const ok = await periodRequest(
+      `/api/exam-organizations/${encodeURIComponent(organizationId)}/period`, 'PATCH',
+      { exam_period_id: nextPeriodId },
+    )
+    if (ok) setReloadKey((key) => key + 1)
+  }
+
   async function createOrganization(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!academicYearId || readOnly) return
@@ -269,6 +373,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     const payload = {
       academic_year_id: academicYearId,
       name,
+      exam_period_id: periodId,
       exam_date: examDate,
       ...(withCourses
         ? { courses: courses.map((course) => ({ name: course.name, groups: course.groupKeys.map(groupFromKey).filter(Boolean) })) }
@@ -630,22 +735,49 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
   return <section className="exam-organizer" aria-labelledby="exam-organizer-title">
     <div className="exam-organizer-heading">
       <div>
-        <span className="eyebrow">SINAV HAZIRLIĞI · {academicYearLabel || 'EĞİTİM YILI'}</span>
-        <h2 id="exam-organizer-title">Sınav organizasyonları</h2>
-        <p>Önce sınavı ve katılacak öğrenci gruplarını belirle. Ders seçmek isteğe bağlıdır.</p>
+        {/* Sayfa başlığı ve eğitim yılı üstte zaten yazıyor; burada tekrar
+            etmek yerine yalnızca ne yapılacağını anlatan tek satır kalır. */}
+        <h2 id="exam-organizer-title" className="visually-hidden">Sınav organizasyonları</h2>
+        <p>Sınavı ve katılacak öğrenci gruplarını belirle, sonra dağıtımı oluştur. Ders seçmek isteğe bağlıdır.</p>
       </div>
-      {!readOnly && <button type="button" className="exam-new-button" data-testid="exam-new-btn" disabled={!groups.length} onClick={() => { setFormOpen((open) => !open); setError('') }}>
-        {formOpen ? 'Formu kapat' : '+ Yeni organizasyon'}
-      </button>}
+      {!readOnly && <div className="exam-header-actions">
+        <button type="button" className="exam-period-manage-btn" data-testid="exam-period-manage-btn" onClick={() => { setPeriodPanelOpen((open) => !open); setPeriodError('') }}>
+          {periodPanelOpen ? 'Dönem düzenlemeyi kapat' : 'Sınav dönemleri'}
+        </button>
+        <button type="button" className="exam-new-button" data-testid="exam-new-btn" disabled={!groups.length || !periods.length} onClick={() => { setFormOpen((open) => !open); setError('') }}>
+          {formOpen ? 'Formu kapat' : '+ Yeni organizasyon'}
+        </button>
+      </div>}
     </div>
+
+    {periodPanelOpen && !readOnly && <section className="exam-period-panel" data-testid="exam-period-panel">
+      <div className="exam-form-title"><span className="exam-step-number">00</span><div><strong>Sınav dönemleri</strong><small>Her yıl dört dönem hazır gelir. Adlarını kendi okuluna göre değiştirebilir, yeni dönem ekleyebilir, içinde sınav olmayan dönemi silebilirsin.</small></div></div>
+      <ul className="exam-period-manage-list">
+        {periods.map((period) => <li key={period.id}>
+          <span className="exam-period-manage-name">{period.name}</span>
+          <small>{period.exam_count} sınav</small>
+          <button type="button" disabled={periodBusy} onClick={() => void renamePeriod(period)}>Adını değiştir</button>
+          <button type="button" disabled={periodBusy || !period.can_delete} title={period.can_delete ? 'Dönemi sil' : 'Bu dönemde sınav var; önce sınavları taşıyın.'} onClick={() => void deletePeriod(period)}>Sil</button>
+        </li>)}
+      </ul>
+      <form className="exam-period-add" onSubmit={addPeriod}>
+        <label><span>Yeni dönem adı</span><input maxLength={80} value={newPeriodName} onChange={(event) => setNewPeriodName(event.target.value)} placeholder="Örn. Telafi sınavları" /></label>
+        <button type="submit" disabled={periodBusy || !newPeriodName.trim()}>Dönem ekle</button>
+      </form>
+      {periodError && <p className="exam-error" role="alert">{periodError}</p>}
+    </section>}
 
     {readOnly && <p className="exam-archive-note">Bu eğitim yılı arşiv olarak açıldı. Organizasyonlar görüntülenebilir; yeni kayıt oluşturulamaz.</p>}
     {!loading && groups.length === 0 && organizations.length > 0 && <div className="exam-empty"><strong>Bu eğitim yılında yeni sınava alınabilecek aktif öğrenci grubu yok.</strong><span>Mevcut organizasyon kayıtları aşağıda görüntülenebilir.</span><button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button></div>}
 
     {formOpen && <form className="exam-create-form" onSubmit={createOrganization}>
-      <div className="exam-form-title"><span className="exam-step-number">01</span><div><strong>Organizasyon bilgileri</strong><small>İsim ve sınav tarihi, taslak kaydına eklenir.</small></div></div>
+      <div className="exam-form-title"><span className="exam-step-number">01</span><div><strong>Organizasyon bilgileri</strong><small>Sınav dönemi, isim ve tarih taslak kaydına eklenir.</small></div></div>
       <div className="exam-form-fields">
-        <label><span>Organizasyon / sınav adı *</span><input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} placeholder="Örn. 1. dönem ortak sınavları" /></label>
+        <label><span>Sınav dönemi *</span><select required value={periodId} onChange={(event) => setPeriodId(event.target.value)}>
+          {periods.length === 0 && <option value="">Dönem bulunamadı</option>}
+          {periods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}
+        </select></label>
+        <label><span>Organizasyon / sınav adı *</span><input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} placeholder="Örn. Matematik ortak sınavı" /></label>
         <label><span>Sınav tarihi *</span><input required type="date" value={examDate} onChange={(event) => setExamDate(event.target.value)} /></label>
       </div>
       <label className="exam-course-toggle"><input type="checkbox" checked={withCourses} onChange={(event) => toggleCourseMode(event.target.checked)} /><span><strong>Ders seçmek istiyorum</strong><small>Ders ekleyebilir veya daha önce kullanılan bir dersi yazabilirsin.</small></span></label>
@@ -671,13 +803,32 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
 
     {notice && <p className="exam-room-success exam-notice-toast" role="status" data-testid="exam-notice">{notice} <button type="button" onClick={() => setNotice('')}>Kapat</button></p>}
     {error && !formOpen && <p className="exam-error" role="alert">{error}</p>}
-    {loading ? <div className="exam-empty">Organizasyonlar yükleniyor…</div> : organizations.length === 0 && !formOpen ? <div className="exam-empty"><strong>{groups.length ? 'Henüz sınav organizasyonu yok.' : 'Bu eğitim yılında öğrenci grubu bulunamadı.'}</strong><span>{groups.length ? 'İlk taslağı oluştur; ders seçmek zorunlu değil.' : 'Önce öğrenci listesini içe aktar veya örnek verilerle başlangıç yap.'}</span>{groups.length ? !readOnly && <button type="button" onClick={() => setFormOpen(true)}>İlk organizasyonu oluştur</button> : <button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button>}</div> : <div className="exam-organization-list">
-      {organizations.map((organization) => {
+    {loading ? <div className="exam-empty">Organizasyonlar yükleniyor…</div> : organizations.length === 0 && !formOpen ? <div className="exam-empty"><strong>{groups.length ? 'Henüz sınav organizasyonu yok.' : 'Bu eğitim yılında öğrenci grubu bulunamadı.'}</strong><span>{groups.length ? 'İlk taslağı oluştur; ders seçmek zorunlu değil.' : 'Önce öğrenci listesini içe aktar veya örnek verilerle başlangıç yap.'}</span>{groups.length ? !readOnly && <button type="button" onClick={() => setFormOpen(true)}>İlk organizasyonu oluştur</button> : <button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button>}</div> : <div className="exam-organization-groups">
+      {groupedOrganizations.bos.length > 0 && <p className="exam-period-idle" data-testid="exam-period-idle">
+        <span>Sınavı olmayan dönemler:</span> {groupedOrganizations.bos.map((item) => item.title).join(' · ')}
+      </p>}
+      {groupedOrganizations.dolu.map((section) => <section className="exam-period-section" key={section.key} data-testid={`exam-period-${section.key}`}>
+        <header className="exam-period-header">
+          <h3>{section.title}</h3>
+          <span className="exam-period-count">{section.items.length} sınav</span>
+        </header>
+        <div className="exam-organization-list">{section.items.map((organization) => {
         const selectedRoomCount = organization.room_selections?.length ?? 0
         const roomEditorOpen = activeRoomOrganizationId === organization.id
         const lockedByOther = Boolean(locks[organization.id] && !locks[organization.id].mine)
         const readOnly = yearReadOnly || lockedByOther || Boolean(organization.archived_at)
         return <article className="exam-organization-card-wrap" key={organization.id} data-testid={`exam-card-${organization.id}`}>
+          {!readOnly && periods.length > 0 && <label className="exam-card-period" data-testid={`exam-card-period-${organization.id}`}>
+            <span>Dönem</span>
+            <select
+              value={organization.exam_period_id ?? ''}
+              disabled={periodBusy}
+              onChange={(event) => void moveOrganizationToPeriod(organization.id, event.target.value)}
+            >
+              {!organization.exam_period_id && <option value="">Dönem atanmamış</option>}
+              {periods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}
+            </select>
+          </label>}
           <div className="exam-organization-card">
             <div className="exam-date-block"><strong>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { day: '2-digit' })}</strong><span>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { month: 'short' })}</span></div>
             <div className="exam-organization-copy"><span className="exam-status" data-testid={`exam-status-${organization.id}`}>{organization.archived_at ? 'Tamamlandı · Arşiv' : organization.status === 'completed' ? 'Kesinleşti' : organization.copied_from_organization_id ? 'Taslak · Kopya' : 'Taslak'}</span><h3>{organization.name}</h3><p>{organization.course_names.length ? organization.course_names.join(' · ') : 'Genel sınav'} · {organization.participant_count} öğrenci</p></div>
@@ -809,7 +960,9 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
           {finalizeConfirmId === organization.id && finalReviews[organization.id] && <div className="final-review-panel"><strong>Son kontrol · kesinleştirme öncesi</strong><span>{finalReviews[organization.id].seated_count}/{finalReviews[organization.id].participant_count} öğrenci oturuyor · {finalReviews[organization.id].unassigned_count} bekleyen · {finalReviews[organization.id].available_capacity} kullanılabilir koltuk · {finalReviews[organization.id].empty_seats} boş koltuk</span><span>{finalReviews[organization.id].violation_count} komşuluk ihlali · {finalReviews[organization.id].affected_student_count} öğrenci etkileniyor</span><div>{finalReviews[organization.id].rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students}/{room.available_seats} dolu · {room.empty_seats} boş</small>)}</div><p>Başlangıç kapasitesi fiziksel sınıf planının yerine geçmez. Masa, sıra, koridor ve kullanılabilir koltukları gerçek derslikle karşılaştırın.</p>{!finalReviews[organization.id].can_finalize && <p className="exam-error">Bekleyen öğrenci kalmamalı ve kural ihlalinden etkilenen öğrenci sayısı beşi aşmamalı.</p>}<label><input type="checkbox" data-testid="finalize-confirm-checkbox" checked={finalizeConfirmed} onChange={(event) => setFinalizeConfirmed(event.target.checked)} />Dağıtımı kontrol ettim; seçilen dersliklerin fiziksel planlarını doğruladım ve sınavı kesinleştirmek istiyorum.</label>{reviewError && <p className="exam-error" role="alert">{reviewError}</p>}<div><button type="button" onClick={() => setFinalizeConfirmId(null)}>Vazgeç</button><button type="button" data-testid="finalize-submit-btn" disabled={!finalizeConfirmed || !finalReviews[organization.id].can_finalize || finalizing} onClick={() => void finalizeOrganization(organization.id)}>{finalizing ? 'Kesinleştiriliyor…' : 'Onayla ve kesinleştir'}</button></div></div>}
           {activeRuleOrganizationId === organization.id && ruleDraft && <div className="exam-rule-panel"><div className="exam-room-panel-heading"><div><strong>Adım 03 · Oturma kuralları</strong><small>Kuralları birbirinden bağımsız açıp kapatabilirsin. Kurallar yalnızca kullanılabilir fiziksel koltuklar arasında değerlendirilir.</small></div></div><div className="exam-rule-list">{ruleLabels.map((rule) => <label key={rule.key}><span><strong>{rule.title}</strong><small>{rule.position}</small></span><input type="checkbox" checked={ruleDraft[rule.key]} onChange={(event) => setRuleDraft((current) => current ? { ...current, [rule.key]: event.target.checked } : current)} /></label>)}</div>{ruleError && <p className="exam-error" role="alert">{ruleError}</p>}{ruleMessage && <p className="exam-room-success" role="status">{ruleMessage}</p>}<div className="exam-room-footer"><span>Dağıtım adayı oluşturulurken bu ayarlar kullanılacak.</span><button type="button" disabled={ruleSaving} onClick={() => saveRules(organization.id)}>{ruleSaving ? 'Kaydediliyor…' : 'Kuralları kaydet'}</button></div></div>}
         </article>
-      })}
+      })}</div>
+        {section.orphan && <p className="exam-period-empty">Bu sınavlar bir dönem seçilmeden oluşturulmuş. Kartın üstündeki dönem kutusundan taşıyabilirsin.</p>}
+      </section>)}
     </div>}
   </section>
 }

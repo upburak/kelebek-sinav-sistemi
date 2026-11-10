@@ -157,7 +157,11 @@ def copy_organization(session: Session, source: ExamOrganization, payload: dict)
         exam_date = date.fromisoformat(str(payload.get("exam_date", "")).strip())
     except ValueError:
         raise ExamOrganizerError("Kopya için geçerli bir sınav tarihi seçin.") from None
+    # Kopya kaynağın sınav dönemini sürdürür; kaynak başka bir yıldansa dönem
+    # taşınamaz ve kopya "dönem atanmamış" olarak açılır, kullanıcı taşır.
+    period_id = source.exam_period_id if source.academic_year_id == year.id else None
     copy = ExamOrganization(academic_year_id=year.id, name=name, exam_date=exam_date, status="draft",
+                            exam_period_id=period_id,
                             copied_from_organization_id=source.id,
                             **{field: getattr(source, field) for field in RULE_FIELDS})
     session.add(copy)

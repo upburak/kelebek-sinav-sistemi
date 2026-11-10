@@ -102,11 +102,20 @@ class ExamFlowTests(unittest.TestCase):
                 session.flush()
                 self.seat_ids.append(seat.id)
 
+    def _first_period_id(self):
+        """Her sınav bir döneme bağlanır; yıl açılırken hazır gelen ilk dönemi kullan."""
+        response = self.client.get(f"/api/exam-periods?academic_year_id={self.year_id}")
+        self.assertEqual(response.status_code, 200, response.get_json())
+        periods = response.get_json()["periods"]
+        self.assertTrue(periods, "Yeni yılda hazır sınav dönemi bulunamadı.")
+        return periods[0]["id"]
+
     def _create_organization(self):
         response = self.client.post("/api/exam-organizations", json={
             "academic_year_id": self.year_id,
             "name": "SENTETİK DENEME SINAVI",
             "exam_date": "2026-11-08",
+            "exam_period_id": self._first_period_id(),
             "participant_groups": [
                 {"class_level": "9", "section": "A", "area": ""},
                 {"class_level": "9", "section": "B", "area": ""},

@@ -10,6 +10,15 @@ BASE_URL = os.environ.get("KELEBEK_PUBLIC_URL", "").rstrip("/")
 if not BASE_URL:
     pytest.skip("KELEBEK_PUBLIC_URL not set", allow_module_level=True)
 API = f"{BASE_URL}/api"
+
+def _first_period_id(year_id: str) -> str:
+    """Her sınav bir döneme bağlanır; yıl açılırken hazır gelen ilk dönemi kullan."""
+    response = requests.get(f"{API}/exam-periods", params={"academic_year_id": year_id}, timeout=20)
+    response.raise_for_status()
+    periods = response.json()["periods"]
+    assert periods, "Hazır sınav dönemi bulunamadı."
+    return periods[0]["id"]
+
 TAB_A = "tab-TEST-A-" + uuid.uuid4().hex[:8]
 TAB_B = "tab-TEST-B-" + uuid.uuid4().hex[:8]
 
@@ -30,7 +39,7 @@ def year_id():
 @pytest.fixture(scope="module")
 def org(year_id):
     groups = requests.get(f"{API}/student-groups", params={"academic_year_id": year_id}, timeout=20).json()["groups"]
-    payload = {"academic_year_id": year_id, "name": f"TEST_API_{uuid.uuid4().hex[:6]}", "exam_date": "2026-03-15",
+    payload = {"academic_year_id": year_id, "name": f"TEST_API_{uuid.uuid4().hex[:6]}", "exam_period_id": _first_period_id(year_id), "exam_date": "2026-03-15",
                "participant_groups": [{"class_level": g["class_level"], "section": g["section"], "area": g["area"]} for g in groups]}
     r = requests.post(f"{API}/exam-organizations", json=payload, timeout=30)
     assert r.status_code == 201, r.text
