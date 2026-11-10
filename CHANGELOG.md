@@ -2,6 +2,26 @@
 
 ## Geliştirme sürümü (0.3.0 sonrası)
 
+### Kural 7-8: aynı sınıf seviyesi yan yana/önlü arkalı oturamaz
+
+Kullanıcı gerçek bir dağıtım krokisine bakıp **9/A ile 9/B öğrencisinin yan yana
+oturduğunu** fark etti. İnceleme, kodun karar belgesine birebir uyduğunu gösterdi:
+belge "9 ve 10. sınıflarda alan bilgisi bulunmadığı için 3–6 numaralı alan
+kuralları bu öğrencilere uygulanmaz" diyor, dolayısıyla bu sınıflarda tek koruma
+"aynı şube" kuralıydı. Farklı şubeden iki 9. sınıf öğrencisi yan yana
+oturabiliyordu; oysa ikisi de aynı sınav kağıdını alır.
+
+Yazılım hatası değil, kural kümesindeki boşluktu. Kullanıcı onayıyla iki kural
+eklendi (karar belgesi v4.3, kural 7–8): **aynı sınıf seviyesindeki öğrenciler
+yan yana / önlü arkalı oturamaz.** Şube ve alan ayrımı gözetilmez. Mevcut altı
+kural aynen korundu, yeni kurallar da ayrı seçenekler olarak açılıp kapatılabilir
+ve varsayılan olarak açık gelir (migration `0019_same_grade_rules` mevcut
+sınavlarda da açık yapar).
+
+Uygulanabilirliği eklemeden önce ölçüldü: 236 öğrenci, koltuk sayısı tam eşit →
+2,9 saniyede optimal, 0 ihlal. Gerçek krokide aynı seviyeden yan yana oturan
+masa sayısı 4'ten 0'a indi.
+
 ### Başlangıç derslik düzeni gerçek sınıfa uyuyor
 
 Okul bildirdi: her derslikte **iki koridor** var ve 36 kişilik sınıfta **6 satır

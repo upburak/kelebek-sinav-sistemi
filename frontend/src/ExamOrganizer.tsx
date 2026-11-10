@@ -12,7 +12,7 @@ type GroupOption = {
 
 type CourseOption = { id: string; name: string }
 type CourseDraft = { id: number; name: string; groupKeys: string[] }
-type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back'
+type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back' | 'prevent_same_grade_adjacent' | 'prevent_same_grade_front_back'
 type RuleSet = Record<RuleKey, boolean>
 type CandidateAssignment = { participant_id: string; seat_id: string | null; seat_number: number | null; classroom_id: string | null; classroom_name: string | null; first_name: string; last_name: string; school_number: string; class_level: string; section: string; area: string | null }
 type Violation = { first_participant_id: string; second_participant_id: string; first_seat_id: string; second_seat_id: string; relation: string; reason: string }
@@ -27,6 +27,8 @@ const ruleLabels: { key: RuleKey; title: string; position: string }[] = [
   { key: 'prevent_different_grade_same_area_front_back', title: 'Farklı sınıf seviyelerinde aynı alan öğrencileri', position: 'Önlü arkalı' },
   { key: 'prevent_same_grade_area_adjacent', title: 'Aynı sınıf seviyesi ve alandaki öğrenciler', position: 'Yan yana' },
   { key: 'prevent_same_grade_area_front_back', title: 'Aynı sınıf seviyesi ve alandaki öğrenciler', position: 'Önlü arkalı' },
+  { key: 'prevent_same_grade_adjacent', title: 'Aynı sınıf seviyesindeki öğrenciler', position: 'Yan yana' },
+  { key: 'prevent_same_grade_front_back', title: 'Aynı sınıf seviyesindeki öğrenciler', position: 'Önlü arkalı' },
 ]
 type RoomOption = {
   classroom_id: string

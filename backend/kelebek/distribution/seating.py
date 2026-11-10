@@ -54,8 +54,11 @@ def _groups_conflict(first: tuple[str, str, str], second: tuple[str, str, str],
         return True
     if same_area and first[0] == second[0] and rules["prevent_same_grade_area" + suffix]:
         return True
-    return bool(same_area and first[0] != second[0]
-                and rules["prevent_different_grade_same_area" + suffix])
+    if same_area and first[0] != second[0] and rules["prevent_different_grade_same_area" + suffix]:
+        return True
+    # Kural 7-8: aynı sınıf seviyesindeki öğrenciler aynı sınav kağıdını alır.
+    # Alan bilgisi olmayan 9 ve 10. sınıflarda tek koruma bu kuraldır.
+    return bool(first[0] == second[0] and rules.get("prevent_same_grade" + suffix))
 
 
 class _ProgressCallback(cp_model.CpSolverSolutionCallback):

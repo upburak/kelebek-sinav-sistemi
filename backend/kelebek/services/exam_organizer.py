@@ -30,6 +30,8 @@ class ExamOrganizerError(ValueError):
 
 
 RULE_FIELDS = (
+    "prevent_same_grade_adjacent",
+    "prevent_same_grade_front_back",
     "prevent_same_section_adjacent",
     "prevent_same_section_front_back",
     "prevent_different_grade_same_area_adjacent",

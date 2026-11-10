@@ -26,6 +26,7 @@ TUM_KURALLAR = {
         "prevent_same_section_adjacent", "prevent_same_section_front_back",
         "prevent_different_grade_same_area_adjacent", "prevent_different_grade_same_area_front_back",
         "prevent_same_grade_area_adjacent", "prevent_same_grade_area_front_back",
+        "prevent_same_grade_adjacent", "prevent_same_grade_front_back",
     )
 }
 
@@ -152,6 +153,60 @@ class RealClassroomGeometryTests(unittest.TestCase):
         denetim = evaluate_assignments(participants, pairs, TUM_KURALLAR, eslesme)
         self.assertEqual(denetim["affected_student_count"], 0,
                          "Bağımsız denetim ihlal buldu.")
+
+
+class SameGradeRuleTests(unittest.TestCase):
+    """Kural 7-8: aynı sınıf seviyesindeki öğrenciler yan yana/önlü arkalı oturamaz.
+
+    Kullanıcı gerçek bir krokide 9/A ile 9/B öğrencisini yan yana görüp bunu
+    bildirdi. Alan bilgisi olmayan 9 ve 10. sınıflarda tek koruma "aynı şube"
+    kuralıydı; farklı şubeler yan yana oturabiliyordu, oysa ikisi de aynı sınav
+    kağıdını alır.
+    """
+
+    def _ayni_seviye_yan_yana(self, participants, rooms, pairs, sonuc) -> list[tuple[str, str]]:
+        """Yan yana oturup aynı sınıf seviyesinde olan öğrenci çiftlerini bul."""
+        by_participant = {item["id"]: item for item in participants}
+        by_seat = {item["seat_id"]: item["participant_id"] for item in sonuc["assignments"]}
+        bulunan = []
+        for first_seat, second_seat in pairs["adjacent"]:
+            first, second = by_seat.get(first_seat), by_seat.get(second_seat)
+            if not first or not second:
+                continue
+            if by_participant[first]["class_level"] == by_participant[second]["class_level"]:
+                bulunan.append((first, second))
+        return bulunan
+
+    def test_same_grade_students_do_not_sit_side_by_side(self):
+        participants, rooms, pairs = okul_kur(236)
+        sonuc = solve_candidate(participants, rooms, pairs, TUM_KURALLAR, time_limit=20.0)
+        self.assertEqual(len(sonuc["assignments"]), 236)
+        self.assertEqual(sonuc["affected_student_count"], 0)
+        self.assertEqual(self._ayni_seviye_yan_yana(participants, rooms, pairs, sonuc), [],
+                         "Aynı sınıf seviyesinden iki öğrenci yan yana oturuyor.")
+
+    def test_rule_can_be_switched_off(self):
+        """Kurallar ayrı seçenekler olarak kalır; kapatıldığında uygulanmaz."""
+        participants, rooms, pairs = okul_kur(72)
+        kurallar = dict(TUM_KURALLAR)
+        kurallar["prevent_same_grade_adjacent"] = False
+        kurallar["prevent_same_grade_front_back"] = False
+        sonuc = solve_candidate(participants, rooms, pairs, kurallar, time_limit=12.0)
+        self.assertEqual(len(sonuc["assignments"]), 72)
+
+    def test_violation_is_reported_with_a_clear_reason(self):
+        """Tek masa, iki koltuk, iki farklı şubeden 9. sınıf: ihlal bildirilmeli."""
+        participants, rooms, pairs = okul_kur(2, derslik_kapasitesi=2)
+        participants[0].update(class_level="9", section="A", area=None)
+        participants[1].update(class_level="9", section="B", area=None)
+        sonuc = solve_candidate(participants, rooms, pairs, TUM_KURALLAR, time_limit=12.0)
+        self.assertEqual(sonuc["affected_student_count"], 2)
+
+        eslesme = {item["participant_id"]: item["seat_id"] for item in sonuc["assignments"]}
+        denetim = evaluate_assignments(participants, pairs, TUM_KURALLAR, eslesme)
+        self.assertEqual(denetim["affected_student_count"], 2)
+        self.assertTrue(denetim["violations"])
+        self.assertIn("Aynı sınıf seviyesi", denetim["violations"][0]["reason"])
 
 
 class SeatingScaleTests(unittest.TestCase):

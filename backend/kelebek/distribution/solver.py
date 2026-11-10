@@ -6,8 +6,10 @@ from ortools.sat.python import cp_model
 from kelebek.distribution.seating import assign_students, solve_group_layout
 
 RULES = {
-    "adjacent": ("prevent_same_section_adjacent", "prevent_different_grade_same_area_adjacent", "prevent_same_grade_area_adjacent"),
-    "front_back": ("prevent_same_section_front_back", "prevent_different_grade_same_area_front_back", "prevent_same_grade_area_front_back"),
+    "adjacent": ("prevent_same_section_adjacent", "prevent_different_grade_same_area_adjacent",
+                 "prevent_same_grade_area_adjacent", "prevent_same_grade_adjacent"),
+    "front_back": ("prevent_same_section_front_back", "prevent_different_grade_same_area_front_back",
+                   "prevent_same_grade_area_front_back", "prevent_same_grade_front_back"),
 }
 
 
@@ -15,6 +17,7 @@ REASONS = {
     "prevent_same_section": "Aynı şube",
     "prevent_same_grade_area": "Aynı sınıf seviyesi ve alan",
     "prevent_different_grade_same_area": "Farklı sınıf seviyesi, aynı alan",
+    "prevent_same_grade": "Aynı sınıf seviyesi",
 }
 RELATION_LABELS = {"adjacent": "yan yana", "front_back": "önlü-arkalı"}
 
@@ -43,12 +46,18 @@ def _conflict_reason(first: dict, second: dict, rules: dict, relation: str) -> s
         return "prevent_same_grade_area"
     if same_area and first["class_level"] != second["class_level"] and rules["prevent_different_grade_same_area" + suffix]:
         return "prevent_different_grade_same_area"
+    # Kural 7-8: aynı sınıf seviyesi (şube ve alan ayrımı olmadan). Daha dar olan
+    # kurallar yukarıda ele alındığı için gerekçe olarak en sonda denenir.
+    if first["class_level"] == second["class_level"] and rules.get("prevent_same_grade" + suffix):
+        return "prevent_same_grade"
     return None
 
 
 def _participants_conflict(first: dict, second: dict, rules: dict, relation: str) -> bool:
     same_section = first["class_level"] == second["class_level"] and first["section"].casefold() == second["section"].casefold()
     same_area = bool(first.get("area")) and (first.get("area") or "").casefold() == (second.get("area") or "").casefold()
+    if first["class_level"] == second["class_level"] and rules.get("prevent_same_grade" + ("_adjacent" if relation == "adjacent" else "_front_back")):
+        return True
     if relation == "adjacent":
         return (same_section and rules["prevent_same_section_adjacent"]) or (
             same_area and first["class_level"] == second["class_level"] and rules["prevent_same_grade_area_adjacent"]

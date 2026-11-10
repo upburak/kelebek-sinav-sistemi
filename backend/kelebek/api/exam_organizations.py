@@ -72,6 +72,7 @@ exam_organizations_api = Blueprint("exam_organizations", __name__)
 
 RULE_NAMES = (
     "prevent_same_section_adjacent", "prevent_same_section_front_back",
+    "prevent_same_grade_adjacent", "prevent_same_grade_front_back",
     "prevent_different_grade_same_area_adjacent", "prevent_different_grade_same_area_front_back",
     "prevent_same_grade_area_adjacent", "prevent_same_grade_area_front_back",
 )
@@ -522,6 +523,7 @@ def create_distribution_candidate(organization_id: str):
                 ]})
             rules = {name: getattr(organization, name) for name in (
                 "prevent_same_section_adjacent", "prevent_same_section_front_back",
+                "prevent_same_grade_adjacent", "prevent_same_grade_front_back",
                 "prevent_different_grade_same_area_adjacent", "prevent_different_grade_same_area_front_back",
                 "prevent_same_grade_area_adjacent", "prevent_same_grade_area_front_back",
             )}
