@@ -2,6 +2,48 @@
 
 ## Geliştirme sürümü (0.3.0 sonrası)
 
+### Dağıtım çözücüsü gerçek okul mevcutlarında çalışıyor (kritik)
+
+Gerçek bir e-Okul sınıf listesiyle (236 öğrenci, 8 şube) denendiğinde uygulamanın
+**ana işini yapamadığı** ortaya çıktı: dağıtım 50 saniyede sonuç vermeden
+"geçerli aday bulunamadı" diyordu. 48 sentetik öğrenciyle yapılan önceki tüm
+testler geçtiği için sorun görünmüyordu. Koltuk sayısı öğrenci sayısına eşit
+olduğundan (okulun olağan durumu) kapasite artırmak çözüm değildi; kapasite
+%125'e çıkarıldığında da çözülemedi.
+
+**Kök neden.** Model "hangi öğrenci hangi koltukta" sorusunu kuruyordu:
+değişken sayısı öğrenci × koltuk, ihlal değişkenleri öğrenci çifti × koltuk çifti
+kadardı. Üstelik altı kuralın tamamı yalnızca sınıf/şube/alan üçlüsüne baktığı için
+aynı gruptaki öğrencilerin her permütasyonu çözücüye farklı bir çözüm gibi
+görünüyor, arama kendini tekrar ediyordu.
+
+**Çözüm.** Model artık öğrenci değil **grup** üzerinden kuruluyor
+(`kelebek/distribution/seating.py`): önce hangi koltukta hangi grubun oturacağı
+çözülür (değişken sayısı koltuk × grup), sonra her grubun kazandığı koltuklara o
+gruptaki öğrenciler saf Python'la yerleştirilir. Kurallar gruba bağlı olduğu için
+bu eşleme ihlal sayısını değiştiremez.
+
+| Öğrenci | Önce | Sonra |
+|---|---|---|
+| 236 | 50 sn, çözülemedi | **2,5 sn, optimal, 0 ihlal** |
+| 600 | — | 5,8 sn, optimal, 0 ihlal |
+| 1000 | — | 12 sn içinde 0 ihlalli çözüm |
+| 1500 | — | 12 sn içinde 0 ihlalli çözüm |
+
+Hepsi koltuk sayısı öğrenci sayısına **tam eşitken** ölçüldü.
+
+**Davranış değişikliği:** eskiden modelde "etkilenen öğrenci sayısı ≤ 5" katı bir
+kısıttı; sağlanamadığında kullanıcıya hiç aday üretilmiyor, yalnızca hata
+gösteriliyordu. Artık bu bir eniyileme hedefi: en az ihlalli aday her durumda
+üretilir, kullanıcı ihlalleri görüp "Tümünü düzelt" ile giderebilir.
+Kesinleştirme aşaması etkilenen öğrenci sayısını zaten ayrıca denetliyor.
+
+Testler: `backend/tests/test_seating_scale.py` (9 test) doğruluğu ve ölçeği
+birlikte sabitler. Çözücü hızlandığı için ilerleme/durdurma uçtan uca testleri de
+güncellendi: 48 öğrencilik dağıtım artık arama aşaması yakalanamayacak kadar
+hızlı bitiyor.
+
+
 ### Tasarım ve ergonomi turu
 
 Arayüz ölçülerek incelendi (üç pencere genişliği, yedi ekran, gerçek zemine göre
