@@ -1,6 +1,6 @@
 import { useEffect, useState, type DragEvent, type FormEvent } from 'react'
 
-type Classroom = { id: string; name: string; layout_count: number }
+type Classroom = { id: string; name: string; layout_count: number; seat_count?: number }
 type ClassroomLayout = {
   id: string
   name: string
@@ -399,7 +399,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
             <div className={`classroom-list-item ${selectedClassroomId === classroom.id ? 'selected' : ''}`} key={classroom.id}>
               <button type="button" className="classroom-list-select" onClick={() => void selectClassroom(classroom.id)}>
                 <span>{classroom.name}</span>
-                <small>{classroom.layout_count} düzen</small>
+                <small>{classroom.layout_count === 0 ? 'Düzen yok' : `${classroom.seat_count ?? 0} koltuk · ${classroom.layout_count} düzen`}</small>
               </button>
               {!readOnly && <span className="classroom-list-actions">
                 <button type="button" disabled={saving} onClick={() => {

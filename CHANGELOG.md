@@ -1,6 +1,23 @@
 # Değişiklik günlüğü
 
-## Geliştirme sürümü (0.3.0 sonrası)
+## 0.4.0 — 10 Kasım 2026
+
+### Genel Bakış panosu ve kullanılabilirlik
+
+- **Genel Bakış canlı veriden çalışıyor.** Eski "Kurulum adımları" kartı sabit
+  yazılmıştı: 236 öğrenci ve 8 derslik kayıtlıyken bile "1 / 3 hazır" diyor,
+  "Öğrenci ve sınıflar: Bekliyor" gösteriyordu. Yeni pano öğrenci, koltuk
+  kapasitesi (öğrenci sayısıyla karşılaştırmalı), sınav ve son yedek durumunu,
+  beş adımlı yol haritasını ve yaklaşan sınavları sıradaki işlemle birlikte
+  gösterir. Kutular ilgili bölüme götürür.
+- Öğrenci listesine arama ve sınıf/şube filtresi eklendi; tablo başlığı sabit.
+- Derslik kartları kullanılabilir koltuk sayısını gösterir; "9-A" artık "10-A"dan
+  önce sıralanır.
+- Raporlar ekranındaki yanlış alt başlık ve çift başlık, sınav ekranındaki
+  "Altı komşuluk kuralı" metni (artık sekiz) ve alt bilgi hizası düzeltildi.
+- Paketler artık `main` dalına her birleştirmede kendiliğinden üretilir ve
+  GitHub Releases altında yayımlanır.
+
 
 ### Koridor ve çapraz komşuluk (Karar 37 güncellendi)
 

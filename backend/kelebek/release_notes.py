@@ -2,6 +2,19 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.4.0",
+    "date": "2026-11-10",
+    "items": [
+      "Genel Bakış yenilendi: öğrenci, koltuk, sınav ve yedek durumu ile sıradaki adım canlı gösteriliyor",
+      "Sınav dönemleri: Güz 1/2 ve Bahar 1/2 hazır gelir; adları değiştirilebilir, dönem eklenip silinebilir",
+      "Yeni kurallar: aynı sınıf seviyesindeki öğrenciler yan yana ve önlü arkalı oturmaz",
+      "Koridorun iki yanındaki öğrenciler de yan yana sayılır; çapraz komşuluk ayrıca denetlenir",
+      "Dağıtım, koltuk sayısı öğrenci sayısına eşit olan büyük okullarda saniyeler içinde sonuç verir",
+      "Excel'den içe aktarma düzeltildi; başlangıç derslik düzeni üç blok ve iki koridorla kurulur",
+      "Öğrenci listesinde arama ve sınıf filtresi; dersliklerde koltuk sayısı ve doğal sıralama"
+    ]
+  },
+  {
     "version": "0.3.0",
     "date": "2026-11-09",
     "items": [
