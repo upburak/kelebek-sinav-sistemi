@@ -19,7 +19,7 @@ REASONS = {
     "prevent_different_grade_same_area": "Farklı sınıf seviyesi, aynı alan",
     "prevent_same_grade": "Aynı sınıf seviyesi",
 }
-RELATION_LABELS = {"adjacent": "yan yana", "front_back": "önlü-arkalı"}
+RELATION_LABELS = {"adjacent": "yan yana", "front_back": "önlü-arkalı", "diagonal": "çapraz"}
 
 
 class DistributionError(ValueError):
@@ -48,7 +48,7 @@ def _conflict_reason(first: dict, second: dict, rules: dict, relation: str) -> s
         return "prevent_different_grade_same_area"
     # Kural 7-8: aynı sınıf seviyesi (şube ve alan ayrımı olmadan). Daha dar olan
     # kurallar yukarıda ele alındığı için gerekçe olarak en sonda denenir.
-    if first["class_level"] == second["class_level"] and rules.get("prevent_same_grade" + suffix):
+    if relation != "diagonal" and first["class_level"] == second["class_level"] and rules.get("prevent_same_grade" + suffix):
         return "prevent_same_grade"
     return None
 
@@ -56,7 +56,7 @@ def _conflict_reason(first: dict, second: dict, rules: dict, relation: str) -> s
 def _participants_conflict(first: dict, second: dict, rules: dict, relation: str) -> bool:
     same_section = first["class_level"] == second["class_level"] and first["section"].casefold() == second["section"].casefold()
     same_area = bool(first.get("area")) and (first.get("area") or "").casefold() == (second.get("area") or "").casefold()
-    if first["class_level"] == second["class_level"] and rules.get("prevent_same_grade" + ("_adjacent" if relation == "adjacent" else "_front_back")):
+    if relation != "diagonal" and first["class_level"] == second["class_level"] and rules.get("prevent_same_grade" + ("_adjacent" if relation == "adjacent" else "_front_back")):
         return True
     if relation == "adjacent":
         return (same_section and rules["prevent_same_section_adjacent"]) or (
@@ -73,8 +73,8 @@ def evaluate_assignments(participants: list[dict], seat_pairs: dict, rules: dict
     by_participant = {item["id"]: item for item in participants}
     affected = set()
     violations = {}
-    for relation in ("adjacent", "front_back"):
-        for first_seat, second_seat in seat_pairs[relation]:
+    for relation in ("adjacent", "front_back", "diagonal"):
+        for first_seat, second_seat in seat_pairs.get(relation, ()):
             first_id, second_id = by_seat.get(first_seat), by_seat.get(second_seat)
             if not first_id or not second_id:
                 continue
@@ -97,8 +97,8 @@ def suggest_violation_fixes(participants: list[dict], seat_pairs: dict, rules: d
     by_participant = {item["id"]: item for item in participants}
     by_seat = {seat_id: participant_id for participant_id, seat_id in assignments.items()}
     neighbors: dict[str, list[tuple[str, str]]] = {}
-    for relation in ("adjacent", "front_back"):
-        for first, second in seat_pairs[relation]:
+    for relation in ("adjacent", "front_back", "diagonal"):
+        for first, second in seat_pairs.get(relation, ()):
             neighbors.setdefault(first, []).append((second, relation))
             neighbors.setdefault(second, []).append((first, relation))
     free_seats = [seat_id for seat_id in seat_info if seat_id not in by_seat]

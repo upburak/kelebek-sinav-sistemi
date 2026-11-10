@@ -738,14 +738,21 @@ ayrıntı kullanıcıyla ayrıca kararlaştırılacaktır.
 
 ### Karar 37 -- Koridor sınırları ve çapraz önlü/arkalı komşuluk
 
--   Koridorla birbirinden ayrılmış masa blokları arasında komşuluk
-    ilişkisi kurulmaz. Koridorun karşı tarafındaki masalar yan yana,
-    önlü/arkalı veya çapraz komşu kabul edilmez.
+-   Koridorun karşı tarafındaki oturma yeri **yan yana komşu** kabul
+    edilir; yan yana kuralları koridorun iki kenarındaki öğrenciler için
+    de uygulanır. Koridor üzerinden önlü/arkalı veya çapraz komşuluk
+    kurulmaz. (10 Kasım 2026, kullanıcı onayıyla güncellendi; önceki metin
+    koridorun karşısını hiçbir biçimde komşu saymıyordu.)
 -   Aynı blok içinde, ardışık ön/arka sıralarda doğrudan hizalı oturma
     yerlerinin yanı sıra çapraz konumdaki oturma yerleri de önlü/arkalı
     komşuluk kapsamında değerlendirilir.
 -   Çapraz komşuluk, önlü/arkalı oturma kuralına eklenir; ayrı bir kural
     seçeneği olarak sunulmaz.
+-   İstisna: 8 numaralı kural (aynı sınıf seviyesi önlü/arkalı) yalnızca
+    doğrudan hizalı oturma yerlerine uygulanır, çapraza uygulanmaz. Koltuk
+    sayısı öğrenci sayısına eşitken dört sınıf seviyesiyle çaprazı da
+    kapsayan ihlalsiz bir yerleşim matematiksel olarak bulunmaz. Aynı şube
+    ve aynı alan kuralları çaprazda da geçerlidir.
 -   Yan yana kuralı yalnızca aynı sıradaki yatay komşuluğu kapsar.
     Çapraz komşuluk yan yana kuralına dahil edilmez.
 -   Çapraz komşuluk hesabı da masaların gerçek fiziksel konumuna ve

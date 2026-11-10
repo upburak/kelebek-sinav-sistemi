@@ -175,7 +175,7 @@ def _review_selected_candidate(session, organization, candidate_id=None):
         .join(ClassroomLayout, ClassroomLayout.id == ExamOrganizationClassroom.layout_id)
         .where(ExamOrganizationClassroom.organization_id == organization.id)
     ).all()
-    seat_pairs = {"adjacent": [], "front_back": []}
+    seat_pairs = {"adjacent": [], "front_back": [], "diagonal": []}
     available_seat_ids = set()
     room_capacities = []
     seat_info = {}
@@ -197,6 +197,7 @@ def _review_selected_candidate(session, organization, candidate_id=None):
         } for desk in desks])
         seat_pairs["adjacent"].extend(graph["adjacent"])
         seat_pairs["front_back"].extend(graph["front_back"])
+        seat_pairs["diagonal"].extend(graph["diagonal"])
         room_capacities.append({"classroom_id": _classroom.id, "classroom_name": _classroom.name, "available_seats": len([seat for seat in seats if seat.is_available])})
     rows = session.scalars(
         select(SeatAssignment)
@@ -503,7 +504,7 @@ def create_distribution_candidate(organization_id: str):
             ).all()
             if not selections:
                 return jsonify({"error": "Dağıtımdan önce en az bir derslik seçin."}), 409
-            rooms, all_pairs = [], {"adjacent": [], "front_back": []}
+            rooms, all_pairs = [], {"adjacent": [], "front_back": [], "diagonal": []}
             seat_labels = {}
             for _selection, classroom, layout in selections:
                 desks = session.scalars(select(Desk).where(Desk.layout_id == layout.id)).all()
@@ -517,6 +518,7 @@ def create_distribution_candidate(organization_id: str):
                 } for desk in desks])
                 all_pairs["adjacent"].extend(graph["adjacent"])
                 all_pairs["front_back"].extend(graph["front_back"])
+                all_pairs["diagonal"].extend(graph["diagonal"])
                 rooms.append({"id": classroom.id, "seats": [
                     {"id": seat.id, "classroom_id": classroom.id, "is_available": seat.is_available}
                     for desk_seats in seats_by_desk.values() for seat in desk_seats

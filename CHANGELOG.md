@@ -2,6 +2,20 @@
 
 ## Geliştirme sürümü (0.3.0 sonrası)
 
+### Koridor ve çapraz komşuluk (Karar 37 güncellendi)
+
+Kullanıcı onayıyla komşuluk modeli üç ilişkiye ayrıldı:
+
+- **Yan yana** artık koridoru aşar: koridorun iki kenarındaki öğrenciler de
+  yan yana sayılır ve yan yana kuralları onlara da uygulanır.
+- **Önlü arkalı** (doğrudan hizalı) ve **çapraz** koridoru aşmaz.
+- Çapraz, önlü/arkalı kurallarına tabidir; tek istisna kural 8'dir (aynı sınıf
+  seviyesi). Ölçüm: kural 8 çapraza da uygulanınca 236 öğrenci / 236 koltukta
+  en iyi çözüm bile ~54 öğrenciyi etkiliyor (2×2'lik her pencere dört ayrı
+  seviye ister). Çapraz dışarıda tutulunca 0 ihlal.
+
+İhlal açıklamalarında ilişki artık "çapraz" olarak da belirtilir.
+
 ### Kural 7-8: aynı sınıf seviyesi yan yana/önlü arkalı oturamaz
 
 Kullanıcı gerçek bir dağıtım krokisine bakıp **9/A ile 9/B öğrencisinin yan yana

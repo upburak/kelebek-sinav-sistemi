@@ -77,7 +77,7 @@ def okul_kur(ogrenci_sayisi: int, koltuk_sayisi: int | None = None, derslik_kapa
     """Koltuk sayısı varsayılan olarak öğrenci sayısına eşittir (okulun gerçek durumu)."""
     koltuk_sayisi = ogrenci_sayisi if koltuk_sayisi is None else koltuk_sayisi
     rooms = []
-    adjacent, front_back = [], []
+    adjacent, front_back, diagonal = [], [], []
     kalan, oda_index = koltuk_sayisi, 0
     while kalan > 0:
         kapasite = min(derslik_kapasitesi, kalan)
@@ -89,8 +89,10 @@ def okul_kur(ogrenci_sayisi: int, koltuk_sayisi: int | None = None, derslik_kapa
         oda_pairs = build_neighbor_pairs(desks)
         adjacent.extend(oda_pairs["adjacent"])
         front_back.extend(oda_pairs["front_back"])
+        diagonal.extend(oda_pairs["diagonal"])
         oda_index += 1
-    pairs = {"adjacent": sorted(adjacent), "front_back": sorted(front_back)}
+    pairs = {"adjacent": sorted(adjacent), "front_back": sorted(front_back),
+             "diagonal": sorted(diagonal)}
     participants = [
         {"id": f"p{i}", "class_level": SUBELER[i % 8][0], "section": SUBELER[i % 8][1],
          "area": SUBELER[i % 8][2] or None}
@@ -111,26 +113,47 @@ class RealClassroomGeometryTests(unittest.TestCase):
         self.assertEqual(bloklar, [0.0, 4.0, 8.0], "Üç blok ve aralarında iki koridor olmalı.")
         self.assertEqual(len({desk["y"] for desk in desks}), 6, "Altı satır olmalı.")
 
-    def test_corridor_breaks_side_by_side_neighbourhood(self):
-        """Koridorun iki yanındaki öğrenciler yan yana sayılmaz."""
+    def test_corridor_allows_only_side_by_side_neighbourhood(self):
+        """Koridorun karşısı yan yana sayılır; önlü arkalı ve çapraz koridoru aşmaz."""
         _room, desks = derslik_kur(0, 36)
         pairs = build_neighbor_pairs(desks)
 
-        # Yan yana: yalnızca aynı masadaki iki koltuk → 18 masa × 1 çift.
-        self.assertEqual(len(pairs["adjacent"]), 18,
-                         "Koridorlar olmasaydı bloklar arası komşuluk da sayılırdı.")
-        # Önlü arkalı: 3 blok × 5 satır aralığı × 2 koltuk.
+        # Yan yana: 18 masa içi çift + 6 satır × 2 koridor.
+        self.assertEqual(len(pairs["adjacent"]), 30)
+        # Önlü arkalı (doğrudan): 3 blok × 5 satır aralığı × 2 koltuk.
         self.assertEqual(len(pairs["front_back"]), 30)
+        # Çapraz: blok içinde, her satır aralığında 2 çift.
+        self.assertEqual(len(pairs["diagonal"]), 30)
 
-        # Koridorun iki yanındaki masaların koltukları arasında çift bulunmamalı.
-        blok_birinci = next(d for d in desks if d["x"] == 0.0 and d["y"] == 0.0)
-        blok_ikinci = next(d for d in desks if d["x"] == 4.0 and d["y"] == 0.0)
-        karsi_koltuklar = {
-            tuple(sorted((a["id"], b["id"])))
-            for a in blok_birinci["seats"] for b in blok_ikinci["seats"]
-        }
-        self.assertFalse(karsi_koltuklar & set(pairs["adjacent"]),
-                         "Koridorun iki yanı yan yana sayılmış.")
+        def masa(x, y):
+            return next(d for d in desks if d["x"] == x and d["y"] == y)
+
+        def cift(a, b):
+            return tuple(sorted((a["id"], b["id"])))
+
+        sol, sag, sag_arka = masa(0.0, 0.0), masa(4.0, 0.0), masa(4.0, 2.0)
+        # Koridorun iki kenarındaki koltuklar yan yanadır.
+        self.assertIn(cift(sol["seats"][-1], sag["seats"][0]), pairs["adjacent"])
+        # Koridor üzerinden önlü arkalı ya da çapraz komşuluk yoktur.
+        karsi = {cift(a, b) for a in sol["seats"] for b in sag_arka["seats"]}
+        self.assertFalse(karsi & (set(pairs["front_back"]) | set(pairs["diagonal"])),
+                         "Önlü arkalı/çapraz komşuluk koridoru aşmış.")
+
+    def test_legacy_mode_can_still_cut_side_by_side_at_corridor(self):
+        _room, desks = derslik_kur(0, 36)
+        pairs = build_neighbor_pairs(desks, side_by_side_crosses_corridor=False)
+        self.assertEqual(len(pairs["adjacent"]), 18)
+
+    def test_same_grade_rule_skips_diagonal_but_other_rules_apply(self):
+        """Kural 8 çapraza uygulanmaz; şube/alan kuralları çaprazda da geçerlidir."""
+        from kelebek.distribution.seating import _groups_conflict
+        dokuz_a, dokuz_b = ("9", "a", ""), ("9", "b", "")
+        self.assertTrue(_groups_conflict(dokuz_a, dokuz_b, TUM_KURALLAR, "front_back"))
+        self.assertTrue(_groups_conflict(dokuz_a, dokuz_b, TUM_KURALLAR, "adjacent"))
+        self.assertFalse(_groups_conflict(dokuz_a, dokuz_b, TUM_KURALLAR, "diagonal"))
+        self.assertTrue(_groups_conflict(dokuz_a, dokuz_a, TUM_KURALLAR, "diagonal"))
+        self.assertTrue(_groups_conflict(("11", "a", "sayısal"), ("12", "c", "sayısal"),
+                                         TUM_KURALLAR, "diagonal"))
 
     def test_single_room_of_thirty_six_seats_at_exact_capacity(self):
         participants, rooms, pairs = okul_kur(36)

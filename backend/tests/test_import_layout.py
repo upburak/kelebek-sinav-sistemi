@@ -101,19 +101,17 @@ class ImportLayoutTests(unittest.TestCase):
                 # Bloklar dört birim arayla durur; aradaki boş ızgara sütunu koridordur.
                 self.assertEqual(sonra - once, 4.0, f"{ad}: bloklar arasında koridor yok.")
 
-    def test_corridor_removes_side_by_side_pairs_between_blocks(self):
-        """Koridorun iki yanındaki öğrenciler yan yana sayılmamalı."""
+    def test_corridor_keeps_side_by_side_but_not_front_back(self):
+        """Koridorun iki yanı yan yana sayılır; önlü arkalı ve çapraz koridoru aşmaz."""
         self._aktar(36)
         for ad, desks in self._taslak_duzenler():
             pairs = build_neighbor_pairs(desks)
-            masa_ici = {
-                tuple(sorted((d["seats"][0]["id"], d["seats"][1]["id"])))
-                for d in desks if len(d["seats"]) == 2
-            }
-            self.assertEqual(set(pairs["adjacent"]), masa_ici,
-                             f"{ad}: koridorun iki yanı yan yana sayılmış.")
+            # 18 masa içi çift + 6 satır × 2 koridor.
+            self.assertEqual(len(pairs["adjacent"]), 30, f"{ad}: koridor üstü yan yana eksik.")
             self.assertEqual(len(pairs["front_back"]), 30,
                              f"{ad}: 3 blok × 5 satır aralığı × 2 koltuk beklenir.")
+            self.assertEqual(len(pairs["diagonal"]), 30,
+                             f"{ad}: çapraz yalnızca blok içinde sayılmalı.")
 
     def test_small_room_still_keeps_corridors(self):
         """12 kişilik sınıf da üç bloklu olmalı; eski kural hiç koridor bırakmıyordu."""

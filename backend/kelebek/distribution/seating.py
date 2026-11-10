@@ -58,6 +58,9 @@ def _groups_conflict(first: tuple[str, str, str], second: tuple[str, str, str],
         return True
     # Kural 7-8: aynı sınıf seviyesindeki öğrenciler aynı sınav kağıdını alır.
     # Alan bilgisi olmayan 9 ve 10. sınıflarda tek koruma bu kuraldır.
+    # Kural 8 çapraza uygulanmaz (bkz. neighbors modülü).
+    if relation == "diagonal":
+        return False
     return bool(first[0] == second[0] and rules.get("prevent_same_grade" + suffix))
 
 
@@ -106,7 +109,7 @@ def solve_group_layout(participants: list[dict], rooms: list[dict], seat_pairs: 
     # İhlaller: koltuk çifti × çakışan grup çifti. Öğrenci sayısından bağımsızdır.
     seat_affected = [model.new_bool_var(f"aff_{s}") for s in range(len(seat_ids))]
     violations = []
-    for relation in ("adjacent", "front_back"):
+    for relation in ("adjacent", "front_back", "diagonal"):
         for first_seat, second_seat in seat_pairs.get(relation, ()):
             if first_seat not in seat_index or second_seat not in seat_index:
                 continue
