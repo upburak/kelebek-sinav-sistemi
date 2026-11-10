@@ -73,8 +73,7 @@ type ExamOrganization = {
 
 type Props = {
   academicYearId: string | null
-  academicYearLabel: string
-  readOnly: boolean
+    readOnly: boolean
   onStudents: () => void
   onClassrooms: () => void
 }
@@ -129,7 +128,7 @@ function GroupSelector({
   </div>
 }
 
-export default function ExamOrganizer({ academicYearId, academicYearLabel, readOnly: yearReadOnly, onStudents, onClassrooms }: Props) {
+export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, onStudents, onClassrooms }: Props) {
   const readOnly = yearReadOnly
   const [reloadKey, setReloadKey] = useState(0)
   const [notice, setNotice] = useState('')
@@ -302,7 +301,12 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     if (orphans.length) {
       sections.push({ key: '__orphan__', title: 'Dönem atanmamış', items: orphans, orphan: true })
     }
-    return sections
+    // İçinde sınav olan dönemler önce gelir. Aksi halde dört boş dönem başlığı
+    // ekranı doldurup kullanıcının asıl işini katlamanın altına itiyordu.
+    return {
+      dolu: sections.filter((item) => item.items.length > 0),
+      bos: sections.filter((item) => item.items.length === 0),
+    }
   }, [organizations, periods])
 
   async function periodRequest(path: string, method: string, body?: unknown) {
@@ -731,9 +735,10 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
   return <section className="exam-organizer" aria-labelledby="exam-organizer-title">
     <div className="exam-organizer-heading">
       <div>
-        <span className="eyebrow">SINAV HAZIRLIĞI · {academicYearLabel || 'EĞİTİM YILI'}</span>
-        <h2 id="exam-organizer-title">Sınav organizasyonları</h2>
-        <p>Önce sınavı ve katılacak öğrenci gruplarını belirle. Ders seçmek isteğe bağlıdır.</p>
+        {/* Sayfa başlığı ve eğitim yılı üstte zaten yazıyor; burada tekrar
+            etmek yerine yalnızca ne yapılacağını anlatan tek satır kalır. */}
+        <h2 id="exam-organizer-title" className="visually-hidden">Sınav organizasyonları</h2>
+        <p>Sınavı ve katılacak öğrenci gruplarını belirle, sonra dağıtımı oluştur. Ders seçmek isteğe bağlıdır.</p>
       </div>
       {!readOnly && <div className="exam-header-actions">
         <button type="button" className="exam-period-manage-btn" data-testid="exam-period-manage-btn" onClick={() => { setPeriodPanelOpen((open) => !open); setPeriodError('') }}>
@@ -799,14 +804,15 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
     {notice && <p className="exam-room-success exam-notice-toast" role="status" data-testid="exam-notice">{notice} <button type="button" onClick={() => setNotice('')}>Kapat</button></p>}
     {error && !formOpen && <p className="exam-error" role="alert">{error}</p>}
     {loading ? <div className="exam-empty">Organizasyonlar yükleniyor…</div> : organizations.length === 0 && !formOpen ? <div className="exam-empty"><strong>{groups.length ? 'Henüz sınav organizasyonu yok.' : 'Bu eğitim yılında öğrenci grubu bulunamadı.'}</strong><span>{groups.length ? 'İlk taslağı oluştur; ders seçmek zorunlu değil.' : 'Önce öğrenci listesini içe aktar veya örnek verilerle başlangıç yap.'}</span>{groups.length ? !readOnly && <button type="button" onClick={() => setFormOpen(true)}>İlk organizasyonu oluştur</button> : <button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button>}</div> : <div className="exam-organization-groups">
-      {groupedOrganizations.map((section) => <section className="exam-period-section" key={section.key} data-testid={`exam-period-${section.key}`}>
+      {groupedOrganizations.bos.length > 0 && <p className="exam-period-idle" data-testid="exam-period-idle">
+        <span>Sınavı olmayan dönemler:</span> {groupedOrganizations.bos.map((item) => item.title).join(' · ')}
+      </p>}
+      {groupedOrganizations.dolu.map((section) => <section className="exam-period-section" key={section.key} data-testid={`exam-period-${section.key}`}>
         <header className="exam-period-header">
           <h3>{section.title}</h3>
           <span className="exam-period-count">{section.items.length} sınav</span>
         </header>
-        {section.items.length === 0
-          ? <p className="exam-period-empty">Bu dönemde henüz sınav yok.</p>
-          : <div className="exam-organization-list">{section.items.map((organization) => {
+        <div className="exam-organization-list">{section.items.map((organization) => {
         const selectedRoomCount = organization.room_selections?.length ?? 0
         const roomEditorOpen = activeRoomOrganizationId === organization.id
         const lockedByOther = Boolean(locks[organization.id] && !locks[organization.id].mine)
@@ -954,7 +960,7 @@ export default function ExamOrganizer({ academicYearId, academicYearLabel, readO
           {finalizeConfirmId === organization.id && finalReviews[organization.id] && <div className="final-review-panel"><strong>Son kontrol · kesinleştirme öncesi</strong><span>{finalReviews[organization.id].seated_count}/{finalReviews[organization.id].participant_count} öğrenci oturuyor · {finalReviews[organization.id].unassigned_count} bekleyen · {finalReviews[organization.id].available_capacity} kullanılabilir koltuk · {finalReviews[organization.id].empty_seats} boş koltuk</span><span>{finalReviews[organization.id].violation_count} komşuluk ihlali · {finalReviews[organization.id].affected_student_count} öğrenci etkileniyor</span><div>{finalReviews[organization.id].rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students}/{room.available_seats} dolu · {room.empty_seats} boş</small>)}</div><p>Başlangıç kapasitesi fiziksel sınıf planının yerine geçmez. Masa, sıra, koridor ve kullanılabilir koltukları gerçek derslikle karşılaştırın.</p>{!finalReviews[organization.id].can_finalize && <p className="exam-error">Bekleyen öğrenci kalmamalı ve kural ihlalinden etkilenen öğrenci sayısı beşi aşmamalı.</p>}<label><input type="checkbox" data-testid="finalize-confirm-checkbox" checked={finalizeConfirmed} onChange={(event) => setFinalizeConfirmed(event.target.checked)} />Dağıtımı kontrol ettim; seçilen dersliklerin fiziksel planlarını doğruladım ve sınavı kesinleştirmek istiyorum.</label>{reviewError && <p className="exam-error" role="alert">{reviewError}</p>}<div><button type="button" onClick={() => setFinalizeConfirmId(null)}>Vazgeç</button><button type="button" data-testid="finalize-submit-btn" disabled={!finalizeConfirmed || !finalReviews[organization.id].can_finalize || finalizing} onClick={() => void finalizeOrganization(organization.id)}>{finalizing ? 'Kesinleştiriliyor…' : 'Onayla ve kesinleştir'}</button></div></div>}
           {activeRuleOrganizationId === organization.id && ruleDraft && <div className="exam-rule-panel"><div className="exam-room-panel-heading"><div><strong>Adım 03 · Oturma kuralları</strong><small>Kuralları birbirinden bağımsız açıp kapatabilirsin. Kurallar yalnızca kullanılabilir fiziksel koltuklar arasında değerlendirilir.</small></div></div><div className="exam-rule-list">{ruleLabels.map((rule) => <label key={rule.key}><span><strong>{rule.title}</strong><small>{rule.position}</small></span><input type="checkbox" checked={ruleDraft[rule.key]} onChange={(event) => setRuleDraft((current) => current ? { ...current, [rule.key]: event.target.checked } : current)} /></label>)}</div>{ruleError && <p className="exam-error" role="alert">{ruleError}</p>}{ruleMessage && <p className="exam-room-success" role="status">{ruleMessage}</p>}<div className="exam-room-footer"><span>Dağıtım adayı oluşturulurken bu ayarlar kullanılacak.</span><button type="button" disabled={ruleSaving} onClick={() => saveRules(organization.id)}>{ruleSaving ? 'Kaydediliyor…' : 'Kuralları kaydet'}</button></div></div>}
         </article>
-      })}</div>}
+      })}</div>
         {section.orphan && <p className="exam-period-empty">Bu sınavlar bir dönem seçilmeden oluşturulmuş. Kartın üstündeki dönem kutusundan taşıyabilirsin.</p>}
       </section>)}
     </div>}
