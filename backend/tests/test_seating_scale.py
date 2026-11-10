@@ -16,6 +16,7 @@ sabitler; ölçek testi olmadan aynı hata sessizce geri gelebilir.
 import time
 import unittest
 
+from kelebek.distribution.neighbors import build_neighbor_pairs
 from kelebek.distribution.seating import BOS_GRUP, assign_students, solve_group_layout
 from kelebek.distribution.solver import DistributionError, evaluate_assignments, solve_candidate
 
@@ -34,36 +35,123 @@ SUBELER = [
 ]
 
 
-def okul_kur(ogrenci_sayisi: int, koltuk_sayisi: int | None = None, satir: int = 5, sutun: int = 6):
+def derslik_kur(oda_index: int, koltuk_sayisi: int, bloklar: int = 3, satir: int = 6):
+    """Gerçek sınıf düzeni: bloklar halinde çiftli masalar ve aralarında koridor.
+
+    Okulun bildirdiği düzen: 36 kişilik sınıfta 6 satır çiftli masa ve iki koridor.
+    Üç blok × altı satır × iki kişilik masa = 36 koltuk.
+
+    Koridor, ızgarada bir sütun atlanarak temsil edilir (masa x'i 2 yerine 4
+    artar); ``build_neighbor_pairs`` bu boşluğu görünce koridorun iki yanını
+    komşu saymaz. Komşuluk grafiği bu yüzden elle değil, uygulamanın kendi
+    hesabıyla üretilir.
+    """
+    desks, seat_id = [], 0
+    kalan = koltuk_sayisi
+    for satir_index in range(satir):
+        for blok in range(bloklar):
+            if kalan <= 0:
+                break
+            masadaki = min(2, kalan)
+            kalan -= masadaki
+            seats = []
+            for seat_index in range(1, masadaki + 1):
+                seat_id += 1
+                seats.append({
+                    "id": f"r{oda_index}s{seat_id}", "seat_index": seat_index,
+                    "seat_number": seat_id, "is_available": True,
+                    "classroom_id": f"r{oda_index}",
+                })
+            desks.append({
+                "id": f"r{oda_index}d{satir_index}_{blok}",
+                # Blok başına 4 birim: aradaki boş ızgara sütunu koridordur.
+                "x": float(blok * 4), "y": float(satir_index * 2), "seats": seats,
+            })
+    room = {"id": f"r{oda_index}", "name": f"Derslik {oda_index}",
+            "seats": [seat for desk in desks for seat in desk["seats"]]}
+    return room, desks
+
+
+def okul_kur(ogrenci_sayisi: int, koltuk_sayisi: int | None = None, derslik_kapasitesi: int = 36):
     """Koltuk sayısı varsayılan olarak öğrenci sayısına eşittir (okulun gerçek durumu)."""
     koltuk_sayisi = ogrenci_sayisi if koltuk_sayisi is None else koltuk_sayisi
-    rooms, adjacent, front_back = [], set(), set()
-    seat_id = 0
+    rooms = []
+    adjacent, front_back = [], []
     kalan, oda_index = koltuk_sayisi, 0
     while kalan > 0:
-        kapasite = min(satir * sutun, kalan)
+        kapasite = min(derslik_kapasitesi, kalan)
         kalan -= kapasite
-        izgara, seats = {}, []
-        for i in range(kapasite):
-            x, y = i % sutun, i // sutun
-            seat_id += 1
-            key = f"s{seat_id}"
-            izgara[(x, y)] = key
-            seats.append({"id": key, "is_available": True, "seat_number": i + 1,
-                          "classroom_id": f"r{oda_index}"})
-        for (x, y), key in izgara.items():
-            if (x + 1, y) in izgara:
-                adjacent.add(tuple(sorted((key, izgara[(x + 1, y)]))))
-            if (x, y + 1) in izgara:
-                front_back.add(tuple(sorted((key, izgara[(x, y + 1)]))))
-        rooms.append({"id": f"r{oda_index}", "name": f"Derslik {oda_index}", "seats": seats})
+        room, desks = derslik_kur(oda_index, kapasite)
+        rooms.append(room)
+        # Komşuluk, uygulamadaki gibi her derslik için ayrı hesaplanır:
+        # ızgara koordinatları derslikler arasında yeniden kullanılır.
+        oda_pairs = build_neighbor_pairs(desks)
+        adjacent.extend(oda_pairs["adjacent"])
+        front_back.extend(oda_pairs["front_back"])
         oda_index += 1
+    pairs = {"adjacent": sorted(adjacent), "front_back": sorted(front_back)}
     participants = [
         {"id": f"p{i}", "class_level": SUBELER[i % 8][0], "section": SUBELER[i % 8][1],
          "area": SUBELER[i % 8][2] or None}
         for i in range(ogrenci_sayisi)
     ]
-    return participants, rooms, {"adjacent": sorted(adjacent), "front_back": sorted(front_back)}
+    return participants, rooms, pairs
+
+
+class RealClassroomGeometryTests(unittest.TestCase):
+    """Okulun bildirdiği düzen: 36 kişilik sınıfta 6 satır çiftli masa, iki koridor."""
+
+    def test_thirty_six_seat_room_is_three_blocks_of_double_desks(self):
+        room, desks = derslik_kur(0, 36)
+        self.assertEqual(len(room["seats"]), 36)
+        self.assertEqual(len(desks), 18, "6 satır × 3 blok = 18 çiftli masa olmalı.")
+        self.assertTrue(all(len(desk["seats"]) == 2 for desk in desks), "Her masa iki kişilik olmalı.")
+        bloklar = sorted({desk["x"] for desk in desks})
+        self.assertEqual(bloklar, [0.0, 4.0, 8.0], "Üç blok ve aralarında iki koridor olmalı.")
+        self.assertEqual(len({desk["y"] for desk in desks}), 6, "Altı satır olmalı.")
+
+    def test_corridor_breaks_side_by_side_neighbourhood(self):
+        """Koridorun iki yanındaki öğrenciler yan yana sayılmaz."""
+        _room, desks = derslik_kur(0, 36)
+        pairs = build_neighbor_pairs(desks)
+
+        # Yan yana: yalnızca aynı masadaki iki koltuk → 18 masa × 1 çift.
+        self.assertEqual(len(pairs["adjacent"]), 18,
+                         "Koridorlar olmasaydı bloklar arası komşuluk da sayılırdı.")
+        # Önlü arkalı: 3 blok × 5 satır aralığı × 2 koltuk.
+        self.assertEqual(len(pairs["front_back"]), 30)
+
+        # Koridorun iki yanındaki masaların koltukları arasında çift bulunmamalı.
+        blok_birinci = next(d for d in desks if d["x"] == 0.0 and d["y"] == 0.0)
+        blok_ikinci = next(d for d in desks if d["x"] == 4.0 and d["y"] == 0.0)
+        karsi_koltuklar = {
+            tuple(sorted((a["id"], b["id"])))
+            for a in blok_birinci["seats"] for b in blok_ikinci["seats"]
+        }
+        self.assertFalse(karsi_koltuklar & set(pairs["adjacent"]),
+                         "Koridorun iki yanı yan yana sayılmış.")
+
+    def test_single_room_of_thirty_six_seats_at_exact_capacity(self):
+        participants, rooms, pairs = okul_kur(36)
+        self.assertEqual(len(rooms), 1)
+        sonuc = solve_candidate(participants, rooms, pairs, TUM_KURALLAR, time_limit=12.0)
+        self.assertEqual(len(sonuc["assignments"]), 36)
+        self.assertEqual(sonuc["affected_student_count"], 0)
+
+    def test_eight_real_rooms_match_the_school_that_reported_the_problem(self):
+        """Sorunun çıktığı okul: 8 derslik, 236 öğrenci, koltuk sayısı tam eşit."""
+        participants, rooms, pairs = okul_kur(236)
+        basladi = time.monotonic()
+        sonuc = solve_candidate(participants, rooms, pairs, TUM_KURALLAR, time_limit=12.0)
+        sure = time.monotonic() - basladi
+        self.assertLess(sure, 20, f"236 öğrencilik dağıtım {sure:.1f} saniye sürdü.")
+        self.assertEqual(len(sonuc["assignments"]), 236)
+        self.assertEqual(sonuc["affected_student_count"], 0)
+
+        eslesme = {item["participant_id"]: item["seat_id"] for item in sonuc["assignments"]}
+        denetim = evaluate_assignments(participants, pairs, TUM_KURALLAR, eslesme)
+        self.assertEqual(denetim["affected_student_count"], 0,
+                         "Bağımsız denetim ihlal buldu.")
 
 
 class SeatingScaleTests(unittest.TestCase):
@@ -112,7 +200,7 @@ class SeatingScaleTests(unittest.TestCase):
         gösteriyordu. Artık en iyi aday üretilir; kesinleştirme aşaması zaten
         etkilenen öğrenci sayısını ayrıca denetliyor.
         """
-        participants, rooms, pairs = okul_kur(4, satir=1, sutun=4)
+        participants, rooms, pairs = okul_kur(4, derslik_kapasitesi=4)
         for item in participants:
             item.update(class_level="9", section="A", area=None)
         sonuc = solve_candidate(participants, rooms, pairs, TUM_KURALLAR, time_limit=12.0)

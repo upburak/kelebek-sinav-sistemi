@@ -2,6 +2,27 @@
 
 ## Geliştirme sürümü (0.3.0 sonrası)
 
+### Başlangıç derslik düzeni gerçek sınıfa uyuyor
+
+Okul bildirdi: her derslikte **iki koridor** var ve 36 kişilik sınıfta **6 satır
+çiftli masa** bulunuyor. İçe aktarmanın ürettiği taslak düzen ise karekök
+temelliydi; 36 koltuk için 5 sütun × 4 satır ve **tek koridor** çıkarıyordu.
+12 kişilik sınıfta hiç koridor bırakmıyordu.
+
+Bu yalnızca görsel bir uyumsuzluk değildi: koridor, komşuluk grafiğini doğrudan
+etkiler (koridorun iki yanındaki öğrenciler yan yana sayılmaz). Yanlış geometriyle
+hesaplanan dağıtım, fiziksel sınıfa taşındığında farklı bir komşuluk tablosuna
+oturuyordu.
+
+Taslak artık iki koridorla ayrılmış üç blok çiftli masa üretir: 36 koltuk →
+3 blok × 6 satır, 24 → 3 × 4, 12 → 3 × 2. Bu yalnızca başlangıç taslağıdır;
+kullanıcı gerçek sınıf ölçülerine göre düzenlemeye devam eder.
+
+Testler: `backend/tests/test_import_layout.py` (4 test) gerçek içe aktarma ucunu
+kullanarak geometriyi ve koridorun komşuluğu kırdığını doğrular.
+`test_seating_scale.py` artık elle kurulmuş yoğun ızgara yerine bu gerçek
+düzeni ve uygulamanın kendi komşuluk hesabını kullanır.
+
 ### Dağıtım çözücüsü gerçek okul mevcutlarında çalışıyor (kritik)
 
 Gerçek bir e-Okul sınıf listesiyle (236 öğrenci, 8 şube) denendiğinde uygulamanın
