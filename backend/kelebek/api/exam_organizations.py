@@ -28,6 +28,7 @@ from kelebek.models import (
     ExamOrganization,
     ExamOrganizationClassroom,
     ExamParticipant,
+    ExamPeriod,
     Seat,
     SeatAssignment,
 )
@@ -399,6 +400,33 @@ def post_exam_organization():
     except IntegrityError:
         return jsonify({"error": "Organizasyon bilgileri aynı anda değişti; seçimleri kontrol edip yeniden deneyin."}), 409
     return jsonify({"organization": organization}), 201
+
+
+@exam_organizations_api.patch("/exam-organizations/<organization_id>/period")
+def patch_exam_organization_period(organization_id: str):
+    """Sınavı başka bir döneme taşı (0018 öncesi dönemsiz kayıtlar için de gerekir)."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Dönem bilgisi JSON biçiminde gönderilmelidir."}), 400
+    period_id = payload.get("exam_period_id")
+    if not isinstance(period_id, str) or not period_id.strip():
+        return jsonify({"error": "Sınav dönemi seçin."}), 400
+
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory.begin() as session:
+        organization = session.get(ExamOrganization, organization_id)
+        if organization is None:
+            return jsonify({"error": "Sınav organizasyonu bulunamadı."}), 404
+        if organization.archived_at is not None:
+            return jsonify({"error": "Arşivlenmiş sınav salt okunur."}), 403
+        period = session.get(ExamPeriod, period_id.strip())
+        if period is None:
+            return jsonify({"error": "Dönem bulunamadı."}), 404
+        if period.academic_year_id != organization.academic_year_id:
+            return jsonify({"error": "Seçilen dönem bu eğitim-öğretim yılına ait değil."}), 400
+        organization.exam_period_id = period.id
+        result = {"id": organization.id, "exam_period_id": period.id, "exam_period_name": period.name}
+    return jsonify({"organization": result})
 
 
 @exam_organizations_api.put("/exam-organizations/<organization_id>/classrooms")

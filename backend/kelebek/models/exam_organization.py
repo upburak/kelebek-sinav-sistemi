@@ -20,6 +20,10 @@ class ExamOrganization(Base):
     academic_year_id: Mapped[str] = mapped_column(
         ForeignKey("academic_years.id", ondelete="RESTRICT"), nullable=False
     )
+    # 0018 öncesi kayıtlarda boş kalabilir; arayüzde "Dönem atanmamış" altında görünür.
+    # Veritabanı düzeyinde yabancı anahtar yok (bkz. migration 0018); bağlantı
+    # uygulama katmanında doğrulanır.
+    exam_period_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     exam_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")

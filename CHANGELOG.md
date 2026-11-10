@@ -2,6 +2,25 @@
 
 ## Geliştirme sürümü (0.3.0 sonrası)
 
+### Sınav dönemleri (yeni)
+
+Sınavlar düz bir liste halindeydi; hangi sınavın ne için yapıldığı belli olmuyordu.
+Artık her eğitim-öğretim yılında dört sınav dönemi hazır gelir: **Güz 1. Sınavları,
+Güz 2. Sınavları, Bahar 1. Sınavları, Bahar 2. Sınavları.**
+
+- Dönem adları okulun kendi diline göre değiştirilebilir ("1. Dönem 1. Yazılılar" gibi).
+- Yeni dönem eklenebilir (telafi, deneme vb.); içinde sınav olmayan dönem silinebilir,
+  dolu dönem silinemez ve uygulama bunu açıkça söyler.
+- Yeni sınav oluştururken dönem seçmek zorunludur; sınav listesi dönem başlıkları
+  altında gruplanır.
+- Önceden oluşturulmuş sınavlar "Dönem atanmamış" başlığı altında görünür ve kartın
+  üstündeki kutudan bir döneme taşınabilir; hiçbir kayıt kaybolmaz.
+- Bir sınavın kopyası kaynağının dönemini sürdürür.
+
+Karar belgesi v4.3'te sınav dönemi kavramı tanımlı değildi; bu ekleme mevcut 72 kararın
+hiçbiriyle çelişmez, belge değiştirilmedi. Migration: `0018_exam_periods`.
+
+
 - **Excel'den öğrenci listesi içe aktarılamıyordu.** Dosya okunuyor, sütunlar
   eşleşiyor, kontrol raporu çıkıyor; ama **"İçe aktarmayı onayla" düğmesi hiç
   görünmediği için liste kaydedilemiyordu.** Arka uç fark raporunu (`diff`)

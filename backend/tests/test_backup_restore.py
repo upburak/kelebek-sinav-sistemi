@@ -13,12 +13,21 @@ from pathlib import Path
 from unittest.mock import patch
 
 from _support import release_app_resources
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
 
 from kelebek import create_app
 from kelebek.models import AcademicYear, SchoolProfile, Student, StudentYearEnrollment
 from kelebek.services.backup import build_backup_package
 from kelebek.services.backup_restore import recover_interrupted_restore
+
+
+def _head_revision() -> str:
+    """Güncel şema sürümünü Alembic'ten oku; her migration'da testi elle güncellemek gerekmesin."""
+    from alembic.script import ScriptDirectory
+
+    from kelebek.db import _migration_config
+
+    return ScriptDirectory.from_config(_migration_config(create_engine("sqlite://"))).get_current_head()
 
 
 class BackupRestoreTests(unittest.TestCase):
@@ -210,6 +219,10 @@ class BackupRestoreTests(unittest.TestCase):
                 database.execute("ALTER TABLE exam_organizations DROP COLUMN archived_at")
                 database.execute("ALTER TABLE exam_organizations DROP COLUMN copied_from_organization_id")
                 database.execute("ALTER TABLE distribution_candidates DROP COLUMN pinned_classroom_ids")
+                # 0018'in eklediklerini de geri al; aksi halde taklit edilen "eski"
+                # veritabanı gerçekte 0014 değil, karışık bir şema olur.
+                database.execute("ALTER TABLE exam_organizations DROP COLUMN exam_period_id")
+                database.execute("DROP TABLE IF EXISTS exam_periods")
                 database.execute(
                     "UPDATE alembic_version SET version_num=?",
                     ("0014_completed_distribution_edits",),
@@ -233,7 +246,7 @@ class BackupRestoreTests(unittest.TestCase):
         preview = response.get_json()["preview"]
         self.assertTrue(preview["migration_required"])
         self.assertEqual(preview["schema_revision"], "0014_completed_distribution_edits")
-        self.assertEqual(preview["target_schema_revision"], "0017_exam_archive_and_pins")
+        self.assertEqual(preview["target_schema_revision"], _head_revision())
 
         restored = self.client.post(
             "/api/backups/restore/confirm",
@@ -246,7 +259,7 @@ class BackupRestoreTests(unittest.TestCase):
         with closing(sqlite3.connect(database_uri, uri=True)) as database:
             self.assertEqual(
                 database.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                "0017_exam_archive_and_pins",
+                _head_revision(),
             )
             self.assertIn("file_sha256", {
                 row[1] for row in database.execute("PRAGMA table_info(distribution_reports)")

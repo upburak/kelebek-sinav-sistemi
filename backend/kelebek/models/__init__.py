@@ -14,6 +14,7 @@ from kelebek.models.exam_course_participant import ExamCourseParticipant
 from kelebek.models.exam_organization import ExamOrganization
 from kelebek.models.exam_organization_classroom import ExamOrganizationClassroom
 from kelebek.models.exam_participant import ExamParticipant
+from kelebek.models.exam_period import ExamPeriod
 from kelebek.models.school_profile import SchoolAdministrator, SchoolProfile
 from kelebek.models.seat import Seat
 from kelebek.models.seat_assignment import SeatAssignment
@@ -35,6 +36,7 @@ __all__ = [
     "ExamOrganization",
     "ExamOrganizationClassroom",
     "ExamParticipant",
+    "ExamPeriod",
     "SchoolAdministrator",
     "SchoolProfile",
     "Seat",

@@ -11,6 +11,7 @@ from kelebek.api.backups import backups_api
 from kelebek.api.classrooms import classrooms_api
 from kelebek.api.exam_lifecycle import exam_lifecycle_api, guard_exam_writes
 from kelebek.api.exam_organizations import exam_organizations_api
+from kelebek.api.exam_periods import exam_periods_api
 from kelebek.api.health import health_api
 from kelebek.api.school_profile import school_profile_api
 from kelebek.api.student_import import student_import_api
@@ -98,6 +99,7 @@ def create_app(frontend_dist: Path | None = None, allowed_hosts: set[str] | None
     app.register_blueprint(student_import_api, url_prefix="/api")
     app.register_blueprint(students_api, url_prefix="/api")
     app.register_blueprint(exam_organizations_api, url_prefix="/api")
+    app.register_blueprint(exam_periods_api, url_prefix="/api")
     app.register_blueprint(exam_lifecycle_api, url_prefix="/api")
     app.register_blueprint(updates_api, url_prefix="/api")
     app.before_request(guard_exam_writes)

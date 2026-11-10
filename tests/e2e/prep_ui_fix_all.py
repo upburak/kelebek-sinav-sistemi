@@ -7,11 +7,20 @@ import uuid
 import requests
 
 API = os.environ["KELEBEK_PUBLIC_URL"].rstrip("/") + "/api"
+
+def _first_period_id(year_id: str) -> str:
+    """Her sınav bir döneme bağlanır; yıl açılırken hazır gelen ilk dönemi kullan."""
+    response = requests.get(f"{API}/exam-periods", params={"academic_year_id": year_id}, timeout=20)
+    response.raise_for_status()
+    periods = response.json()["periods"]
+    assert periods, "Hazır sınav dönemi bulunamadı."
+    return periods[0]["id"]
+
 n = int(sys.argv[1]) if len(sys.argv) > 1 else 2
 year_id = requests.get(f"{API}/academic-years", timeout=20).json()["selected_academic_year_id"]
 groups = requests.get(f"{API}/student-groups", params={"academic_year_id": year_id}, timeout=20).json()["groups"]
 r = requests.post(f"{API}/exam-organizations", json={"academic_year_id": year_id, "name": f"TEST_FIXUI_{uuid.uuid4().hex[:6]}",
-                  "exam_date": "2026-03-19", "participant_groups": [{"class_level": g["class_level"], "section": g["section"], "area": g["area"]} for g in groups]}, timeout=30)
+                  "exam_period_id": _first_period_id(year_id), "exam_date": "2026-03-19", "participant_groups": [{"class_level": g["class_level"], "section": g["section"], "area": g["area"]} for g in groups]}, timeout=30)
 assert r.status_code == 201, r.text
 org = r.json()["organization"]["id"]
 rooms = requests.get(f"{API}/exam-room-options", params={"academic_year_id": year_id}, timeout=20).json()["rooms"]
