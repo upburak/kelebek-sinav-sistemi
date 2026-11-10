@@ -13,6 +13,7 @@ class ExamLifecycleTests(unittest.TestCase):
     tearDown = ExamFlowTests.tearDown
     _seed_synthetic_school = ExamFlowTests._seed_synthetic_school
     _create_organization = ExamFlowTests._create_organization
+    _first_period_id = ExamFlowTests._first_period_id
 
     def _finalized(self, layout_ids=None):
         organization = self._create_organization()

@@ -13,6 +13,15 @@ if not BASE_URL:
     pytest.skip("KELEBEK_PUBLIC_URL not set", allow_module_level=True)
 API = f"{BASE_URL}/api"
 
+def _first_period_id(year_id: str) -> str:
+    """Her sınav bir döneme bağlanır; yıl açılırken hazır gelen ilk dönemi kullan."""
+    response = requests.get(f"{API}/exam-periods", params={"academic_year_id": year_id}, timeout=20)
+    response.raise_for_status()
+    periods = response.json()["periods"]
+    assert periods, "Hazır sınav dönemi bulunamadı."
+    return periods[0]["id"]
+
+
 
 def _ui_state_path() -> Path:
     """Çalışan servisin veri klasöründeki ui_state.json yolunu platformdan bağımsız bul."""
@@ -62,7 +71,7 @@ def make_violation(org, cand):
 def org():
     year_id = requests.get(f"{API}/academic-years", timeout=20).json()["selected_academic_year_id"]
     groups = requests.get(f"{API}/student-groups", params={"academic_year_id": year_id}, timeout=20).json()["groups"]
-    payload = {"academic_year_id": year_id, "name": f"TEST_FIX_{uuid.uuid4().hex[:6]}", "exam_date": "2026-03-18",
+    payload = {"academic_year_id": year_id, "name": f"TEST_FIX_{uuid.uuid4().hex[:6]}", "exam_period_id": _first_period_id(year_id), "exam_date": "2026-03-18",
                "participant_groups": [{"class_level": g["class_level"], "section": g["section"], "area": g["area"]} for g in groups]}
     r = requests.post(f"{API}/exam-organizations", json=payload, timeout=30)
     assert r.status_code == 201, r.text

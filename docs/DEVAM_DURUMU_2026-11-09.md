@@ -95,6 +95,23 @@ Yeni iş akışının ilk koşusunda macOS, Ubuntu, uçtan uca ve arayüz işler
   gönderir; kullanıcının dalına, HEAD'ine, index'ine ve çalışma dizinine dokunmaz. macOS
   zamanlayıcısı `scripts/com.kelebek.autopush.plist` (15 dk). Yedek dalları CI tetiklemez.
 
+## Sınav dönemleri (0.3.0 sonrası, yeni özellik)
+
+Kullanıcı isteği: sınavların ne için oluşturulduğu belli değildi. Her yılda dört dönem
+hazır gelir (Güz 1/2, Bahar 1/2), adları değiştirilebilir, dönem eklenip silinebilir.
+Yeni sınavda dönem seçimi zorunlu; liste dönem başlıklarına göre gruplanır. Eski kayıtlar
+"Dönem atanmamış" altında görünür ve taşınabilir.
+
+- Migration `0018_exam_periods`. **Not:** `exam_period_id` sütunu veritabanı düzeyinde
+  yabancı anahtar taşımaz. SQLite ALTER ile kısıt eklemeye izin vermiyor, batch kipi ise
+  `exam_organizations` tablosunu silip yeniden kurmayı gerektiriyor ve bu tabloya bağlı
+  başka tablolar olduğundan silme reddediliyor (0017 de aynı nedenle kısıtsız sütun
+  eklemişti). Bağlantı uygulama katmanında doğrulanır.
+- Yan düzeltme: sınav kopyalama kaynağın dönemini kaybediyordu.
+- Testler: `backend/tests/test_exam_periods.py` (9 test). Mevcut testler ve uçtan uca
+  testler dönem zorunluluğuna göre güncellendi; `test_backup_restore` içindeki sabit
+  şema sürümü Alembic head'inden okunur hale getirildi.
+
 ## Bundan sonra Mac'te çalışırken
 
 Bu belge bulut oturumundan devralma notudur. Mac'te klasörün içinde `claude` ile açılan oturum

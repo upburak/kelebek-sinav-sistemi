@@ -12,7 +12,7 @@ from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import URL, Engine, create_engine, event, inspect, select, update
+from sqlalchemy import URL, Engine, create_engine, event, func, inspect, select, update
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from kelebek.config import get_data_dir, get_database_path
@@ -95,6 +95,24 @@ def current_academic_year_start(today: date | None = None) -> int:
     return today.year if today.month >= ACADEMIC_YEAR_START_MONTH else today.year - 1
 
 
+def ensure_default_exam_periods(session: Session, academic_year_id: str) -> int:
+    """Yılda hiç sınav dönemi yoksa dört hazır dönemi oluştur.
+
+    Kullanıcı adlarını değiştirebildiği için var olan dönemler kesinlikle
+    bozulmaz; yalnızca tamamen boş bir yıl için varsayılanlar eklenir.
+    """
+    from kelebek.models.exam_period import DEFAULT_PERIOD_NAMES, ExamPeriod
+
+    existing = session.scalar(
+        select(func.count(ExamPeriod.id)).where(ExamPeriod.academic_year_id == academic_year_id)
+    )
+    if existing:
+        return 0
+    for order, name in enumerate(DEFAULT_PERIOD_NAMES):
+        session.add(ExamPeriod(academic_year_id=academic_year_id, name=name, display_order=order))
+    return len(DEFAULT_PERIOD_NAMES)
+
+
 def _ensure_current_academic_year(session_factory: sessionmaker[Session]) -> None:
     """Güncel yılı oluştur ve uygulama açılışında varsayılan olarak seç."""
     from kelebek.models import AcademicYear
@@ -109,6 +127,7 @@ def _ensure_current_academic_year(session_factory: sessionmaker[Session]) -> Non
             session.add(year)
             session.flush()
 
+        ensure_default_exam_periods(session, year.id)
         session.execute(update(AcademicYear).values(is_selected=False))
         year.is_selected = True
 

@@ -16,6 +16,7 @@ from kelebek.models import (
     ExamOrganization,
     ExamOrganizationClassroom,
     ExamParticipant,
+    ExamPeriod,
     Seat,
     StudentYearEnrollment,
 )
@@ -153,10 +154,15 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
               for kind in REPORT_TYPES}
         for item in organizations
     }
+    period_names = dict(
+        session.execute(select(ExamPeriod.id, ExamPeriod.name)).all()
+    )
     return [
         {
             "id": item.id,
             "name": item.name,
+            "exam_period_id": item.exam_period_id,
+            "exam_period_name": period_names.get(item.exam_period_id),
             "exam_date": item.exam_date.isoformat(),
             "status": item.status,
             "course_names": courses_by_org.get(item.id, []),
@@ -289,6 +295,15 @@ def create_organization(session: Session, payload: dict) -> dict:
     date_value = str(payload.get("exam_date", "")).strip()
     if not name or len(name) > 160:
         raise ExamOrganizerError("Sınav/organizasyon adı gerekli ve 160 karakterden kısa olmalı.")
+
+    # Her sınav bir döneme bağlanır; böylece liste hangi sınavın ne için
+    # yapıldığını gösterir. Dönemler yıl açılırken hazır gelir.
+    period_id = payload.get("exam_period_id")
+    period = session.get(ExamPeriod, period_id) if isinstance(period_id, str) and period_id else None
+    if period is None:
+        raise ExamOrganizerError("Sınav dönemi seçin.")
+    if period.academic_year_id != year.id:
+        raise ExamOrganizerError("Seçilen dönem bu eğitim-öğretim yılına ait değil.")
     try:
         exam_date = date.fromisoformat(date_value)
     except ValueError:
@@ -319,6 +334,7 @@ def create_organization(session: Session, payload: dict) -> dict:
         available_by_group.setdefault(key, []).append(enrollment)
 
     organization = ExamOrganization(
+        exam_period_id=period.id,
         academic_year_id=year.id,
         name=name,
         exam_date=exam_date,
@@ -395,9 +411,12 @@ def create_organization(session: Session, payload: dict) -> dict:
     if not participants_by_enrollment:
         raise ExamOrganizerError("Seçilen gruplarda aktif öğrenci bulunamadı.", 409)
 
+    period = session.get(ExamPeriod, organization.exam_period_id) if organization.exam_period_id else None
     return {
         "id": organization.id,
         "name": organization.name,
+        "exam_period_id": organization.exam_period_id,
+        "exam_period_name": period.name if period else None,
         "exam_date": organization.exam_date.isoformat(),
         "status": organization.status,
         "course_names": [
