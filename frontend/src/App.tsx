@@ -785,6 +785,7 @@ export default function App() {
           readOnly={activeYear?.is_archive ?? false}
           onStudents={() => setActiveSection('students')}
           onClassrooms={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}
+          onReports={() => setActiveSection('reports')}
         />}
 
         {activeSection === 'backup' && <><BackupManager /><UpdateManager /></>}

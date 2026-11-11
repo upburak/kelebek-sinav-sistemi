@@ -2,6 +2,32 @@
 
 ## 0.5.0 — 11 Kasım 2026
 
+### Sınav hazırlığı adım adım
+
+İlk gerçek kullanımda sınav dağıtımı "inanılmaz zorlayıcı" bulundu: bir sınav
+kartında derslik seçimi, kurallar, aday üretme, derslik sabitleme, "incelemeye
+al", "son kontrol", karşılaştırma ve kopyalama aynı anda görünüyor, hangisinin
+sıradaki adım olduğu anlaşılmıyordu. İşlevler değişmedi; sunum değişti.
+
+- Her sınav kartında beş adımlı bir şerit (Derslikler → Dağıtım → Kontrol →
+  Kesinleştirme → Raporlar), sıradaki adımın tek cümlelik açıklaması ve **tek
+  ana düğme** var.
+- **Daha az tıklama:** yeni sınavda her dersliğin aktif düzeni kendiliğinden
+  seçilir (kapasite yetiyorsa); dağıtım sonucu ayrıca "incelemeye alınmadan"
+  geçerli dağıtım olur. Sıfırdan kesinleşmiş sınava dört tıkla ulaşılır:
+  oluştur → Dağıtımı başlat → Kontrol et ve kesinleştir → onayla.
+- Oturma planı sekiz dersliği alt alta dizmek yerine **derslik sekmeleriyle**
+  gezilir; ihlal bulunan dersliğin sekmesi işaretlenir, ihlalli öğrenciye
+  tıklanınca ilgili sekmeye geçilir.
+- Yalnızca geçerli dağıtım gösterilir; öncekiler "Önceki dağıtımlar" altında
+  durur ve "Buna dön" ile geri alınabilir.
+- Kurallar, derslik sabitleme, dönem değiştirme, liste karşılaştırma, arşivleme
+  ve kopyalama "Diğer seçenekler" altına taşındı.
+- Derslik seçiminde "Tüm derslikleri seç" düğmesi ve her dersliğin koltuk sayısı.
+- Dil sadeleşti: "organizasyon taslağı" → "sınav", "aday" → "dağıtım",
+  "incelemeye al" kalktı.
+- Test: `tests/e2e/test_exam_guided_flow_ui_e2e.py` bu yolu tarayıcıda yürür.
+
 ### Aktif oturma düzeni ve düzen silme
 
 Kullanıcı isteği: oluşturulmuş ama kullanılmayacak düzenler silinebilsin ve
