@@ -2,6 +2,13 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.4.2",
+    "date": "2026-11-11",
+    "items": [
+      "Liste aktarımında alan seçiminin hemen altına \"Alanları uygula ve devam et\" düğmesi eklendi"
+    ]
+  },
+  {
     "version": "0.4.1",
     "date": "2026-11-11",
     "items": [

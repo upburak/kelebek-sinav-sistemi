@@ -1,5 +1,12 @@
 # Değişiklik günlüğü
 
+## 0.4.2 — 11 Kasım 2026
+
+İlk gerçek Windows denemesinde kullanıcı, 11–12. sınıfların alanlarını seçtikten
+sonra nasıl devam edeceğini bulamadı: devam düğmesi alan kutularının *üstünde*,
+ekranın dışında kalıyordu. Alan seçim panelinin altına "Alanları uygula ve devam
+et" düğmesi eklendi; eksik seçim varken düğme neyin beklendiğini söyler.
+
 ## 0.4.1 — 11 Kasım 2026
 
 Arayüzde daha önce elle denenmemiş akışlar gerçek tarayıcıda, 236 öğrencilik
