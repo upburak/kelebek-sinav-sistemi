@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 @updates_api.get("/updates/status")
 def get_update_status():
-    return jsonify(app_update.status())
+    # Açılış denetimi ayarı buradan okunur; internete çıkmadan hemen döner.
+    return jsonify({**app_update.status(), "auto_update_check": _auto_check_enabled()})
 
 
 def _ui_state_path():

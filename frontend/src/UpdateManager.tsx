@@ -32,6 +32,7 @@ export default function UpdateManager() {
   const [autoCheck, setAutoCheckState] = useState(true)
   // Kullanıcı kutuya dokunduysa, o sırada süren denetimin yanıtı seçimini ezmemeli.
   const autoTouched = useRef(false)
+  const [autoLoaded, setAutoLoaded] = useState(false)
   const [onlineMessage, setOnlineMessage] = useState('')
   const [onlineError, setOnlineError] = useState('')
 
@@ -41,7 +42,6 @@ export default function UpdateManager() {
       const response = await fetch(`/api/updates/online${auto ? '?auto=1' : ''}`)
       const data = await response.json() as OnlineCheck
       setOnline(data)
-      if (!autoTouched.current) setAutoCheckState(data.auto_check !== false)
       if (data.error && !auto) setOnlineError(data.error)
     } catch { if (!auto) setOnlineError('Sürüm denetimi yapılamadı.') } finally { setOnlineBusy('') }
   }
@@ -64,7 +64,11 @@ export default function UpdateManager() {
   }
 
   useEffect(() => {
-    fetch('/api/updates/status').then((response) => response.json()).then(setStatus).catch(() => undefined)
+    fetch('/api/updates/status').then((response) => response.json()).then((data: Status & { auto_update_check?: boolean }) => {
+      setStatus(data)
+      if (!autoTouched.current) setAutoCheckState(data.auto_update_check !== false)
+      setAutoLoaded(true)
+    }).catch(() => setAutoLoaded(true))
     void checkOnline(true)
   }, [])
 
@@ -105,7 +109,7 @@ export default function UpdateManager() {
         {online?.update_available && online.asset && <button type="button" className="backup-create-button" data-testid="online-update-download" disabled={Boolean(onlineBusy)} onClick={() => void downloadOnline()}>{onlineBusy === 'download' ? 'İndiriliyor… (1-2 dakika sürebilir)' : `Sürüm ${online.latest_version}'i indir ve kur`}</button>}
         {online?.update_available && online.release_url && <a className="update-secondary-button" href={online.release_url} target="_blank" rel="noreferrer">İndirme sayfasını aç</a>}
       </div>
-      <label className="online-update-toggle"><input type="checkbox" data-testid="online-update-auto" checked={autoCheck} onChange={(event) => void setAutoCheck(event.target.checked)} />Uygulama açılırken yeni sürümü kendiliğinden denetle</label>
+      <label className="online-update-toggle"><input type="checkbox" data-testid="online-update-auto" disabled={!autoLoaded} checked={autoCheck} onChange={(event) => void setAutoCheck(event.target.checked)} />Uygulama açılırken yeni sürümü kendiliğinden denetle</label>
       {onlineMessage && <p className="backup-feedback success" role="status" data-testid="online-update-message">{onlineMessage}</p>}
       {onlineError && <p className="backup-feedback error" role="alert" data-testid="online-update-error">{onlineError}</p>}
     </div>

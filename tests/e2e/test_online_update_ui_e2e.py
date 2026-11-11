@@ -11,6 +11,8 @@ import os
 import pytest
 import requests
 
+expect = pytest.importorskip("playwright.sync_api").expect
+
 BASE_URL = os.environ.get("KELEBEK_PUBLIC_URL", "").rstrip("/")
 if not BASE_URL:
     pytest.skip("KELEBEK_PUBLIC_URL not set", allow_module_level=True)
@@ -33,7 +35,8 @@ def test_update_section_shows_status_and_remembers_the_startup_setting(page):
         assert page.get_by_test_id("online-update-status").inner_text().strip()
 
         toggle = page.get_by_test_id("online-update-auto")
-        assert toggle.is_checked()
+        expect(toggle).to_be_enabled()
+        expect(toggle).to_be_checked()
         toggle.uncheck()
         page.wait_for_timeout(400)
         # Ayar kapalıyken açılış denetimi internete çıkmaz.
@@ -41,6 +44,8 @@ def test_update_section_shows_status_and_remembers_the_startup_setting(page):
         assert data == {"checked": False, "auto_check": False, "current_version": data["current_version"]}
 
         _open_backup(page)
-        assert not page.get_by_test_id("online-update-auto").is_checked()
+        # Kutu, yerel ayar okunana kadar kapalıdır; okununca doğru durumu gösterir.
+        expect(page.get_by_test_id("online-update-auto")).to_be_enabled()
+        expect(page.get_by_test_id("online-update-auto")).not_to_be_checked()
     finally:
         requests.put(f"{BASE_URL}/api/updates/online/settings", json={"auto_check": True}, timeout=30)
