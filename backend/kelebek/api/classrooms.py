@@ -1,5 +1,6 @@
 """Derslik ve düzen kayıtlarını yöneten yerel API."""
 
+import re
 from math import isfinite
 
 from flask import Blueprint, current_app, jsonify, request
@@ -104,7 +105,24 @@ def list_classrooms():
                     ClassroomLayout.classroom_id == classroom.id
                 )
             ) or 0
-            result.append({"id": classroom.id, "name": classroom.name, "layout_count": layout_count})
+            latest_layout_id = session.scalar(
+                select(ClassroomLayout.id)
+                .where(ClassroomLayout.classroom_id == classroom.id)
+                .order_by(ClassroomLayout.created_at.desc(), ClassroomLayout.version.desc())
+                .limit(1)
+            )
+            seat_count = 0
+            if latest_layout_id:
+                seat_count = session.scalar(
+                    select(func.count(Seat.id)).where(
+                        Seat.layout_id == latest_layout_id, Seat.is_available.is_(True)
+                    )
+                ) or 0
+            result.append({"id": classroom.id, "name": classroom.name, "layout_count": layout_count,
+                           "seat_count": seat_count})
+    # "9-A" < "10-A": adlardaki sayılar sayı olarak sıralanır.
+    result.sort(key=lambda item: [int(part) if part.isdigit() else part.casefold()
+                                  for part in re.split(r"(\d+)", item["name"])])
     return jsonify({"classrooms": result})
 
 

@@ -252,7 +252,7 @@ Boş koltuk da fiziksel planda görünür; öğrenci bilgileri boş olur.
 
 ## 7. Dağıtım kuralları
 
-Sınav bazında aşağıdaki altı kural ayrı ayrı açılıp kapatılabilir:
+Sınav bazında aşağıdaki sekiz kural ayrı ayrı açılıp kapatılabilir:
 
 1.  Aynı şubedeki öğrenciler yan yana oturamaz.
 
@@ -272,8 +272,15 @@ Sınav bazında aşağıdaki altı kural ayrı ayrı açılıp kapatılabilir:
 6.  **Aynı sınıf seviyesindeki ve aynı alandaki öğrenciler önlü arkalı
     oturamaz.**
 
-7.  ve 10. sınıflarda alan bilgisi bulunmadığı için 3--6 numaralı alan
-    kuralları bu öğrencilere uygulanmaz.
+7.  **Aynı sınıf seviyesindeki öğrenciler yan yana oturamaz.** Şube ve
+    alan ayrımı gözetilmez; örneğin 9/A ile 9/B öğrencisinin yan yana
+    oturmasını engeller.
+
+8.  **Aynı sınıf seviyesindeki öğrenciler önlü arkalı oturamaz.**
+
+9.  ve 10. sınıflarda alan bilgisi bulunmadığı için 3--6 numaralı alan
+    kuralları bu öğrencilere uygulanmaz; bu sınıflarda koruma 1--2 ve
+    7--8 numaralı kurallarla sağlanır.
 
 **Teknik anlam ayrımı:** 3--4 numaralı kurallar farklı sınıf seviyeleri
 arasındaki aynı alan eşleşmelerini; 5--6 numaralı kurallar aynı sınıf
@@ -281,7 +288,16 @@ seviyesi içindeki aynı alan eşleşmelerini denetler. Böylece bu
 kuralların kapsamı birbirinden ayrılır. Bu ayrım kullanıcı tarafından
 onaylanmıştır.
 
-Bu altı kural ayrı seçenekler olarak korunacaktır; uygulama tasarımında
+**Kural 7--8 hakkında (10 Kasım 2026, kullanıcı onayı):** 9 ve 10. sınıflarda
+alan bilgisi bulunmadığından, 7--8 numaralı kurallar eklenmeden önce bu
+öğrenciler için tek koruma "aynı şube" kuralıydı. Farklı şubelerden iki 9. sınıf
+öğrencisi yan yana oturabiliyordu; oysa ikisi de aynı sınav kağıdını alır.
+Kullanıcı gerçek bir dağıtım krokisinde bu durumu fark edip kuralın eklenmesini
+onayladı. Yeni sınavlarda ve mevcut kayıtlarda varsayılan olarak açık gelir.
+Kural 7--8, 1--2 ve 5--6 numaralı kuralların kapsadığı durumları da içerir;
+kurallar yine de ayrı seçenekler olarak korunur.
+
+Bu sekiz kural ayrı seçenekler olarak korunacaktır; uygulama tasarımında
 kullanıcı onayı olmadan birleştirilmemeli veya kaldırılmamalıdır.
 
 ## 8. Kapasite kontrolü
@@ -722,14 +738,21 @@ ayrıntı kullanıcıyla ayrıca kararlaştırılacaktır.
 
 ### Karar 37 -- Koridor sınırları ve çapraz önlü/arkalı komşuluk
 
--   Koridorla birbirinden ayrılmış masa blokları arasında komşuluk
-    ilişkisi kurulmaz. Koridorun karşı tarafındaki masalar yan yana,
-    önlü/arkalı veya çapraz komşu kabul edilmez.
+-   Koridorun karşı tarafındaki oturma yeri **yan yana komşu** kabul
+    edilir; yan yana kuralları koridorun iki kenarındaki öğrenciler için
+    de uygulanır. Koridor üzerinden önlü/arkalı veya çapraz komşuluk
+    kurulmaz. (10 Kasım 2026, kullanıcı onayıyla güncellendi; önceki metin
+    koridorun karşısını hiçbir biçimde komşu saymıyordu.)
 -   Aynı blok içinde, ardışık ön/arka sıralarda doğrudan hizalı oturma
     yerlerinin yanı sıra çapraz konumdaki oturma yerleri de önlü/arkalı
     komşuluk kapsamında değerlendirilir.
 -   Çapraz komşuluk, önlü/arkalı oturma kuralına eklenir; ayrı bir kural
     seçeneği olarak sunulmaz.
+-   İstisna: 8 numaralı kural (aynı sınıf seviyesi önlü/arkalı) yalnızca
+    doğrudan hizalı oturma yerlerine uygulanır, çapraza uygulanmaz. Koltuk
+    sayısı öğrenci sayısına eşitken dört sınıf seviyesiyle çaprazı da
+    kapsayan ihlalsiz bir yerleşim matematiksel olarak bulunmaz. Aynı şube
+    ve aynı alan kuralları çaprazda da geçerlidir.
 -   Yan yana kuralı yalnızca aynı sıradaki yatay komşuluğu kapsar.
     Çapraz komşuluk yan yana kuralına dahil edilmez.
 -   Çapraz komşuluk hesabı da masaların gerçek fiziksel konumuna ve

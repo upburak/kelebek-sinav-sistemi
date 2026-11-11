@@ -2,6 +2,14 @@ name: Paketleri Oluştur
 
 on:
   workflow_dispatch:
+  # main'e her birleştirmede paketler kendiliğinden üretilir ve yayımlanır.
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', '*.md']
+
+concurrency:
+  group: paketler-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-macos:
@@ -34,7 +42,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kelebek-macOS
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/*.sha256
 
   build-windows:
     name: Windows Paketini Derle
@@ -53,6 +63,12 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Inno Setup Kur (yoksa)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
       - name: Windows Derleme
         shell: pwsh
         run: |
@@ -67,4 +83,39 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kelebek-Windows
-          path: dist/*
+          path: |
+            dist/*.zip
+            dist/*.exe
+            dist/SHA256SUMS.txt
+
+  release:
+    name: GitHub Sürümünü Yayımla
+    needs: [build-macos, build-windows]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Kodları Çek
+        uses: actions/checkout@v4
+
+      - name: Paketleri İndir
+        uses: actions/download-artifact@v4
+        with:
+          path: paketler
+          merge-multiple: true
+
+      - name: Sürümü Oluştur veya Güncelle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' backend/kelebek/version.py)
+          TAG="v$VERSION"
+          ls -la paketler
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" paketler/* --clobber
+          else
+            gh release create "$TAG" paketler/* --target "$GITHUB_SHA" \
+              --title "Kelebek Sınav Sistemi $VERSION" \
+              --notes "macOS (Apple Silicon): .dmg dosyasını indirin. Windows: -kurulum.exe dosyasını (yoksa .zip) indirin. Ayrıntılar için CHANGELOG.md."
+          fi

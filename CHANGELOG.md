@@ -1,6 +1,120 @@
 # Değişiklik günlüğü
 
-## Geliştirme sürümü (0.3.0 sonrası)
+## 0.4.0 — 10 Kasım 2026
+
+### Genel Bakış panosu ve kullanılabilirlik
+
+- **Genel Bakış canlı veriden çalışıyor.** Eski "Kurulum adımları" kartı sabit
+  yazılmıştı: 236 öğrenci ve 8 derslik kayıtlıyken bile "1 / 3 hazır" diyor,
+  "Öğrenci ve sınıflar: Bekliyor" gösteriyordu. Yeni pano öğrenci, koltuk
+  kapasitesi (öğrenci sayısıyla karşılaştırmalı), sınav ve son yedek durumunu,
+  beş adımlı yol haritasını ve yaklaşan sınavları sıradaki işlemle birlikte
+  gösterir. Kutular ilgili bölüme götürür.
+- Öğrenci listesine arama ve sınıf/şube filtresi eklendi; tablo başlığı sabit.
+- Derslik kartları kullanılabilir koltuk sayısını gösterir; "9-A" artık "10-A"dan
+  önce sıralanır.
+- Raporlar ekranındaki yanlış alt başlık ve çift başlık, sınav ekranındaki
+  "Altı komşuluk kuralı" metni (artık sekiz) ve alt bilgi hizası düzeltildi.
+- Paketler artık `main` dalına her birleştirmede kendiliğinden üretilir ve
+  GitHub Releases altında yayımlanır.
+
+
+### Koridor ve çapraz komşuluk (Karar 37 güncellendi)
+
+Kullanıcı onayıyla komşuluk modeli üç ilişkiye ayrıldı:
+
+- **Yan yana** artık koridoru aşar: koridorun iki kenarındaki öğrenciler de
+  yan yana sayılır ve yan yana kuralları onlara da uygulanır.
+- **Önlü arkalı** (doğrudan hizalı) ve **çapraz** koridoru aşmaz.
+- Çapraz, önlü/arkalı kurallarına tabidir; tek istisna kural 8'dir (aynı sınıf
+  seviyesi). Ölçüm: kural 8 çapraza da uygulanınca 236 öğrenci / 236 koltukta
+  en iyi çözüm bile ~54 öğrenciyi etkiliyor (2×2'lik her pencere dört ayrı
+  seviye ister). Çapraz dışarıda tutulunca 0 ihlal.
+
+İhlal açıklamalarında ilişki artık "çapraz" olarak da belirtilir.
+
+### Kural 7-8: aynı sınıf seviyesi yan yana/önlü arkalı oturamaz
+
+Kullanıcı gerçek bir dağıtım krokisine bakıp **9/A ile 9/B öğrencisinin yan yana
+oturduğunu** fark etti. İnceleme, kodun karar belgesine birebir uyduğunu gösterdi:
+belge "9 ve 10. sınıflarda alan bilgisi bulunmadığı için 3–6 numaralı alan
+kuralları bu öğrencilere uygulanmaz" diyor, dolayısıyla bu sınıflarda tek koruma
+"aynı şube" kuralıydı. Farklı şubeden iki 9. sınıf öğrencisi yan yana
+oturabiliyordu; oysa ikisi de aynı sınav kağıdını alır.
+
+Yazılım hatası değil, kural kümesindeki boşluktu. Kullanıcı onayıyla iki kural
+eklendi (karar belgesi v4.3, kural 7–8): **aynı sınıf seviyesindeki öğrenciler
+yan yana / önlü arkalı oturamaz.** Şube ve alan ayrımı gözetilmez. Mevcut altı
+kural aynen korundu, yeni kurallar da ayrı seçenekler olarak açılıp kapatılabilir
+ve varsayılan olarak açık gelir (migration `0019_same_grade_rules` mevcut
+sınavlarda da açık yapar).
+
+Uygulanabilirliği eklemeden önce ölçüldü: 236 öğrenci, koltuk sayısı tam eşit →
+2,9 saniyede optimal, 0 ihlal. Gerçek krokide aynı seviyeden yan yana oturan
+masa sayısı 4'ten 0'a indi.
+
+### Başlangıç derslik düzeni gerçek sınıfa uyuyor
+
+Okul bildirdi: her derslikte **iki koridor** var ve 36 kişilik sınıfta **6 satır
+çiftli masa** bulunuyor. İçe aktarmanın ürettiği taslak düzen ise karekök
+temelliydi; 36 koltuk için 5 sütun × 4 satır ve **tek koridor** çıkarıyordu.
+12 kişilik sınıfta hiç koridor bırakmıyordu.
+
+Bu yalnızca görsel bir uyumsuzluk değildi: koridor, komşuluk grafiğini doğrudan
+etkiler (koridorun iki yanındaki öğrenciler yan yana sayılmaz). Yanlış geometriyle
+hesaplanan dağıtım, fiziksel sınıfa taşındığında farklı bir komşuluk tablosuna
+oturuyordu.
+
+Taslak artık iki koridorla ayrılmış üç blok çiftli masa üretir: 36 koltuk →
+3 blok × 6 satır, 24 → 3 × 4, 12 → 3 × 2. Bu yalnızca başlangıç taslağıdır;
+kullanıcı gerçek sınıf ölçülerine göre düzenlemeye devam eder.
+
+Testler: `backend/tests/test_import_layout.py` (4 test) gerçek içe aktarma ucunu
+kullanarak geometriyi ve koridorun komşuluğu kırdığını doğrular.
+`test_seating_scale.py` artık elle kurulmuş yoğun ızgara yerine bu gerçek
+düzeni ve uygulamanın kendi komşuluk hesabını kullanır.
+
+### Dağıtım çözücüsü gerçek okul mevcutlarında çalışıyor (kritik)
+
+Gerçek bir e-Okul sınıf listesiyle (236 öğrenci, 8 şube) denendiğinde uygulamanın
+**ana işini yapamadığı** ortaya çıktı: dağıtım 50 saniyede sonuç vermeden
+"geçerli aday bulunamadı" diyordu. 48 sentetik öğrenciyle yapılan önceki tüm
+testler geçtiği için sorun görünmüyordu. Koltuk sayısı öğrenci sayısına eşit
+olduğundan (okulun olağan durumu) kapasite artırmak çözüm değildi; kapasite
+%125'e çıkarıldığında da çözülemedi.
+
+**Kök neden.** Model "hangi öğrenci hangi koltukta" sorusunu kuruyordu:
+değişken sayısı öğrenci × koltuk, ihlal değişkenleri öğrenci çifti × koltuk çifti
+kadardı. Üstelik altı kuralın tamamı yalnızca sınıf/şube/alan üçlüsüne baktığı için
+aynı gruptaki öğrencilerin her permütasyonu çözücüye farklı bir çözüm gibi
+görünüyor, arama kendini tekrar ediyordu.
+
+**Çözüm.** Model artık öğrenci değil **grup** üzerinden kuruluyor
+(`kelebek/distribution/seating.py`): önce hangi koltukta hangi grubun oturacağı
+çözülür (değişken sayısı koltuk × grup), sonra her grubun kazandığı koltuklara o
+gruptaki öğrenciler saf Python'la yerleştirilir. Kurallar gruba bağlı olduğu için
+bu eşleme ihlal sayısını değiştiremez.
+
+| Öğrenci | Önce | Sonra |
+|---|---|---|
+| 236 | 50 sn, çözülemedi | **2,5 sn, optimal, 0 ihlal** |
+| 600 | — | 5,8 sn, optimal, 0 ihlal |
+| 1000 | — | 12 sn içinde 0 ihlalli çözüm |
+| 1500 | — | 12 sn içinde 0 ihlalli çözüm |
+
+Hepsi koltuk sayısı öğrenci sayısına **tam eşitken** ölçüldü.
+
+**Davranış değişikliği:** eskiden modelde "etkilenen öğrenci sayısı ≤ 5" katı bir
+kısıttı; sağlanamadığında kullanıcıya hiç aday üretilmiyor, yalnızca hata
+gösteriliyordu. Artık bu bir eniyileme hedefi: en az ihlalli aday her durumda
+üretilir, kullanıcı ihlalleri görüp "Tümünü düzelt" ile giderebilir.
+Kesinleştirme aşaması etkilenen öğrenci sayısını zaten ayrıca denetliyor.
+
+Testler: `backend/tests/test_seating_scale.py` (9 test) doğruluğu ve ölçeği
+birlikte sabitler. Çözücü hızlandığı için ilerleme/durdurma uçtan uca testleri de
+güncellendi: 48 öğrencilik dağıtım artık arama aşaması yakalanamayacak kadar
+hızlı bitiyor.
+
 
 ### Tasarım ve ergonomi turu
 

@@ -249,7 +249,7 @@ export default function ReportCenter({ academicYearId, academicYearLabel, onExam
 
   return <section className="report-center" aria-labelledby="report-center-title">
     <header className="report-center-heading">
-      <div><span className="eyebrow">KESİNLEŞMİŞ DAĞITIMLAR</span><h2 id="report-center-title">Raporlar</h2><p>Raporlar seçtiğin güncel dağıtımdan hazırlanır. Excel kopyasını kendi ihtiyacına göre düzenleyebilirsin.</p></div>
+      <div><span className="eyebrow">KESİNLEŞMİŞ DAĞITIMLAR</span><h2 id="report-center-title">Sınav raporları</h2><p>Raporlar seçtiğin güncel dağıtımdan hazırlanır. Excel kopyasını kendi ihtiyacına göre düzenleyebilirsin.</p></div>
       <span className="report-year">{academicYearLabel}</span>
     </header>
     {loading ? <div className="exam-empty">Kesinleşmiş sınavlar yükleniyor…</div> : exams.length === 0 ? <div className="report-empty"><strong>Bu eğitim yılında kesinleşmiş sınav yok.</strong><span>Rapor oluşturmak için önce bir sınav dağıtımını son kontrolden geçirip kesinleştir.</span><button type="button" onClick={onExams}>Sınav organizasyonlarına git</button></div> : <>
