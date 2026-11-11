@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 
 from kelebek.db import current_academic_year_start
 from kelebek.services.backup import create_safety_backup
+from kelebek.services.layouts import ensure_active_layout
 from kelebek.services.student_import import auto_map_headers, read_student_tables
 from kelebek.services.student_registry import (
     deactivate_student_in_year,
@@ -598,6 +599,7 @@ def _ensure_classrooms_for_groups(session, academic_year_id, groups):
             )
             session.add(layout)
             session.flush()
+            ensure_active_layout(session, layout)
 
         desk_count = session.scalar(select(func.count(Desk.id)).where(Desk.layout_id == layout.id)) or 0
         generated = False

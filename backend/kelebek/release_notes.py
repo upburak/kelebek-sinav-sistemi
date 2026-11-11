@@ -2,6 +2,25 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.5.0",
+    "date": "2026-11-11",
+    "items": [
+      "Sınav hazırlığı adım adım: her sınav kartı sıradaki adımı ve basılacak tek düğmeyi gösterir",
+      "Yeni sınavda derslikler kendiliğinden seçilir; dağıtım sonucu doğrudan kullanıma alınır",
+      "Oturma planı derslik derslik sekmelerle gezilir; ileri düzey seçenekler ayrı bölümde",
+      "Derslikte hangi oturma düzeninin kullanılacağı \"Aktif yap\" ile belirlenir; sınavda o düzen gelir",
+      "Kullanılmayan oturma düzenleri silinebilir; bir sınavda kullanılmış düzenler korunur",
+      "Liste aktarımında alan seçiminin hemen altına \"Alanları uygula ve devam et\" düğmesi eklendi"
+    ]
+  },
+  {
+    "version": "0.4.2",
+    "date": "2026-11-11",
+    "items": [
+      "Liste aktarımında alan seçiminin hemen altına \"Alanları uygula ve devam et\" düğmesi eklendi"
+    ]
+  },
+  {
     "version": "0.4.1",
     "date": "2026-11-11",
     "items": [

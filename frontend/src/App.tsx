@@ -785,6 +785,7 @@ export default function App() {
           readOnly={activeYear?.is_archive ?? false}
           onStudents={() => setActiveSection('students')}
           onClassrooms={() => { setActiveSection('classrooms'); setClassroomPanelOpen(true) }}
+          onReports={() => setActiveSection('reports')}
         />}
 
         {activeSection === 'backup' && <><BackupManager /><UpdateManager /></>}
@@ -898,6 +899,15 @@ export default function App() {
                       )
                     })}
                     <p className="privacy-note">Bu toplu atama yalnızca alanı boş öğrencileri doldurur. Dolu alan değerleri korunur.</p>
+                    <button
+                      className="commit-import"
+                      type="button"
+                      data-testid="apply-areas-btn"
+                      disabled={importLoading || !requiredMappingsComplete || !areaAssignmentsComplete}
+                      onClick={validateStudentFile}
+                    >
+                      {importLoading ? 'Kontrol ediliyor…' : areaAssignmentsComplete ? 'Alanları uygula ve devam et' : 'Devam etmek için tüm alanları seç'}
+                    </button>
                   </div>
                 )}
                 {importValidation.issues.length > 0 && (

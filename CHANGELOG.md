@@ -1,5 +1,60 @@
 # Değişiklik günlüğü
 
+## 0.5.0 — 11 Kasım 2026
+
+### Sınav hazırlığı adım adım
+
+İlk gerçek kullanımda sınav dağıtımı "inanılmaz zorlayıcı" bulundu: bir sınav
+kartında derslik seçimi, kurallar, aday üretme, derslik sabitleme, "incelemeye
+al", "son kontrol", karşılaştırma ve kopyalama aynı anda görünüyor, hangisinin
+sıradaki adım olduğu anlaşılmıyordu. İşlevler değişmedi; sunum değişti.
+
+- Her sınav kartında beş adımlı bir şerit (Derslikler → Dağıtım → Kontrol →
+  Kesinleştirme → Raporlar), sıradaki adımın tek cümlelik açıklaması ve **tek
+  ana düğme** var.
+- **Daha az tıklama:** yeni sınavda her dersliğin aktif düzeni kendiliğinden
+  seçilir (kapasite yetiyorsa); dağıtım sonucu ayrıca "incelemeye alınmadan"
+  geçerli dağıtım olur. Sıfırdan kesinleşmiş sınava dört tıkla ulaşılır:
+  oluştur → Dağıtımı başlat → Kontrol et ve kesinleştir → onayla.
+- Oturma planı sekiz dersliği alt alta dizmek yerine **derslik sekmeleriyle**
+  gezilir; ihlal bulunan dersliğin sekmesi işaretlenir, ihlalli öğrenciye
+  tıklanınca ilgili sekmeye geçilir.
+- Yalnızca geçerli dağıtım gösterilir; öncekiler "Önceki dağıtımlar" altında
+  durur ve "Buna dön" ile geri alınabilir.
+- Kurallar, derslik sabitleme, dönem değiştirme, liste karşılaştırma, arşivleme
+  ve kopyalama "Diğer seçenekler" altına taşındı.
+- Derslik seçiminde "Tüm derslikleri seç" düğmesi ve her dersliğin koltuk sayısı.
+- Dil sadeleşti: "organizasyon taslağı" → "sınav", "aday" → "dağıtım",
+  "incelemeye al" kalktı.
+- Test: `tests/e2e/test_exam_guided_flow_ui_e2e.py` bu yolu tarayıcıda yürür.
+
+### Aktif oturma düzeni ve düzen silme
+
+Kullanıcı isteği: oluşturulmuş ama kullanılmayacak düzenler silinebilsin ve
+hangi düzenin kullanılacağı belirlenebilsin.
+
+- **Aktif düzen:** her derslik ve eğitim yılı için tek bir düzen "Aktif"tir.
+  Derslikler ekranında "Aktif yap" ile değiştirilir. Sınav için derslik
+  seçildiğinde varsayılan olarak aktif düzen gelir; Genel Bakış ve derslik
+  kartlarındaki koltuk sayısı da aktif düzenden hesaplanır. Daha önce
+  oluşturulmuş sınavların seçili düzeni değişmez.
+- İlk oluşturulan düzen kendiliğinden aktif olur; düzenlemek için açılan yeni
+  sürüm, kaynağı aktifse aktifliği devralır. Şablonlar aktif yapılamaz.
+- **Silme:** hiçbir sınavda kullanılmayan düzen masaları ve koltuklarıyla
+  silinir. Bir sınavda kullanılan düzen silinemez (düğme kapalı gelir, kaç
+  sınavda kullanıldığı yazar). Aktif düzen silinirse kalan en yeni düzen aktif
+  olur. Arşiv yıllarının düzenleri salt okunurdur.
+- Migration `0020_active_layout`: mevcut verilerde her derslik/yıl için en son
+  oluşturulan düzen aktif yapılır; güncelleme sonrası davranış değişmez.
+- Testler: `backend/tests/test_layout_active_delete.py` (8 test).
+
+## 0.4.2 — 11 Kasım 2026
+
+İlk gerçek Windows denemesinde kullanıcı, 11–12. sınıfların alanlarını seçtikten
+sonra nasıl devam edeceğini bulamadı: devam düğmesi alan kutularının *üstünde*,
+ekranın dışında kalıyordu. Alan seçim panelinin altına "Alanları uygula ve devam
+et" düğmesi eklendi; eksik seçim varken düğme neyin beklendiğini söyler.
+
 ## 0.4.1 — 11 Kasım 2026
 
 Arayüzde daha önce elle denenmemiş akışlar gerçek tarayıcıda, 236 öğrencilik
