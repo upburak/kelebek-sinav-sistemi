@@ -2,6 +2,15 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.4.1",
+    "date": "2026-11-11",
+    "items": [
+      "Derslikler sınav seçiminde de sınıf sırasına göre listelenir (9-A, 10-A'dan önce)",
+      "Kesinleşen sınavların durum etiketi yeşil gösterilir",
+      "Menüde etkin bölümün rengi fare üzerindeyken değişmez"
+    ]
+  },
+  {
     "version": "0.4.0",
     "date": "2026-11-10",
     "items": [

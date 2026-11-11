@@ -1,6 +1,5 @@
 """Derslik ve düzen kayıtlarını yöneten yerel API."""
 
-import re
 from math import isfinite
 
 from flask import Blueprint, current_app, jsonify, request
@@ -16,6 +15,7 @@ from kelebek.models import (
     ExamOrganizationClassroom,
     Seat,
 )
+from kelebek.services.exam_organizer import natural_sort_key
 
 classrooms_api = Blueprint("classrooms", __name__)
 
@@ -121,8 +121,7 @@ def list_classrooms():
             result.append({"id": classroom.id, "name": classroom.name, "layout_count": layout_count,
                            "seat_count": seat_count})
     # "9-A" < "10-A": adlardaki sayılar sayı olarak sıralanır.
-    result.sort(key=lambda item: [int(part) if part.isdigit() else part.casefold()
-                                  for part in re.split(r"(\d+)", item["name"])])
+    result.sort(key=lambda item: natural_sort_key(item["name"]))
     return jsonify({"classrooms": result})
 
 
