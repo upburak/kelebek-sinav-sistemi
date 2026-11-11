@@ -2,6 +2,14 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.6.1",
+    "date": "2026-11-11",
+    "items": [
+      "Yeni sınavda yalnızca sınava giren sınıfların kendi derslikleri seçilir; artık bütün derslikler gelmez",
+      "Sınıf seçiminde \"Tüm sınıfları seç\" düğmesi"
+    ]
+  },
+  {
     "version": "0.6.0",
     "date": "2026-11-11",
     "items": [

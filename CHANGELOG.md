@@ -1,5 +1,17 @@
 # Değişiklik günlüğü
 
+## 0.6.1 — 11 Kasım 2026
+
+- **İki sınıf seçilince bütün derslikler seçiliyordu.** 0.5.0'da gelen
+  "derslikler kendiliğinden seçilsin" kolaylığı sınava kaç sınıfın girdiğine
+  bakmıyor, koltuk yetiyorsa okulun bütün dersliklerini seçiyordu; dağıtım da
+  iki sınıfın öğrencilerini sekiz dersliğe yayıyordu. Artık yalnızca sınava
+  giren sınıfların kendi derslikleri ("9-A Derslik" gibi) seçilir. Koltuk
+  yetmezse sırayla başka derslik eklenir; yine yetmezse seçim kullanıcıya
+  bırakılır. Bildirimde hangi dersliklerin seçildiği yazar.
+- Sınıf seçiminde "Tüm sınıfları seç / Seçimi temizle" düğmesi.
+- Gerileme testi: `tests/e2e/test_exam_guided_flow_ui_e2e.py`.
+
 ## 0.6.0 — 11 Kasım 2026
 
 ### Çevrim içi sürüm denetimi ve tek tıkla güncelleme
