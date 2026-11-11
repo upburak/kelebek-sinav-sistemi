@@ -1175,3 +1175,5 @@ button:not(.plan-seat):not(.candidate-plan-seat) { min-height: 28px; }
 .exam-period-manage-btn { min-height: 36px; padding: 0 14px; border: 1px solid #cfdcd7; border-radius: 9px; background: #fff; color: #173247; font-size: 12px; font-weight: 700; cursor: pointer; }
 .exam-period-manage-btn:hover { border-color: #1c9b79; background: #f6fbf9; }
 .page-footer { padding: 0 clamp(22px, 4vw, 58px) 24px; }
+.exam-status.done { background: #dff3ec; color: #0d5247; }
+.main-navigation button.active:hover:not(:disabled) { background: #f2b744; color: #173247; }

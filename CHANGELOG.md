@@ -1,5 +1,23 @@
 # Değişiklik günlüğü
 
+## 0.4.1 — 11 Kasım 2026
+
+Arayüzde daha önce elle denenmemiş akışlar gerçek tarayıcıda, 236 öğrencilik
+sentetik okulla uçtan uca yürütüldü: taslakta koltuk değiştirme (yeni "manuel
+sürüm" adayı ve ihlal listesi), kesinleşmiş sınavda koltuk değiştirme ile geri
+al / yinele, sınavı kopyalama, tamamlayıp arşivleme, yedek paketini indirme ve
+aynı paketle geri yükleme önizlemesi. Hepsi hatasız çalıştı; bu turda işlev
+hatası bulunmadı.
+
+Küçük düzeltmeler:
+
+- Sınav için derslik seçenekleri de doğal sırayla gelir ("9-A", "10-A"dan önce);
+  yeni sınavlarda rapor sayfaları bu sırayı izler.
+- "Kesinleşti" ve "Tamamlandı · Arşiv" etiketleri taslakla aynı sarı yerine yeşil.
+- Etkin menü öğesi fare üzerindeyken renk değiştiriyordu.
+- Yeni test: yedek indirme ve geri yükleme önizlemesi tarayıcıda (onaysız geri
+  yükleme başlatılamadığı dahil).
+
 ## 0.4.0 — 10 Kasım 2026
 
 ### Genel Bakış panosu ve kullanılabilirlik

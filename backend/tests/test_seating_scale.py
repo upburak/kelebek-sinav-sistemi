@@ -319,5 +319,16 @@ class SeatingScaleTests(unittest.TestCase):
         self.assertEqual(len(sonuc["assignments"]), 30)
 
 
+
+class NaturalOrderTests(unittest.TestCase):
+    def test_classroom_names_sort_by_number_not_by_text(self):
+        from kelebek.services.exam_organizer import natural_sort_key
+
+        adlar = ["10-A Derslik", "12-C Derslik", "9-B Derslik", "9-A Derslik", "Kütüphane", "11-A Derslik"]
+        self.assertEqual(
+            sorted(adlar, key=natural_sort_key),
+            ["9-A Derslik", "9-B Derslik", "10-A Derslik", "11-A Derslik", "12-C Derslik", "Kütüphane"],
+        )
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,6 @@
 """Sınav organizasyonu taslaklarının iş kuralları."""
 
+import re
 from datetime import date
 
 from sqlalchemy import func, select
@@ -65,6 +66,12 @@ def _layout_capacity(session: Session, layout_id: str) -> tuple[int, int]:
     return total, available
 
 
+def natural_sort_key(text: str) -> list:
+    """Adlardaki sayıları sayı olarak sıralar: "9-A" < "10-A"."""
+    return [(0, int(part), "") if part.isdigit() else (1, 0, part.casefold())
+            for part in re.split(r"(\d+)", text) if part]
+
+
 def list_room_options(session: Session, academic_year_id: str) -> list[dict]:
     """Seçili eğitim yılının fiziksel düzen sürümlerini ve kapasitelerini döndür."""
     layouts = session.execute(
@@ -94,6 +101,8 @@ def list_room_options(session: Session, academic_year_id: str) -> list[dict]:
             "can_select": total > 0,
             "is_latest": layout.version == latest_version,
         })
+    # "9-A", "10-A"dan önce gelir; aynı dersliğin düzenleri kendi sırasını korur.
+    result.sort(key=lambda item: natural_sort_key(item["classroom_name"]))
     return result
 
 
