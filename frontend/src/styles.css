@@ -1230,3 +1230,19 @@ button:not(.plan-seat):not(.candidate-plan-seat) { min-height: 28px; }
 .exam-advanced-body { display: grid; gap: 4px; margin-top: 8px; padding: 10px 12px; border: 1px dashed #cfdcd7; border-radius: 12px; background: #fbfdfc; }
 .exam-advanced-body .exam-card-period { position: static; margin: 0 0 6px; border: 0; background: transparent; padding: 0; }
 .exam-room-select-all { min-height: 32px; margin-left: 10px; padding: 0 12px; border: 1px solid #cfdcd7; border-radius: 8px; background: #fff; color: #12695c; font-size: 12px; font-weight: 700; cursor: pointer; }
+
+/* Çevrim içi sürüm denetimi */
+.online-update { display: grid; gap: 8px; margin: 12px 0; padding: 14px 16px; border: 1px solid #dbe7e2; border-radius: 12px; background: #f6fbf9; }
+.online-update.has-update { border-color: #e9b9a4; background: #fff6f1; }
+.online-update strong { color: #173247; font-size: 15px; }
+.online-update small { color: #5e707b; font-size: 12px; }
+.online-update .update-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.online-update a.update-secondary-button { display: inline-flex; align-items: center; text-decoration: none; }
+.online-update-toggle { display: flex; align-items: center; gap: 8px; color: #4b5d68; font-size: 12px; }
+.update-manual { margin-top: 8px; }
+.update-manual > summary { color: #5e707b; font-size: 12px; font-weight: 600; cursor: pointer; }
+.new-version-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid #e9b9a4; border-radius: 12px; background: #fff6f1; color: #4b3a31; font-size: 13px; }
+.new-version-banner span { flex: 1 1 260px; }
+.new-version-banner strong { margin-right: 6px; color: #8a3414; }
+.new-version-banner button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 9px; background: #12695c; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.new-version-banner button.new-version-dismiss { min-width: 34px; padding: 0; background: transparent; color: #8a3414; font-size: 18px; }

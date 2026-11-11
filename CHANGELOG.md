@@ -1,5 +1,29 @@
 # Değişiklik günlüğü
 
+## 0.6.0 — 11 Kasım 2026
+
+### Çevrim içi sürüm denetimi ve tek tıkla güncelleme
+
+- Uygulama açılışta (kapatılabilir) ve "Şimdi denetle" ile GitHub'daki son
+  sürümü sorar. Yeni sürüm varsa her ekranda bir bildirim ve Yedek ve arşiv
+  bölümünde "Sürüm X'i indir ve kur" düğmesi görünür.
+- İndirme: önce güvenlik yedeği alınır; paket yalnızca projenin kendi sürüm
+  adresinden kabul edilir, GitHub'ın bildirdiği SHA-256 özetiyle doğrulanır,
+  İndirilenler klasörüne yazılır ve kurulum penceresi açılır. Özeti uyuşmayan
+  dosya silinir.
+- **Gizlilik ve çevrimdışı çalışma:** yalnızca sürüm numarası sorulur; okul,
+  öğrenci ya da kullanım verisi gönderilmez. İnternet yoksa ya da denetim
+  kapalıysa uygulama aynen çalışır (karar belgesi 18: temel işlevler internet
+  gerektirmez).
+- Sertifikalar önce işletim sisteminin deposundan, olmazsa paketle gelen kök
+  sertifikalardan doğrulanır (okul ağlarındaki vekil sunucular için).
+- **Ön koşul:** sürümlerin herkese açık yayımlanması gerekir. Depo gizliyken
+  GitHub kimliksiz isteğe 404 döndürür; uygulama bunu açıklayan bir ileti
+  gösterir ve çalışmaya devam eder.
+- Eski "elle güncelleme paketi yükle" bölümü "ileri düzey" başlığı altına alındı.
+- Testler: `backend/tests/test_online_update.py` (13 test, ağ taklit edilir).
+  Gerçek GitHub yanıtıyla sürüm karşılaştırması ve paket seçimi ayrıca denendi.
+
 ## 0.5.0 — 11 Kasım 2026
 
 ### Sınav hazırlığı adım adım
