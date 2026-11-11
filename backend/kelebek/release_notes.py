@@ -2,6 +2,56 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.6.0",
+    "date": "2026-11-11",
+    "items": [
+      "Yeni sürüm denetimi: uygulama açılışta ve istenince son sürümü sorar, yeni sürüm varsa bildirir",
+      "Yeni sürüm tek tıkla indirilir, doğrulanır ve kurulum penceresi açılır; önce güvenlik yedeği alınır",
+      "Denetim kapatılabilir; internet yoksa uygulama aynen çalışır, hiçbir okul verisi gönderilmez"
+    ]
+  },
+  {
+    "version": "0.5.0",
+    "date": "2026-11-11",
+    "items": [
+      "Sınav hazırlığı adım adım: her sınav kartı sıradaki adımı ve basılacak tek düğmeyi gösterir",
+      "Yeni sınavda derslikler kendiliğinden seçilir; dağıtım sonucu doğrudan kullanıma alınır",
+      "Oturma planı derslik derslik sekmelerle gezilir; ileri düzey seçenekler ayrı bölümde",
+      "Derslikte hangi oturma düzeninin kullanılacağı \"Aktif yap\" ile belirlenir; sınavda o düzen gelir",
+      "Kullanılmayan oturma düzenleri silinebilir; bir sınavda kullanılmış düzenler korunur",
+      "Liste aktarımında alan seçiminin hemen altına \"Alanları uygula ve devam et\" düğmesi eklendi"
+    ]
+  },
+  {
+    "version": "0.4.2",
+    "date": "2026-11-11",
+    "items": [
+      "Liste aktarımında alan seçiminin hemen altına \"Alanları uygula ve devam et\" düğmesi eklendi"
+    ]
+  },
+  {
+    "version": "0.4.1",
+    "date": "2026-11-11",
+    "items": [
+      "Derslikler sınav seçiminde de sınıf sırasına göre listelenir (9-A, 10-A'dan önce)",
+      "Kesinleşen sınavların durum etiketi yeşil gösterilir",
+      "Menüde etkin bölümün rengi fare üzerindeyken değişmez"
+    ]
+  },
+  {
+    "version": "0.4.0",
+    "date": "2026-11-10",
+    "items": [
+      "Genel Bakış yenilendi: öğrenci, koltuk, sınav ve yedek durumu ile sıradaki adım canlı gösteriliyor",
+      "Sınav dönemleri: Güz 1/2 ve Bahar 1/2 hazır gelir; adları değiştirilebilir, dönem eklenip silinebilir",
+      "Yeni kurallar: aynı sınıf seviyesindeki öğrenciler yan yana ve önlü arkalı oturmaz",
+      "Koridorun iki yanındaki öğrenciler de yan yana sayılır; çapraz komşuluk ayrıca denetlenir",
+      "Dağıtım, koltuk sayısı öğrenci sayısına eşit olan büyük okullarda saniyeler içinde sonuç verir",
+      "Excel'den içe aktarma düzeltildi; başlangıç derslik düzeni üç blok ve iki koridorla kurulur",
+      "Öğrenci listesinde arama ve sınıf filtresi; dersliklerde koltuk sayısı ve doğal sıralama"
+    ]
+  },
+  {
     "version": "0.3.0",
     "date": "2026-11-09",
     "items": [

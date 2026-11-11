@@ -223,6 +223,11 @@ class BackupRestoreTests(unittest.TestCase):
                 # veritabanı gerçekte 0014 değil, karışık bir şema olur.
                 database.execute("ALTER TABLE exam_organizations DROP COLUMN exam_period_id")
                 database.execute("DROP TABLE IF EXISTS exam_periods")
+                # 0019'un eklediği kural 7-8 sütunları
+                database.execute("ALTER TABLE exam_organizations DROP COLUMN prevent_same_grade_adjacent")
+                database.execute("ALTER TABLE exam_organizations DROP COLUMN prevent_same_grade_front_back")
+                # 0020'nin eklediği aktif düzen sütunu
+                database.execute("ALTER TABLE classroom_layouts DROP COLUMN is_active")
                 database.execute(
                     "UPDATE alembic_version SET version_num=?",
                     ("0014_completed_distribution_edits",),

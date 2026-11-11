@@ -4,6 +4,7 @@ from math import isfinite
 
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from kelebek.db import current_academic_year_start
 from kelebek.distribution.neighbors import build_neighbor_pairs
@@ -14,6 +15,13 @@ from kelebek.models import (
     Desk,
     ExamOrganizationClassroom,
     Seat,
+)
+from kelebek.services.exam_organizer import natural_sort_key
+from kelebek.services.layouts import (
+    activate_layout,
+    delete_layout,
+    ensure_active_layout,
+    layout_exam_count,
 )
 
 classrooms_api = Blueprint("classrooms", __name__)
@@ -30,6 +38,7 @@ def _layout_payload(session, layout):
         )
     ) or 0
     year = session.get(AcademicYear, layout.academic_year_id) if layout.academic_year_id else None
+    exam_count = layout_exam_count(session, layout.id)
     return {
         "id": layout.id,
         "name": layout.name,
@@ -37,6 +46,9 @@ def _layout_payload(session, layout):
         "academic_year_id": layout.academic_year_id,
         "academic_year_label": year.label if year else None,
         "is_template": layout.academic_year_id is None,
+        "is_active": bool(layout.is_active),
+        "exam_count": exam_count,
+        "can_delete": exam_count == 0,
         "total_seats": total_seats,
         "available_seats": available_seats,
     }
@@ -104,7 +116,24 @@ def list_classrooms():
                     ClassroomLayout.classroom_id == classroom.id
                 )
             ) or 0
-            result.append({"id": classroom.id, "name": classroom.name, "layout_count": layout_count})
+            latest_layout_id = session.scalar(
+                select(ClassroomLayout.id)
+                .where(ClassroomLayout.classroom_id == classroom.id)
+                .order_by(ClassroomLayout.is_active.desc(), ClassroomLayout.created_at.desc(),
+                          ClassroomLayout.version.desc())
+                .limit(1)
+            )
+            seat_count = 0
+            if latest_layout_id:
+                seat_count = session.scalar(
+                    select(func.count(Seat.id)).where(
+                        Seat.layout_id == latest_layout_id, Seat.is_available.is_(True)
+                    )
+                ) or 0
+            result.append({"id": classroom.id, "name": classroom.name, "layout_count": layout_count,
+                           "seat_count": seat_count})
+    # "9-A" < "10-A": adlardaki sayılar sayı olarak sıralanır.
+    result.sort(key=lambda item: natural_sort_key(item["name"]))
     return jsonify({"classrooms": result})
 
 
@@ -266,6 +295,9 @@ def create_layout_version(classroom_id: str, layout_id: str):
         )
         session.add(updated)
         session.flush()
+        # Düzenlemek için açılan yeni sürüm, kaynağın aktifliğini devralır.
+        if source.is_active:
+            activate_layout(session, updated)
 
         source_desks = session.scalars(
             select(Desk).where(Desk.layout_id == source.id).order_by(Desk.y, Desk.x)
@@ -438,8 +470,49 @@ def create_classroom_layout(classroom_id: str):
         )
         session.add(layout)
         session.flush()
+        ensure_active_layout(session, layout)
         result = _layout_payload(session, layout)
     return jsonify({"layout": result}), 201
+
+
+@classrooms_api.post("/classrooms/<classroom_id>/layouts/<layout_id>/activate")
+def activate_classroom_layout(classroom_id: str, layout_id: str):
+    """Sınavlarda varsayılan olarak kullanılacak düzeni belirle."""
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory.begin() as session:
+        layout = session.get(ClassroomLayout, layout_id)
+        if layout is None or layout.classroom_id != classroom_id:
+            return jsonify({"error": "Derslik düzeni bulunamadı."}), 404
+        if _is_archive_layout(session, layout):
+            return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
+        try:
+            activate_layout(session, layout)
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 409
+        result = _layout_payload(session, layout)
+    return jsonify({"layout": result})
+
+
+@classrooms_api.delete("/classrooms/<classroom_id>/layouts/<layout_id>")
+def delete_classroom_layout(classroom_id: str, layout_id: str):
+    """Hiçbir sınavda kullanılmayan düzeni sil."""
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    try:
+        with session_factory.begin() as session:
+            layout = session.get(ClassroomLayout, layout_id)
+            if layout is None or layout.classroom_id != classroom_id:
+                return jsonify({"error": "Derslik düzeni bulunamadı."}), 404
+            if _is_archive_layout(session, layout):
+                return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
+            try:
+                delete_layout(session, layout)
+            except ValueError as error:
+                return jsonify({"error": str(error)}), 409
+    except IntegrityError:
+        return jsonify({
+            "error": "Bu düzenin koltukları geçmiş bir dağıtımda kullanılmış; düzen silinemez.",
+        }), 409
+    return jsonify({"deleted": True})
 
 
 @classrooms_api.post("/classrooms/<classroom_id>/layouts/<layout_id>/generate")

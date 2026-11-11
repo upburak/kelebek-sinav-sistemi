@@ -17,7 +17,6 @@ import os
 from pathlib import Path
 
 import pytest
-import requests
 
 BASE_URL = os.environ.get("KELEBEK_PUBLIC_URL", "").rstrip("/")
 if not BASE_URL:
@@ -31,36 +30,11 @@ ROOT = Path(__file__).resolve().parents[2]
 SAMPLE = ROOT / "frontend" / "public" / "downloads" / "kelebek_sentetik_demo_48_ogrenci.xlsx"
 
 
-@pytest.fixture(scope="module")
-def page():
-    if not (ROOT / "frontend" / "dist" / "index.html").is_file():
-        pytest.skip("Arayüz derlenmemiş (frontend/dist yok).")
-    if requests.get(BASE_URL, timeout=20).headers.get("content-type", "").find("html") < 0:
-        pytest.skip("Bu adres derlenmiş arayüzü sunmuyor.")
-    with sync_playwright() as playwright:
-        browser = None
-        for options in ({}, {"executable_path": os.environ.get("KELEBEK_CHROMIUM", "")}):
-            if "executable_path" in options and not options["executable_path"]:
-                continue
-            try:
-                browser = playwright.chromium.launch(**options)
-                break
-            except Exception as error:  # tarayıcı indirilmemiş olabilir
-                last_error = error
-        if browser is None:
-            pytest.skip(f"Chromium başlatılamadı: {last_error}")
-        context = browser.new_context(viewport={"width": 1440, "height": 1100})
-        tab = context.new_page()
-        tab.on("dialog", lambda dialog: dialog.accept())
-        yield tab
-        context.close()
-        browser.close()
-
-
 def test_import_flow_reaches_the_confirm_button(page):
     assert SAMPLE.is_file(), f"Sentetik örnek dosya yok: {SAMPLE}"
     page.goto(BASE_URL, wait_until="networkidle")
 
+    page.locator("nav button", has_text="Öğrenci kay").click()
     page.set_input_files("#student-import input[type=file]", str(SAMPLE))
     page.locator("#import-preview-title").wait_for(timeout=30_000)
 

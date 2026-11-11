@@ -21,6 +21,7 @@ import tempfile
 import time
 from pathlib import Path
 
+import pytest
 import requests
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -160,3 +161,33 @@ def pytest_unconfigure(config) -> None:
         _data_dir = None
         os.environ.pop("KELEBEK_DATA_DIR", None)
     os.environ.pop("KELEBEK_PUBLIC_URL", None)
+
+
+@pytest.fixture(scope="module")
+def page():
+    """Derlenmiş arayüzü gerçek tarayıcıda açan ortak sayfa."""
+    if not (ROOT / "frontend" / "dist" / "index.html").is_file():
+        pytest.skip("Arayüz derlenmemiş (frontend/dist yok).")
+    if requests.get(os.environ["KELEBEK_PUBLIC_URL"], timeout=20).headers.get("content-type", "").find("html") < 0:
+        pytest.skip("Bu adres derlenmiş arayüzü sunmuyor.")
+    sync_playwright = pytest.importorskip(
+        "playwright.sync_api", reason="Playwright kurulu değil; arayüz testi atlanıyor."
+    ).sync_playwright
+    with sync_playwright() as playwright:
+        browser = None
+        for options in ({}, {"executable_path": os.environ.get("KELEBEK_CHROMIUM", "")}):
+            if "executable_path" in options and not options["executable_path"]:
+                continue
+            try:
+                browser = playwright.chromium.launch(**options)
+                break
+            except Exception as error:  # tarayıcı indirilmemiş olabilir
+                last_error = error
+        if browser is None:
+            pytest.skip(f"Chromium başlatılamadı: {last_error}")
+        context = browser.new_context(viewport={"width": 1440, "height": 1100})
+        tab = context.new_page()
+        tab.on("dialog", lambda dialog: dialog.accept())
+        yield tab
+        context.close()
+        browser.close()

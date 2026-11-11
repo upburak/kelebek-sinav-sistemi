@@ -12,7 +12,7 @@ type GroupOption = {
 
 type CourseOption = { id: string; name: string }
 type CourseDraft = { id: number; name: string; groupKeys: string[] }
-type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back'
+type RuleKey = 'prevent_same_section_adjacent' | 'prevent_same_section_front_back' | 'prevent_different_grade_same_area_adjacent' | 'prevent_different_grade_same_area_front_back' | 'prevent_same_grade_area_adjacent' | 'prevent_same_grade_area_front_back' | 'prevent_same_grade_adjacent' | 'prevent_same_grade_front_back'
 type RuleSet = Record<RuleKey, boolean>
 type CandidateAssignment = { participant_id: string; seat_id: string | null; seat_number: number | null; classroom_id: string | null; classroom_name: string | null; first_name: string; last_name: string; school_number: string; class_level: string; section: string; area: string | null }
 type Violation = { first_participant_id: string; second_participant_id: string; first_seat_id: string; second_seat_id: string; relation: string; reason: string }
@@ -27,6 +27,8 @@ const ruleLabels: { key: RuleKey; title: string; position: string }[] = [
   { key: 'prevent_different_grade_same_area_front_back', title: 'Farklı sınıf seviyelerinde aynı alan öğrencileri', position: 'Önlü arkalı' },
   { key: 'prevent_same_grade_area_adjacent', title: 'Aynı sınıf seviyesi ve alandaki öğrenciler', position: 'Yan yana' },
   { key: 'prevent_same_grade_area_front_back', title: 'Aynı sınıf seviyesi ve alandaki öğrenciler', position: 'Önlü arkalı' },
+  { key: 'prevent_same_grade_adjacent', title: 'Aynı sınıf seviyesindeki öğrenciler', position: 'Yan yana' },
+  { key: 'prevent_same_grade_front_back', title: 'Aynı sınıf seviyesindeki öğrenciler', position: 'Önlü arkalı' },
 ]
 type RoomOption = {
   classroom_id: string
@@ -38,6 +40,7 @@ type RoomOption = {
   available_seats: number
   can_select: boolean
   is_latest: boolean
+  is_active?: boolean
 }
 type ExamPeriod = {
   id: string
@@ -76,6 +79,7 @@ type Props = {
     readOnly: boolean
   onStudents: () => void
   onClassrooms: () => void
+  onReports: () => void
 }
 
 function groupKey(group: GroupOption) {
@@ -128,7 +132,9 @@ function GroupSelector({
   </div>
 }
 
-export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, onStudents, onClassrooms }: Props) {
+const GUIDE_STEPS = ['Derslikler', 'Dağıtım', 'Kontrol', 'Kesinleştirme', 'Raporlar']
+
+export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, onStudents, onClassrooms, onReports }: Props) {
   const readOnly = yearReadOnly
   const [reloadKey, setReloadKey] = useState(0)
   const [notice, setNotice] = useState('')
@@ -172,9 +178,15 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
   const [focusedViolation, setFocusedViolation] = useState<Record<string, string>>({})
   function focusViolation(candidateId: string, participantId: string, seatId: string | null) {
     setFocusedViolation((current) => ({ ...current, [candidateId]: current[candidateId] === participantId ? '' : participantId }))
+    // İhlalli koltuk başka bir derslikteyse önce o dersliğin sekmesine geç.
+    if (seatId) {
+      const owner = Object.values(candidates).flat().find((item) => item.candidate_id === candidateId)
+      const room = owner?.plan.find((item) => item.desks.some((desk) => desk.seats.some((seat) => seat.seat_id === seatId)))
+      if (room) setPlanRoomByCandidate((current) => ({ ...current, [candidateId]: room.layout_id }))
+    }
     const details = document.getElementById(`plan-details-${candidateId}`) as HTMLDetailsElement | null
     if (details) details.open = true
-    if (seatId) window.setTimeout(() => details?.querySelector(`[data-seat-id="${seatId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }), 60)
+    if (seatId) window.setTimeout(() => document.getElementById(`plan-details-${candidateId}`)?.querySelector(`[data-seat-id="${seatId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }), 120)
   }
   const [movingCandidateId, setMovingCandidateId] = useState<string | null>(null)
   const [finalReviews, setFinalReviews] = useState<Record<string, FinalReview>>({})
@@ -185,6 +197,8 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
   const [reportLoadingId, setReportLoadingId] = useState<string | null>(null)
   const [finalizeConfirmId, setFinalizeConfirmId] = useState<string | null>(null)
   const [finalizeConfirmed, setFinalizeConfirmed] = useState(false)
+  const [openExamId, setOpenExamId] = useState<string | null>(null)
+  const [planRoomByCandidate, setPlanRoomByCandidate] = useState<Record<string, string>>({})
   const [finalizing, setFinalizing] = useState(false)
 
   useEffect(() => {
@@ -387,10 +401,31 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Organizasyon oluşturulamadı.')
-      const organization = data.organization as ExamOrganization
-      setOrganizations((items) => [organization, ...items].sort((a, b) => b.exam_date.localeCompare(a.exam_date)))
-      setActiveRoomOrganizationId(organization.id)
+      let organization = data.organization as ExamOrganization
+      // Her dersliğin aktif düzeni kendiliğinden seçilir; kapasite yetiyorsa
+      // kullanıcı doğrudan dağıtım adımına geçer, isterse sonradan değiştirir.
+      const autoLayouts = roomOptionsByClassroom
+        .map((layouts) => layouts.find((item) => item.is_active && item.can_select) ?? layouts.find((item) => item.can_select))
+        .filter((item): item is RoomOption => Boolean(item))
+      const autoCapacity = autoLayouts.reduce((total, item) => total + item.available_seats, 0)
+      let autoSelected = false
+      if (autoLayouts.length && autoCapacity >= organization.participant_count) {
+        const roomResponse = await fetch(`/api/exam-organizations/${encodeURIComponent(organization.id)}/classrooms`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ layout_ids: autoLayouts.map((item) => item.layout_id) }),
+        })
+        if (roomResponse.ok) {
+          organization = (await roomResponse.json()).organization as ExamOrganization
+          autoSelected = true
+        }
+      }
+      const created = organization
+      setOrganizations((items) => [created, ...items].sort((a, b) => b.exam_date.localeCompare(a.exam_date)))
+      setActiveRoomOrganizationId(autoSelected ? null : created.id)
       setSelectedLayoutByClassroom({})
+      setNotice(autoSelected
+        ? `«${created.name}» oluşturuldu. ${autoLayouts.length} derslik kendiliğinden seçildi; sıradaki adım dağıtım.`
+        : `«${created.name}» oluşturuldu. Sıradaki adım derslik seçimi.`)
       const newCourses = organization.course_names.map((courseName) => ({ id: 0, name: courseName }))
       setCourseCatalog((items) => {
         const names = new Set(items.map((item) => item.name.toLocaleLowerCase('tr-TR')))
@@ -457,6 +492,8 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
         updated.room_selections.map((room) => [room.classroom_id, room.layout_id]),
       ))
       setRoomMessage('Derslik seçimi kaydedildi.')
+      // Kapasite yetiyorsa panel kapanır ve rehber dağıtım adımını gösterir.
+      if (updated.capacity_sufficient && updated.room_selections.length) setActiveRoomOrganizationId(null)
     } catch (reason) {
       setRoomError(reason instanceof Error ? reason.message : 'Derslik seçimi kaydedilemedi.')
     } finally {
@@ -511,9 +548,13 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Dağıtım adayı oluşturulamadı.')
-      setCandidates((current) => ({ ...current, [organizationId]: [...(current[organizationId] ?? []), data.candidate as CandidatePreview] }))
+      const created = data.candidate as CandidatePreview
+      setCandidates((current) => ({ ...current, [organizationId]: [...(current[organizationId] ?? []), created] }))
+      setOpenExamId(organizationId)
+      // Yeni dağıtım doğrudan geçerli dağıtım olur; öncekiler "Önceki dağıtımlar"da kalır.
+      await selectCandidate(organizationId, created.candidate_id)
     } catch (reason) {
-      setCandidateError(reason instanceof Error ? reason.message : 'Dağıtım adayı oluşturulamadı.')
+      setCandidateError(reason instanceof Error ? reason.message : 'Dağıtım oluşturulamadı.')
       setCandidateErrorId(organizationId)
     } finally {
       setCandidateSavingId(null)
@@ -738,14 +779,14 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
         {/* Sayfa başlığı ve eğitim yılı üstte zaten yazıyor; burada tekrar
             etmek yerine yalnızca ne yapılacağını anlatan tek satır kalır. */}
         <h2 id="exam-organizer-title" className="visually-hidden">Sınav organizasyonları</h2>
-        <p>Sınavı ve katılacak öğrenci gruplarını belirle, sonra dağıtımı oluştur. Ders seçmek isteğe bağlıdır.</p>
+        <p>Sınavı oluştur, öğrencileri dağıt, kontrol edip kesinleştir. Her sınav kartı sıradaki adımı ve basman gereken düğmeyi gösterir.</p>
       </div>
       {!readOnly && <div className="exam-header-actions">
         <button type="button" className="exam-period-manage-btn" data-testid="exam-period-manage-btn" onClick={() => { setPeriodPanelOpen((open) => !open); setPeriodError('') }}>
           {periodPanelOpen ? 'Dönem düzenlemeyi kapat' : 'Sınav dönemleri'}
         </button>
         <button type="button" className="exam-new-button" data-testid="exam-new-btn" disabled={!groups.length || !periods.length} onClick={() => { setFormOpen((open) => !open); setError('') }}>
-          {formOpen ? 'Formu kapat' : '+ Yeni organizasyon'}
+          {formOpen ? 'Formu kapat' : '+ Yeni sınav'}
         </button>
       </div>}
     </div>
@@ -771,13 +812,13 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
     {!loading && groups.length === 0 && organizations.length > 0 && <div className="exam-empty"><strong>Bu eğitim yılında yeni sınava alınabilecek aktif öğrenci grubu yok.</strong><span>Mevcut organizasyon kayıtları aşağıda görüntülenebilir.</span><button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button></div>}
 
     {formOpen && <form className="exam-create-form" onSubmit={createOrganization}>
-      <div className="exam-form-title"><span className="exam-step-number">01</span><div><strong>Organizasyon bilgileri</strong><small>Sınav dönemi, isim ve tarih taslak kaydına eklenir.</small></div></div>
+      <div className="exam-form-title"><span className="exam-step-number">01</span><div><strong>Yeni sınav</strong><small>Dönemi, adı, tarihi ve sınava girecek sınıfları seç.</small></div></div>
       <div className="exam-form-fields">
         <label><span>Sınav dönemi *</span><select required value={periodId} onChange={(event) => setPeriodId(event.target.value)}>
           {periods.length === 0 && <option value="">Dönem bulunamadı</option>}
           {periods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}
         </select></label>
-        <label><span>Organizasyon / sınav adı *</span><input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} placeholder="Örn. Matematik ortak sınavı" /></label>
+        <label><span>Sınav adı *</span><input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} placeholder="Örn. Matematik ortak sınavı" /></label>
         <label><span>Sınav tarihi *</span><input required type="date" value={examDate} onChange={(event) => setExamDate(event.target.value)} /></label>
       </div>
       <label className="exam-course-toggle"><input type="checkbox" checked={withCourses} onChange={(event) => toggleCourseMode(event.target.checked)} /><span><strong>Ders seçmek istiyorum</strong><small>Ders ekleyebilir veya daha önce kullanılan bir dersi yazabilirsin.</small></span></label>
@@ -798,12 +839,12 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
 
       <div className="exam-selection-summary"><span>Katılımcı ön izlemesi</span><strong>{selectedStudentCount} farklı öğrenci</strong></div>
       {error && <p className="exam-error" role="alert">{error}</p>}
-      <div className="exam-form-footer"><span>Bu adım taslak oluşturur; derslik ve oturma düzeni sonraki aşamada seçilir.</span><button type="submit" data-testid="exam-create-submit" disabled={saving || !selectedStudentCount || !selectionsComplete || !name.trim()}>{saving ? 'Taslak oluşturuluyor…' : 'Organizasyon taslağı oluştur'}</button></div>
+      <div className="exam-form-footer"><span>Derslikler kendiliğinden seçilir; sonraki adımda değiştirebilirsin.</span><button type="submit" data-testid="exam-create-submit" disabled={saving || !selectedStudentCount || !selectionsComplete || !name.trim()}>{saving ? 'Oluşturuluyor…' : 'Sınavı oluştur'}</button></div>
     </form>}
 
     {notice && <p className="exam-room-success exam-notice-toast" role="status" data-testid="exam-notice">{notice} <button type="button" onClick={() => setNotice('')}>Kapat</button></p>}
     {error && !formOpen && <p className="exam-error" role="alert">{error}</p>}
-    {loading ? <div className="exam-empty">Organizasyonlar yükleniyor…</div> : organizations.length === 0 && !formOpen ? <div className="exam-empty"><strong>{groups.length ? 'Henüz sınav organizasyonu yok.' : 'Bu eğitim yılında öğrenci grubu bulunamadı.'}</strong><span>{groups.length ? 'İlk taslağı oluştur; ders seçmek zorunlu değil.' : 'Önce öğrenci listesini içe aktar veya örnek verilerle başlangıç yap.'}</span>{groups.length ? !readOnly && <button type="button" onClick={() => setFormOpen(true)}>İlk organizasyonu oluştur</button> : <button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button>}</div> : <div className="exam-organization-groups">
+    {loading ? <div className="exam-empty">Sınavlar yükleniyor…</div> : organizations.length === 0 && !formOpen ? <div className="exam-empty"><strong>{groups.length ? 'Henüz sınav yok.' : 'Bu eğitim yılında öğrenci grubu bulunamadı.'}</strong><span>{groups.length ? 'İlk sınavını oluştur; gerisini adım adım birlikte yaparız.' : 'Önce öğrenci listesini içe aktar veya örnek verilerle başlangıç yap.'}</span>{groups.length ? !readOnly && <button type="button" onClick={() => setFormOpen(true)}>İlk sınavı oluştur</button> : <button type="button" onClick={onStudents}>Öğrenci kayıtlarına git</button>}</div> : <div className="exam-organization-groups">
       {groupedOrganizations.bos.length > 0 && <p className="exam-period-idle" data-testid="exam-period-idle">
         <span>Sınavı olmayan dönemler:</span> {groupedOrganizations.bos.map((item) => item.title).join(' · ')}
       </p>}
@@ -817,23 +858,30 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
         const roomEditorOpen = activeRoomOrganizationId === organization.id
         const lockedByOther = Boolean(locks[organization.id] && !locks[organization.id].mine)
         const readOnly = yearReadOnly || lockedByOther || Boolean(organization.archived_at)
+        const allCandidates = candidates[organization.id] ?? []
+        const currentCandidate = allCandidates.find((item) => item.candidate_id === organization.selected_candidate_id) ?? allCandidates[allCandidates.length - 1]
+        const isDone = organization.status === 'completed' || Boolean(organization.archived_at)
+        const expanded = openExamId === organization.id
+        const distributing = candidateSavingId === organization.id
+        const guideStep = isDone ? 4 : finalizeConfirmId === organization.id ? 3 : currentCandidate ? 2 : selectedRoomCount && organization.capacity_sufficient ? 1 : 0
+        const guideTitle = organization.archived_at ? 'Sınav tamamlandı ve arşivlendi'
+          : isDone ? 'Sınav kesinleşti'
+            : guideStep === 3 ? 'Son kontrol'
+              : guideStep === 2 ? (currentCandidate!.affected_student_count === 0 && currentCandidate!.summary.waiting_count === 0 ? 'Dağıtım hazır, kural ihlali yok' : currentCandidate!.summary.waiting_count > 0 ? `${currentCandidate!.summary.waiting_count} öğrenci yer bekliyor` : `${currentCandidate!.affected_student_count} öğrenci kural ihlalinden etkileniyor`)
+                : guideStep === 1 ? 'Öğrencileri dersliklere dağıt'
+                  : selectedRoomCount ? `${organization.capacity_deficit} koltuk eksik` : 'Derslikleri seç'
+        const guideText = isDone ? 'Kapı krokilerini, yoklama çizelgelerini ve öğrenci listelerini Raporlar bölümünden yazdırabilirsin.'
+          : guideStep === 3 ? 'Aşağıdaki özeti oku, onay kutusunu işaretle ve kesinleştir.'
+            : guideStep === 2 ? 'Oturma planına göz at; istersen iki koltuğa sırayla tıklayarak öğrencilerin yerini değiştir. Uygunsa kesinleştir.'
+              : guideStep === 1 ? `${selectedRoomCount} derslik ve ${organization.available_capacity} koltuk hazır. Program öğrencileri kurallara göre kendisi yerleştirir; birkaç saniye sürer.`
+                : selectedRoomCount ? 'Seçili dersliklerdeki koltuk sayısı öğrenci sayısına yetmiyor. Derslik ekle ya da derslik düzenlerini kontrol et.'
+                  : `Sınavın yapılacağı derslikleri işaretle. ${organization.participant_count} öğrenci için en az o kadar koltuk gerekir.`
         return <article className="exam-organization-card-wrap" key={organization.id} data-testid={`exam-card-${organization.id}`}>
-          {!readOnly && periods.length > 0 && <label className="exam-card-period" data-testid={`exam-card-period-${organization.id}`}>
-            <span>Dönem</span>
-            <select
-              value={organization.exam_period_id ?? ''}
-              disabled={periodBusy}
-              onChange={(event) => void moveOrganizationToPeriod(organization.id, event.target.value)}
-            >
-              {!organization.exam_period_id && <option value="">Dönem atanmamış</option>}
-              {periods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}
-            </select>
-          </label>}
           <div className="exam-organization-card">
             <div className="exam-date-block"><strong>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { day: '2-digit' })}</strong><span>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { month: 'short' })}</span></div>
-            <div className="exam-organization-copy"><span className="exam-status" data-testid={`exam-status-${organization.id}`}>{organization.archived_at ? 'Tamamlandı · Arşiv' : organization.status === 'completed' ? 'Kesinleşti' : organization.copied_from_organization_id ? 'Taslak · Kopya' : 'Taslak'}</span><h3>{organization.name}</h3><p>{organization.course_names.length ? organization.course_names.join(' · ') : 'Genel sınav'} · {organization.participant_count} öğrenci</p></div>
-            <div className="exam-organization-meta"><small>{organization.course_count} ders</small><small>{organization.exam_date}</small><small>{selectedRoomCount ? `${selectedRoomCount} derslik · ${organization.available_capacity} kullanılabilir yer` : 'Derslik seçilmedi'}</small></div>
-            <button className="exam-room-open" data-testid={`exam-room-open-${organization.id}`} type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRoomEditor(organization)}>{roomEditorOpen ? 'Derslik seçimini kapat' : selectedRoomCount ? 'Derslikleri düzenle' : 'Derslik seç'}</button>
+            <div className="exam-organization-copy"><span className={`exam-status${organization.status === 'completed' || organization.archived_at ? ' done' : ''}`} data-testid={`exam-status-${organization.id}`}>{organization.archived_at ? 'Tamamlandı · Arşiv' : organization.status === 'completed' ? 'Kesinleşti' : organization.copied_from_organization_id ? 'Taslak · Kopya' : 'Taslak'}</span><h3>{organization.name}</h3><p>{organization.course_names.length ? organization.course_names.join(' · ') : 'Genel sınav'} · {organization.participant_count} öğrenci</p></div>
+            <div className="exam-organization-meta">{organization.course_count > 0 && <small>{organization.course_count} ders</small>}<small>{new Date(`${organization.exam_date}T12:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</small><small>{selectedRoomCount ? `${selectedRoomCount} derslik · ${organization.available_capacity} koltuk` : 'Derslik seçilmedi'}</small></div>
+            {currentCandidate && <button className="exam-room-open" data-testid={`exam-toggle-${organization.id}`} type="button" aria-expanded={expanded} onClick={() => setOpenExamId(expanded ? null : organization.id)}>{expanded ? 'Oturma planını gizle' : 'Oturma planını göster'}</button>}
             {organization.status === 'completed' && <div className="exam-report-action exam-report-actions">{([
               ['seating_plan_pdf', 'Oturma planı'],
               ['attendance_pdf', 'Yoklama çizelgesi'],
@@ -843,11 +891,31 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
               return <button key={kind} type="button" className="exam-report-link" disabled={reportLoadingId === organization.id} onClick={() => void openReportPdf(organization, kind)}>{reportLoadingId === organization.id ? 'PDF hazırlanıyor…' : `${title} · ${status === 'stale' ? 'Güncel değil · Yenile' : status === 'current' ? 'Ön izle' : 'PDF oluştur'}`}</button>
             })}</div>}
           </div>
+          <div className={`exam-guide step-${guideStep}${isDone ? ' done' : ''}`} data-testid={`exam-guide-${organization.id}`}>
+            <ol className="exam-guide-steps" aria-label="Sınav hazırlık adımları">
+              {GUIDE_STEPS.map((label, index) => <li key={label} className={index < guideStep || isDone ? 'complete' : index === guideStep ? 'current' : ''} aria-current={index === guideStep && !isDone ? 'step' : undefined}><span aria-hidden="true">{index < guideStep || isDone ? '✓' : index + 1}</span>{label}</li>)}
+            </ol>
+            <div className="exam-guide-body">
+              <div className="exam-guide-copy">
+                <small>{isDone ? 'Hazır' : `Sıradaki adım · ${guideStep + 1} / ${GUIDE_STEPS.length}`}</small>
+                <strong data-testid={`exam-guide-title-${organization.id}`}>{guideTitle}</strong>
+                <p>{guideText}</p>
+              </div>
+              <div className="exam-guide-actions">
+                {!readOnly && guideStep === 0 && !roomEditorOpen && <button type="button" className="exam-guide-primary" data-testid={`exam-room-open-${organization.id}`} onClick={() => toggleRoomEditor(organization)}>{selectedRoomCount ? 'Derslikleri düzenle' : 'Derslikleri seç'}</button>}
+                {!readOnly && guideStep === 1 && <button type="button" className="exam-guide-primary" data-testid={`candidate-create-${organization.id}`} disabled={distributing} onClick={() => void createCandidate(organization.id)}>{distributing ? 'Dağıtılıyor…' : 'Dağıtımı başlat'}</button>}
+                {!readOnly && guideStep === 2 && currentCandidate && <>
+                  <button type="button" className="exam-guide-primary" data-testid={`final-review-open-${organization.id}`} disabled={reviewLoadingId === organization.id || distributing} onClick={() => void (async () => { if (organization.selected_candidate_id !== currentCandidate.candidate_id) await selectCandidate(organization.id, currentCandidate.candidate_id); await openFinalReview(organization.id) })()}>{reviewLoadingId === organization.id ? 'Kontrol ediliyor…' : 'Kontrol et ve kesinleştir'}</button>
+                  <button type="button" className="exam-guide-secondary" data-testid={`candidate-recreate-${organization.id}`} disabled={distributing || !organization.capacity_sufficient} title="Aynı dersliklerle farklı bir yerleşim üretir; şimdiki dağıtım silinmez." onClick={() => void createCandidate(organization.id)}>{distributing ? 'Dağıtılıyor…' : 'Yeniden dağıt'}</button>
+                </>}
+                {isDone && <button type="button" className="exam-guide-primary" data-testid={`exam-reports-${organization.id}`} onClick={onReports}>Raporlara git</button>}
+              </div>
+            </div>
+          </div>
           {reportError && reportErrorId === organization.id && <p className="exam-error" role="alert">{reportError}</p>}
           {lockedByOther && <div className="edit-lock-banner" role="status" data-testid={`edit-lock-banner-${organization.id}`}><span><strong>Önizleme modu · salt okunur</strong>Bu sınav başka bir sekmede düzenleniyor. Burada yalnızca görüntüleyebilirsin.</span><button type="button" data-testid={`edit-lock-takeover-${organization.id}`} onClick={() => void takeOverEditing(organization.id)}>Düzenlemeyi bu sekmeye al</button></div>}
-          <ExamLifecyclePanel organization={organization} candidates={candidates[organization.id] ?? []} readOnly={readOnly} yearReadOnly={yearReadOnly} onReload={(text) => { setNotice(text ?? ''); setReloadKey((key) => key + 1) }} />
           {roomEditorOpen && <div className="exam-room-panel">
-            <div className="exam-room-panel-heading"><div><strong>Adım 02 · Derslik ve kapasite</strong><small>Her fiziksel derslikten bir düzen seç. Kullanım dışı yerler kapasiteye sayılmaz.</small></div><span>{organization.participant_count} öğrenci</span></div>
+            <div className="exam-room-panel-heading"><div><strong>1. adım · Derslikler</strong><small>Sınavın yapılacağı derslikleri işaretle. Her derslikte aktif oturma düzeni kullanılır.</small></div><span>{organization.participant_count} öğrenci</span><button type="button" className="exam-room-select-all" data-testid={`exam-room-select-all-${organization.id}`} onClick={() => { setSelectedLayoutByClassroom(Object.fromEntries(roomOptionsByClassroom.map((layouts) => layouts.find((item) => item.is_active && item.can_select) ?? layouts.find((item) => item.can_select)).filter((item): item is RoomOption => Boolean(item)).map((item) => [item.classroom_id, item.layout_id]))); setRoomMessage('') }}>Tüm derslikleri seç</button></div>
             {!roomOptionsByClassroom.length ? <div className="exam-empty room-empty"><strong>Bu eğitim yılı için oturma düzeni yok.</strong><span>Derslik oluşturup bu eğitim yılına ait masa ve oturma yeri düzeni hazırlamalısın.</span><button type="button" onClick={onClassrooms}>Derslik düzenlerine git</button></div> : <div className="exam-room-options">
               {roomOptionsByClassroom.map((layouts) => {
                 const classroomId = layouts[0].classroom_id
@@ -856,21 +924,20 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
                 const selectedLayout = layouts.find((layout) => layout.layout_id === selectedLayoutId)
                 const canSelect = layouts.some((layout) => layout.can_select)
                 return <article className={`exam-room-option ${selectedLayoutId ? 'selected' : ''}`} key={classroomId}>
-                  <label className="exam-room-check"><input type="checkbox" checked={Boolean(selectedLayoutId)} disabled={!canSelect && !selectedLayoutId} onChange={(event) => toggleRoom(classroomId, event.target.checked)} /><span><strong>{classroomName}</strong><small>{selectedLayout ? `${selectedLayout.available_seats} / ${selectedLayout.total_seats} kullanılabilir` : `${layouts.length} düzen seçeneği`}</small></span></label>
-                  {selectedLayoutId && <label className="exam-layout-choice"><span>Oturma düzeni</span><select value={selectedLayoutId} onChange={(event) => { setSelectedLayoutByClassroom((selected) => ({ ...selected, [classroomId]: event.target.value })); setRoomMessage('') }}>{layouts.map((layout) => <option key={layout.layout_id} value={layout.layout_id} disabled={!layout.can_select}>{layout.layout_name} · v{layout.version}{layout.is_latest ? ' · Güncel' : ' · Önceki sürüm'} · {layout.available_seats} yer</option>)}</select></label>}
+                  <label className="exam-room-check"><input type="checkbox" checked={Boolean(selectedLayoutId)} disabled={!canSelect && !selectedLayoutId} onChange={(event) => toggleRoom(classroomId, event.target.checked)} /><span><strong>{classroomName}</strong><small>{selectedLayout ? `${selectedLayout.available_seats} / ${selectedLayout.total_seats} kullanılabilir` : `${(layouts.find((item) => item.is_active && item.can_select) ?? layouts.find((item) => item.can_select))?.available_seats ?? 0} koltuk`}</small></span></label>
+                  {selectedLayoutId && <label className="exam-layout-choice"><span>Oturma düzeni</span><select value={selectedLayoutId} onChange={(event) => { setSelectedLayoutByClassroom((selected) => ({ ...selected, [classroomId]: event.target.value })); setRoomMessage('') }}>{layouts.map((layout) => <option key={layout.layout_id} value={layout.layout_id} disabled={!layout.can_select}>{layout.layout_name} · v{layout.version}{layout.is_active ? ' · Aktif' : layout.is_latest ? '' : ' · Önceki sürüm'} · {layout.available_seats} yer</option>)}</select></label>}
                   {!canSelect && <small className="exam-layout-empty">Bu dersliğin düzeninde henüz oturma yeri yok.</small>}
                 </article>
               })}
             </div>}
             <div className={`exam-capacity-check ${selectedRoomCapacity >= organization.participant_count && selectedRoomCapacity > 0 ? 'enough' : 'short'}`}><span>Toplam kullanılabilir kapasite</span><strong>{selectedRoomCapacity} / {organization.participant_count}</strong><small>{selectedRoomCapacity >= organization.participant_count && selectedRoomCapacity > 0 ? 'Kapasite yeterli. Dağıtım aşamasında yeniden doğrulanacak.' : `${Math.max(0, organization.participant_count - selectedRoomCapacity)} kişilik kapasite eksiği var.`}</small></div>
             {roomError && <p className="exam-error" role="alert">{roomError}</p>}{roomMessage && <p className="exam-room-success" role="status">{roomMessage}</p>}
-            <div className="exam-room-footer"><span>Bu seçim taslakta saklanır. Öğrenciler koltuklara henüz dağıtılmaz.</span><button type="button" data-testid={`exam-room-save-${organization.id}`} disabled={roomSaving || !roomOptionsByClassroom.length} onClick={() => saveRoomSelection(organization.id)}>{roomSaving ? 'Kaydediliyor…' : 'Derslik seçimini kaydet'}</button></div>
+            <div className="exam-room-footer"><span>Kaydedince sıradaki adım dağıtım olur.</span><button type="button" data-testid={`exam-room-save-${organization.id}`} disabled={roomSaving || !roomOptionsByClassroom.length} onClick={() => saveRoomSelection(organization.id)}>{roomSaving ? 'Kaydediliyor…' : 'Derslik seçimini kaydet'}</button></div>
           </div>}
-          <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRuleEditor(organization)}>{activeRuleOrganizationId === organization.id ? 'Kuralları kapat' : 'Dağıtım kuralları'}</button><span>Altı komşuluk kuralı bu sınava özeldir.</span></div>
-          <div className="exam-rule-toolbar"><button type="button" data-testid={`candidate-create-${organization.id}`} disabled={readOnly || organization.status !== 'draft' || candidateSavingId === organization.id || !organization.capacity_sufficient} onClick={() => void createCandidate(organization.id)}>{candidateSavingId === organization.id ? 'Aday hesaplanıyor…' : (candidates[organization.id]?.length ? 'Yeni alternatif üret' : 'İlk dağıtım adayını oluştur')}</button><span>{organization.capacity_sufficient ? `${candidates[organization.id]?.length ?? 0} kayıtlı aday · kapasite yeterli` : `${organization.capacity_deficit} kişilik kapasite eksiği var`}</span></div>
           {candidateError && candidateErrorId === organization.id && <p className="exam-error" role="alert">{candidateError}</p>}
           <DistributionProgressOverlay organizationId={organization.id} active={candidateSavingId === organization.id} />
-          {(candidates[organization.id] ?? []).map((candidate, candidateIndex) => {
+          {expanded && allCandidates.map((candidate, candidateIndex) => {
+            if (candidate.candidate_id !== currentCandidate?.candidate_id) return null
             const selectedPlanParticipantId = selectedPlanStudentByCandidate[candidate.candidate_id] || null
             const selectedPlanStudent = candidate.assignments.find((assignment) => assignment.participant_id === selectedPlanParticipantId) ?? null
             const violations = candidate.violations ?? []
@@ -888,11 +955,16 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
             const planEditingEnabled = !readOnly
               && (organization.status === 'draft' || organization.status === 'completed')
               && organization.selected_candidate_id === candidate.candidate_id
+            // Sekmeler sınıf sırasıyla gelir: "9-A", "10-A"dan önce.
+            const planRooms = [...candidate.plan].sort((first, second) => first.classroom_name.localeCompare(second.classroom_name, 'tr-TR', { numeric: true }))
+            const activePlanRoomId = planRooms.some((room) => room.layout_id === planRoomByCandidate[candidate.candidate_id]) ? planRoomByCandidate[candidate.candidate_id] : planRooms[0]?.layout_id
             return <div className={`exam-candidate-result ${organization.selected_candidate_id === candidate.candidate_id ? 'selected' : ''}`} key={candidate.candidate_id}>
-            <strong>Aday {candidateIndex + 1}{candidate.pinned_classroom_ids?.length ? ` · Sabitlemeli alternatif (${candidate.pinned_classroom_ids.length} derslik korundu)` : candidate.derived_from_candidate_id ? ' · Manuel sürüm' : candidateIndex === 0 ? ' · İlk dağıtım' : ' · Alternatif'}{candidate.status === 'stopped' && <em className="candidate-stopped-badge" data-testid={`candidate-stopped-badge-${candidate.candidate_id}`} title="Hesaplama kullanıcı tarafından durduruldu; o ana kadar bulunan en iyi geçerli çözüm kaydedildi.">Erken durduruldu</em>}</strong>
-            <span>{candidate.assignments.length} öğrenci · {candidate.summary.waiting_count} bekleyen · {candidate.affected_student_count} kural ihlalinden etkilenen öğrenci · {candidate.status === 'optimal' ? 'Denge açısından en iyi bulundu' : candidate.status === 'stopped' ? 'Durdurulana kadar bulunan en iyi çözüm; daha dengeli bir alternatif üretilebilir' : candidate.status === 'manual' ? 'Manuel değişiklik' : 'Geçerli aday'}</span>
+            <strong>Dağıtım {candidateIndex + 1}{candidate.pinned_classroom_ids?.length ? ` · ${candidate.pinned_classroom_ids.length} derslik sabitlenerek` : candidate.derived_from_candidate_id ? ' · Elle düzenlendi' : candidateIndex === 0 ? '' : ' · Yeniden dağıtım'}{candidate.status === 'stopped' && <em className="candidate-stopped-badge" data-testid={`candidate-stopped-badge-${candidate.candidate_id}`} title="Hesaplama kullanıcı tarafından durduruldu; o ana kadar bulunan en iyi geçerli çözüm kaydedildi.">Erken durduruldu</em>}</strong>
+            <span className={`candidate-result-line ${candidate.affected_student_count === 0 && candidate.summary.waiting_count === 0 ? 'ok' : 'warn'}`} data-testid={`candidate-result-${candidate.candidate_id}`}>{candidate.assignments.length - candidate.summary.waiting_count} öğrenci yerleşti{candidate.summary.waiting_count > 0 ? ` · ${candidate.summary.waiting_count} öğrenci yer bekliyor` : ''} · {candidate.affected_student_count === 0 ? 'kural ihlali yok' : `${candidate.affected_student_count} öğrenci kural ihlalinden etkileniyor`}{candidate.status === 'stopped' ? ' · hesaplama erken durduruldu' : ''}</span>
+            <details className="candidate-breakdown"><summary>Derslik ve sınıf dökümü</summary>
             <div className="candidate-room-summary">{candidate.summary.rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students} öğrenci / {room.available_seats} yer · {room.empty_seats} boş</small>)}</div>
             <div className="candidate-group-summary">{candidate.summary.groups.map((group) => <small key={`${group.class_level}-${group.section}-${group.area ?? ''}`}>{group.class_level}/{group.section}{group.area ? ` · ${group.area}` : ''}: {group.student_count} öğrenci</small>)}</div>
+            </details>
             {violatingStudents.length > 0 && <div className="candidate-violations" data-testid={`candidate-violations-${candidate.candidate_id}`}>
               <strong>Kural ihlalinden etkilenen öğrenciler · {violatingStudents.length}</strong>
               {planEditingEnabled && violatingStudents.some(({ assignment }) => candidate.violation_suggestions?.[assignment!.participant_id]?.length) && <button type="button" className="violation-fix-all" data-testid={`violation-fix-all-${candidate.candidate_id}`} disabled={movingCandidateId === candidate.candidate_id} onClick={() => void moveCandidateStudent(organization.id, candidate.candidate_id, '', '', true)}>{movingCandidateId === candidate.candidate_id ? 'Düzeltiliyor…' : 'Tümünü düzelt'}</button>}
@@ -904,12 +976,19 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
                 </div>
               })}</div>
             </div>}
-            <details id={`plan-details-${candidate.candidate_id}`}>
-              <summary>Oturma planı ve öğrenci havuzu{candidate.events.length ? ` · ${candidate.events.length} işlem` : ''}</summary>
+            <details id={`plan-details-${candidate.candidate_id}`} open>
+              <summary>Oturma planı{candidate.events.length ? ` · ${candidate.events.length} işlem` : ''}</summary>
               <div className={`candidate-plan-instructions ${selectedPlanStudent ? 'has-selection' : ''}`} aria-live="polite">
-                {selectedPlanStudent ? <><span><strong>{selectedPlanStudent.first_name} {selectedPlanStudent.last_name}</strong> seçildi. {selectedPlanStudent.seat_id ? 'Hedef koltuğa tıklayın; dolu koltukta öğrenciler yer değiştirir.' : 'Boş koltuğa tıklayın; dolu bir hedef seçerseniz oradaki öğrenci bekleyen havuza geçer.'}</span><button type="button" disabled={movingCandidateId === candidate.candidate_id} onClick={() => selectPlanStudent(candidate.candidate_id, selectedPlanStudent.participant_id)}>Seçimi kaldır</button></> : <span>{planEditingEnabled ? 'Dolu koltuğa dokunarak öğrenciyi seçin; sonra boş veya dolu hedef koltuğa dokunun.' : 'Düzenlemek için bu adayı önce incelemeye alın.'}</span>}
+                {selectedPlanStudent ? <><span><strong>{selectedPlanStudent.first_name} {selectedPlanStudent.last_name}</strong> seçildi. {selectedPlanStudent.seat_id ? 'Hedef koltuğa tıklayın; dolu koltukta öğrenciler yer değiştirir.' : 'Boş koltuğa tıklayın; dolu bir hedef seçerseniz oradaki öğrenci bekleyen havuza geçer.'}</span><button type="button" disabled={movingCandidateId === candidate.candidate_id} onClick={() => selectPlanStudent(candidate.candidate_id, selectedPlanStudent.participant_id)}>Seçimi kaldır</button></> : <span>{planEditingEnabled ? 'Yer değiştirmek için önce bir öğrencinin koltuğuna, sonra gitmesini istediğin koltuğa tıkla.' : 'Bu görünüm salt okunur.'}</span>}
               </div>
-              {candidate.plan.map((room) => {
+              {candidate.plan.length > 1 && <div className="plan-room-tabs" role="tablist" aria-label="Derslik seç">
+                {planRooms.map((room) => {
+                  const roomHasViolation = room.desks.some((desk) => desk.seats.some((seat) => violationSeatIds.has(seat.seat_id)))
+                  const active = room.layout_id === activePlanRoomId
+                  return <button type="button" role="tab" aria-selected={active} className={`${active ? 'active' : ''} ${roomHasViolation ? 'has-violation' : ''}`} key={room.layout_id} data-testid={`plan-room-tab-${room.layout_id}`} onClick={() => setPlanRoomByCandidate((current) => ({ ...current, [candidate.candidate_id]: room.layout_id }))}>{room.classroom_name}{roomHasViolation && <i title="Bu derslikte kural ihlali var" />}</button>
+                })}
+              </div>}
+              {candidate.plan.filter((room) => room.layout_id === activePlanRoomId).map((room) => {
                 const maxX = room.desks.length ? Math.max(...room.desks.map((desk) => desk.x)) : 0
                 const maxY = room.desks.length ? Math.max(...room.desks.map((desk) => desk.y)) : 0
                 const canvasWidth = Math.max(520, 150 + (maxX + 2.5) * 45)
@@ -952,13 +1031,32 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
                 return <li key={event.id}><span><strong>{historyEventLabel(event.event_type)}</strong> · {event.participant_name} · {movement}{event.displaced_participant_id ? ' · Takas' : ''}</span><time>{new Date(event.created_at).toLocaleString('tr-TR')}</time></li>
               })}</ol> : <span>Henüz manuel değişiklik yapılmadı.</span>}
             </div>}
-            <button type="button" data-testid={`candidate-select-${candidate.candidate_id}`} disabled={readOnly || organization.status !== 'draft'} onClick={() => void selectCandidate(organization.id,candidate.candidate_id)}>{organization.status === 'completed' ? (organization.selected_candidate_id === candidate.candidate_id ? 'Kesinleşmiş dağıtım' : 'Seçilmeyen aday') : organization.selected_candidate_id === candidate.candidate_id ? 'Seçili aday' : 'Bu adayı incelemeye al'}</button>
-            {organization.status === 'draft' && organization.selected_candidate_id === candidate.candidate_id && <button type="button" className="candidate-review-button" data-testid={`final-review-open-${organization.id}`} disabled={reviewLoadingId === organization.id} onClick={() => void openFinalReview(organization.id)}>{reviewLoadingId === organization.id ? 'Son kontrol…' : 'Son kontrolü aç'}</button>}
+            {organization.status === 'draft' && !readOnly && organization.selected_candidate_id !== candidate.candidate_id && <button type="button" data-testid={`candidate-select-${candidate.candidate_id}`} onClick={() => void selectCandidate(organization.id, candidate.candidate_id)}>Bu dağıtımı düzenlemeye aç</button>}
           </div>
           })}
+          {expanded && allCandidates.length > 1 && <details className="exam-previous" data-testid={`exam-previous-${organization.id}`}><summary>Önceki dağıtımlar · {allCandidates.length - 1}</summary><ul>{allCandidates.map((item, index) => item.candidate_id === currentCandidate?.candidate_id ? null : <li key={item.candidate_id}><span>Dağıtım {index + 1} · {item.affected_student_count === 0 ? 'kural ihlali yok' : `${item.affected_student_count} öğrenci ihlalden etkileniyor`}</span>{organization.status === 'draft' && !readOnly && <button type="button" data-testid={`candidate-select-${item.candidate_id}`} onClick={() => void selectCandidate(organization.id, item.candidate_id)}>Buna dön</button>}</li>)}</ul></details>}
           {reviewError && !finalizeConfirmId && <p className="exam-error" role="alert">{reviewError}</p>}
           {finalizeConfirmId === organization.id && finalReviews[organization.id] && <div className="final-review-panel"><strong>Son kontrol · kesinleştirme öncesi</strong><span>{finalReviews[organization.id].seated_count}/{finalReviews[organization.id].participant_count} öğrenci oturuyor · {finalReviews[organization.id].unassigned_count} bekleyen · {finalReviews[organization.id].available_capacity} kullanılabilir koltuk · {finalReviews[organization.id].empty_seats} boş koltuk</span><span>{finalReviews[organization.id].violation_count} komşuluk ihlali · {finalReviews[organization.id].affected_student_count} öğrenci etkileniyor</span><div>{finalReviews[organization.id].rooms.map((room) => <small key={room.classroom_id}>{room.classroom_name}: {room.assigned_students}/{room.available_seats} dolu · {room.empty_seats} boş</small>)}</div><p>Başlangıç kapasitesi fiziksel sınıf planının yerine geçmez. Masa, sıra, koridor ve kullanılabilir koltukları gerçek derslikle karşılaştırın.</p>{!finalReviews[organization.id].can_finalize && <p className="exam-error">Bekleyen öğrenci kalmamalı ve kural ihlalinden etkilenen öğrenci sayısı beşi aşmamalı.</p>}<label><input type="checkbox" data-testid="finalize-confirm-checkbox" checked={finalizeConfirmed} onChange={(event) => setFinalizeConfirmed(event.target.checked)} />Dağıtımı kontrol ettim; seçilen dersliklerin fiziksel planlarını doğruladım ve sınavı kesinleştirmek istiyorum.</label>{reviewError && <p className="exam-error" role="alert">{reviewError}</p>}<div><button type="button" onClick={() => setFinalizeConfirmId(null)}>Vazgeç</button><button type="button" data-testid="finalize-submit-btn" disabled={!finalizeConfirmed || !finalReviews[organization.id].can_finalize || finalizing} onClick={() => void finalizeOrganization(organization.id)}>{finalizing ? 'Kesinleştiriliyor…' : 'Onayla ve kesinleştir'}</button></div></div>}
-          {activeRuleOrganizationId === organization.id && ruleDraft && <div className="exam-rule-panel"><div className="exam-room-panel-heading"><div><strong>Adım 03 · Oturma kuralları</strong><small>Kuralları birbirinden bağımsız açıp kapatabilirsin. Kurallar yalnızca kullanılabilir fiziksel koltuklar arasında değerlendirilir.</small></div></div><div className="exam-rule-list">{ruleLabels.map((rule) => <label key={rule.key}><span><strong>{rule.title}</strong><small>{rule.position}</small></span><input type="checkbox" checked={ruleDraft[rule.key]} onChange={(event) => setRuleDraft((current) => current ? { ...current, [rule.key]: event.target.checked } : current)} /></label>)}</div>{ruleError && <p className="exam-error" role="alert">{ruleError}</p>}{ruleMessage && <p className="exam-room-success" role="status">{ruleMessage}</p>}<div className="exam-room-footer"><span>Dağıtım adayı oluşturulurken bu ayarlar kullanılacak.</span><button type="button" disabled={ruleSaving} onClick={() => saveRules(organization.id)}>{ruleSaving ? 'Kaydediliyor…' : 'Kuralları kaydet'}</button></div></div>}
+          <details className="exam-advanced" data-testid={`exam-advanced-${organization.id}`}>
+            <summary>{isDone ? 'Sınav sonrası işlemler: arşivle, kopyala, öğrenci listesini karşılaştır' : 'Diğer seçenekler: kurallar, derslik değiştirme, dönem'}</summary>
+            <div className="exam-advanced-body">
+          {!readOnly && periods.length > 0 && <label className="exam-card-period" data-testid={`exam-card-period-${organization.id}`}>
+            <span>Dönem</span>
+            <select
+              value={organization.exam_period_id ?? ''}
+              disabled={periodBusy}
+              onChange={(event) => void moveOrganizationToPeriod(organization.id, event.target.value)}
+            >
+              {!organization.exam_period_id && <option value="">Dönem atanmamış</option>}
+              {periods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}
+            </select>
+          </label>}
+              {!readOnly && organization.status === 'draft' && guideStep > 0 && <div className="exam-rule-toolbar"><button type="button" data-testid={`exam-room-edit-${organization.id}`} onClick={() => toggleRoomEditor(organization)}>{roomEditorOpen ? 'Derslik seçimini kapat' : 'Derslikleri değiştir'}</button><span>Derslik seçimi değişirse dağıtım yeniden yapılır.</span></div>}
+          {organization.status === 'draft' && <div className="exam-rule-toolbar"><button type="button" disabled={readOnly || organization.status !== 'draft'} onClick={() => toggleRuleEditor(organization)}>{activeRuleOrganizationId === organization.id ? 'Kuralları kapat' : 'Oturma kurallarını değiştir'}</button><span>Kimlerin yan yana ya da önlü arkalı oturamayacağını belirler. Hepsi açık gelir.</span></div>}
+          {activeRuleOrganizationId === organization.id && ruleDraft && <div className="exam-rule-panel"><div className="exam-room-panel-heading"><div><strong>Oturma kuralları</strong><small>Kuralları birbirinden bağımsız açıp kapatabilirsin. Kurallar yalnızca kullanılabilir fiziksel koltuklar arasında değerlendirilir.</small></div></div><div className="exam-rule-list">{ruleLabels.map((rule) => <label key={rule.key}><span><strong>{rule.title}</strong><small>{rule.position}</small></span><input type="checkbox" checked={ruleDraft[rule.key]} onChange={(event) => setRuleDraft((current) => current ? { ...current, [rule.key]: event.target.checked } : current)} /></label>)}</div>{ruleError && <p className="exam-error" role="alert">{ruleError}</p>}{ruleMessage && <p className="exam-room-success" role="status">{ruleMessage}</p>}<div className="exam-room-footer"><span>Dağıtım adayı oluşturulurken bu ayarlar kullanılacak.</span><button type="button" disabled={ruleSaving} onClick={() => saveRules(organization.id)}>{ruleSaving ? 'Kaydediliyor…' : 'Kuralları kaydet'}</button></div></div>}
+          <ExamLifecyclePanel organization={organization} candidates={candidates[organization.id] ?? []} readOnly={readOnly} yearReadOnly={yearReadOnly} onReload={(text) => { setNotice(text ?? ''); setReloadKey((key) => key + 1) }} />
+            </div>
+          </details>
         </article>
       })}</div>
         {section.orphan && <p className="exam-period-empty">Bu sınavlar bir dönem seçilmeden oluşturulmuş. Kartın üstündeki dönem kutusundan taşıyabilirsin.</p>}

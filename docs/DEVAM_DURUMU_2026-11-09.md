@@ -122,7 +122,24 @@ arayüz derlemesi, uçtan uca testler) geçiyor. Çalıştırma komutları READM
 testleri sağlam ama arayüzle arka uç arasındaki sözleşme kopabiliyor ve bu sessiz oluyor.
 Dağıtım oluşturma, rapor merkezi ve yedekleme akışları bu gözle elle denenmeli.
 
+## 0.4.0 – 0.4.1 (10–11 Kasım 2026)
+
+- Sürümler artık `main` dalına her birleştirmede CI tarafından üretilir ve GitHub
+  Releases altında yayımlanır (macOS `.dmg`, Windows kurulum `.exe` ve `.zip`).
+  0.4.0 paketleri iki platformda da derlendi ve duman testinden geçti.
+- Çözücü grup modeline taşındı; koltuk sayısı öğrenci sayısına eşitken 236 öğrenci
+  birkaç saniyede 0 ihlalle dağıtılıyor.
+- Kural 7–8 (aynı sınıf seviyesi) ve Karar 37 güncellemesi (koridorda yan yana
+  sayılır; çapraz ayrı ilişki, kural 8 çapraza uygulanmaz) karar belgesine işlendi.
+- Genel Bakış canlı veriden çalışıyor; öğrenci listesinde arama ve filtre var.
+- Arayüz akışlarının tamamı tarayıcıda denendi (ayrıntı: CHANGELOG 0.4.1).
+
 ## Açık kalanlar
+
+- Paketlerin gerçek bir Mac ve Windows bilgisayarda elle kurulup denenmesi; simgenin
+  göründüğünün doğrulanması.
+- CI paketlerinde yayıncı anahtarı yok; artımlı güncelleme paketleri kabul edilmez,
+  güncelleme tam kurulum paketiyle yapılır (kullanıcı verisi ayrı klasörde korunur).
 
 - macOS ve Windows paketlerinin gerçek cihazlarda veya CI'da üretilip denenmesi. Paketleme yolu
   bu oturumda Linux'ta uçtan uca denendi; iki platformun kendi iş akışı hazır ama henüz çalıştırılmadı.

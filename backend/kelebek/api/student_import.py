@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 
 from kelebek.db import current_academic_year_start
 from kelebek.services.backup import create_safety_backup
+from kelebek.services.layouts import ensure_active_layout
 from kelebek.services.student_import import auto_map_headers, read_student_tables
 from kelebek.services.student_registry import (
     deactivate_student_in_year,
@@ -28,6 +29,8 @@ FIELD_LABELS = {
     "section": "Şube",
     "area": "Alan",
 }
+BLOCKS_PER_ROOM = 3  # iki koridorla ayrılmış üç blok
+
 AREA_OPTIONS = {"Sayısal", "Eşit Ağırlık", "Sözel", "Dil"}
 @student_import_api.get("/student-import/template")
 def download_student_template():
@@ -536,7 +539,7 @@ def _preview_mapping(table):
 
 def _ensure_classrooms_for_groups(session, academic_year_id, groups):
     """Create an editable current-year capacity draft without replacing layouts."""
-    from math import ceil, sqrt
+    from math import ceil
 
     from kelebek.models import (
         AcademicYear,
@@ -596,20 +599,27 @@ def _ensure_classrooms_for_groups(session, academic_year_id, groups):
             )
             session.add(layout)
             session.flush()
+            ensure_active_layout(session, layout)
 
         desk_count = session.scalar(select(func.count(Desk.id)).where(Desk.layout_id == layout.id)) or 0
         generated = False
         if desk_count == 0:
-            columns = min(12, max(1, ceil(sqrt(requested_seats / 2))))
+            # Türkiye'deki olağan derslik düzeni: iki koridorla ayrılmış üç blok
+            # çiftli masa. Örneğin 36 kişilik sınıf 3 blok × 6 satır olur.
+            # Koridor, ızgarada bir sütun atlanarak temsil edilir; komşuluk
+            # hesabı (build_neighbor_pairs) bu boşluğu görüp koridorun iki yanını
+            # yan yana saymaz. Bu yalnızca başlangıç taslağıdır; kullanıcı gerçek
+            # sınıf ölçülerine göre düzenler.
+            columns = max(1, min(BLOCKS_PER_ROOM, ceil(requested_seats / 2)))
             rows = ceil(requested_seats / columns / 2)
             seat_number = 1
             remaining = requested_seats
-            for column in range(columns):
-                x = float(column * 2 + (column // 3) * 2)
-                block_label = f"B{column // 3 + 1}"
-                for row in range(rows):
+            for row in range(rows):
+                for column in range(columns):
                     if remaining <= 0:
                         break
+                    x = float(column * 4)
+                    block_label = f"B{column + 1}"
                     seats_in_desk = min(2, remaining)
                     desk = Desk(
                         layout_id=layout.id,

@@ -1,5 +1,6 @@
 """Sınav organizasyonu taslaklarının iş kuralları."""
 
+import re
 from datetime import date
 
 from sqlalchemy import func, select
@@ -30,6 +31,8 @@ class ExamOrganizerError(ValueError):
 
 
 RULE_FIELDS = (
+    "prevent_same_grade_adjacent",
+    "prevent_same_grade_front_back",
     "prevent_same_section_adjacent",
     "prevent_same_section_front_back",
     "prevent_different_grade_same_area_adjacent",
@@ -63,6 +66,12 @@ def _layout_capacity(session: Session, layout_id: str) -> tuple[int, int]:
     return total, available
 
 
+def natural_sort_key(text: str) -> list:
+    """Adlardaki sayıları sayı olarak sıralar: "9-A" < "10-A"."""
+    return [(0, int(part), "") if part.isdigit() else (1, 0, part.casefold())
+            for part in re.split(r"(\d+)", text) if part]
+
+
 def list_room_options(session: Session, academic_year_id: str) -> list[dict]:
     """Seçili eğitim yılının fiziksel düzen sürümlerini ve kapasitelerini döndür."""
     layouts = session.execute(
@@ -91,7 +100,11 @@ def list_room_options(session: Session, academic_year_id: str) -> list[dict]:
             "available_seats": available,
             "can_select": total > 0,
             "is_latest": layout.version == latest_version,
+            "is_active": bool(layout.is_active),
         })
+    # "9-A", "10-A"dan önce gelir; aynı dersliğin düzenleri kendi sırasını korur.
+    # Her derslikte aktif düzen ilk sırada gelir; arayüz varsayılan olarak onu seçer.
+    result.sort(key=lambda item: (natural_sort_key(item["classroom_name"]), not item["is_active"]))
     return result
 
 
