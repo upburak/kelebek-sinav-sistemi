@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from kelebek.db import Base
@@ -24,6 +24,8 @@ class ClassroomLayout(Base):
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Derslik ve yıl başına tek düzen aktiftir; sınavda varsayılan olarak o kullanılır.
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )

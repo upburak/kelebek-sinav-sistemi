@@ -1,5 +1,27 @@
 # Değişiklik günlüğü
 
+## 0.5.0 — 11 Kasım 2026
+
+### Aktif oturma düzeni ve düzen silme
+
+Kullanıcı isteği: oluşturulmuş ama kullanılmayacak düzenler silinebilsin ve
+hangi düzenin kullanılacağı belirlenebilsin.
+
+- **Aktif düzen:** her derslik ve eğitim yılı için tek bir düzen "Aktif"tir.
+  Derslikler ekranında "Aktif yap" ile değiştirilir. Sınav için derslik
+  seçildiğinde varsayılan olarak aktif düzen gelir; Genel Bakış ve derslik
+  kartlarındaki koltuk sayısı da aktif düzenden hesaplanır. Daha önce
+  oluşturulmuş sınavların seçili düzeni değişmez.
+- İlk oluşturulan düzen kendiliğinden aktif olur; düzenlemek için açılan yeni
+  sürüm, kaynağı aktifse aktifliği devralır. Şablonlar aktif yapılamaz.
+- **Silme:** hiçbir sınavda kullanılmayan düzen masaları ve koltuklarıyla
+  silinir. Bir sınavda kullanılan düzen silinemez (düğme kapalı gelir, kaç
+  sınavda kullanıldığı yazar). Aktif düzen silinirse kalan en yeni düzen aktif
+  olur. Arşiv yıllarının düzenleri salt okunurdur.
+- Migration `0020_active_layout`: mevcut verilerde her derslik/yıl için en son
+  oluşturulan düzen aktif yapılır; güncelleme sonrası davranış değişmez.
+- Testler: `backend/tests/test_layout_active_delete.py` (8 test).
+
 ## 0.4.2 — 11 Kasım 2026
 
 İlk gerçek Windows denemesinde kullanıcı, 11–12. sınıfların alanlarını seçtikten

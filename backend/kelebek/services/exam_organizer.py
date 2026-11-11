@@ -100,9 +100,11 @@ def list_room_options(session: Session, academic_year_id: str) -> list[dict]:
             "available_seats": available,
             "can_select": total > 0,
             "is_latest": layout.version == latest_version,
+            "is_active": bool(layout.is_active),
         })
     # "9-A", "10-A"dan önce gelir; aynı dersliğin düzenleri kendi sırasını korur.
-    result.sort(key=lambda item: natural_sort_key(item["classroom_name"]))
+    # Her derslikte aktif düzen ilk sırada gelir; arayüz varsayılan olarak onu seçer.
+    result.sort(key=lambda item: (natural_sort_key(item["classroom_name"]), not item["is_active"]))
     return result
 
 

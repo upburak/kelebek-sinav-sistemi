@@ -8,6 +8,9 @@ type ClassroomLayout = {
   academic_year_id: string | null
   academic_year_label: string | null
   is_template: boolean
+  is_active?: boolean
+  exam_count?: number
+  can_delete?: boolean
   total_seats: number
   available_seats: number
 }
@@ -172,6 +175,44 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       await loadClassrooms()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Derslik adı değiştirilemedi.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function activateLayout(classroomId: string, layout: ClassroomLayout) {
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/classrooms/${classroomId}/layouts/${layout.id}/activate`, { method: 'POST' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Düzen aktif yapılamadı.')
+      await Promise.all([loadLayouts(classroomId), loadClassrooms()])
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Düzen aktif yapılamadı.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteLayout(classroomId: string, layout: ClassroomLayout) {
+    const warning = layout.is_active
+      ? `“${layout.name} · v${layout.version}” şu an aktif düzen. Silinirse kalan en yeni düzen aktif olur. Silinsin mi?`
+      : `“${layout.name} · v${layout.version}” düzeni masaları ve koltuklarıyla birlikte silinsin mi? Bu işlem geri alınamaz.`
+    if (!window.confirm(warning)) return
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/classrooms/${classroomId}/layouts/${layout.id}`, { method: 'DELETE' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Düzen silinemedi.')
+      if (selectedLayout?.layout.id === layout.id) {
+        setSelectedLayout(null)
+        setEditingLayout(false)
+      }
+      await Promise.all([loadLayouts(classroomId), loadClassrooms()])
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Düzen silinemedi.')
     } finally {
       setSaving(false)
     }
@@ -446,14 +487,20 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
               </button>
             </form>
           )}
+          {layouts.length > 1 && <p className="layout-active-hint">Sınav için derslik seçildiğinde <b>Aktif</b> işaretli düzen kullanılır. Kullanılmayan düzenleri silebilirsin; bir sınavda kullanılmış düzenler korunur.</p>}
           {layouts.length === 0 ? <p>Bu derslik için henüz düzen yok.</p> : (
             <ul className="layout-list">
               {layouts.map((layout) => (
-                <li key={layout.id}>
-                  <span><strong>{layout.name} · v{layout.version}</strong><small>{layout.is_template ? 'Şablon' : layout.academic_year_label}</small></span>
+                <li key={layout.id} className={layout.is_active ? 'active-layout' : ''} data-testid={`layout-row-${layout.id}`}>
+                  <span>
+                    <strong>{layout.name} · v{layout.version}{layout.is_active && <b className="layout-active-badge" data-testid="layout-active-badge">Aktif</b>}</strong>
+                    <small>{layout.is_template ? 'Şablon' : layout.academic_year_label}{layout.exam_count ? ` · ${layout.exam_count} sınavda kullanılıyor` : ''}</small>
+                  </span>
                   <span className="layout-actions">
                     <small>{layout.available_seats}/{layout.total_seats} kullanılabilir oturma yeri</small>
                     <button type="button" className="layout-open" onClick={() => openLayout(selectedClassroom.id, layout.id)}>Düzeni aç</button>
+                    {!readOnly && !layout.is_template && !layout.is_active && <button type="button" className="layout-open" data-testid={`layout-activate-${layout.id}`} disabled={saving} title="Sınav için derslik seçildiğinde bu düzen gelsin" onClick={() => void activateLayout(selectedClassroom.id, layout)}>Aktif yap</button>}
+                    {!readOnly && <button type="button" className="layout-open layout-delete" data-testid={`layout-delete-${layout.id}`} disabled={saving || layout.can_delete === false} title={layout.can_delete === false ? 'Bir sınavda kullanılan düzen silinemez' : 'Kullanılmayan düzeni sil'} onClick={() => void deleteLayout(selectedClassroom.id, layout)}>Sil</button>}
                   </span>
                 </li>
               ))}

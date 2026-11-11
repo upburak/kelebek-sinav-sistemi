@@ -1177,3 +1177,11 @@ button:not(.plan-seat):not(.candidate-plan-seat) { min-height: 28px; }
 .page-footer { padding: 0 clamp(22px, 4vw, 58px) 24px; }
 .exam-status.done { background: #dff3ec; color: #0d5247; }
 .main-navigation button.active:hover:not(:disabled) { background: #f2b744; color: #173247; }
+
+/* Derslik düzenleri: aktif düzen ve silme */
+.layout-list li.active-layout { border-color: #1c9b79; background: #f3fbf8; }
+.layout-active-badge { margin-left: 8px; padding: 2px 8px; border-radius: 99px; background: #1c9b79; color: #fff; font-size: 11px; font-weight: 700; }
+.layout-active-hint { margin: 10px 0; color: #5e707b; font-size: 12px; }
+.layout-open.layout-delete { border-color: #ecc9bb; color: #a8421c; }
+.layout-open.layout-delete:hover:not(:disabled) { background: #fdeee6; }
+.layout-open:disabled { opacity: .5; cursor: not-allowed; }

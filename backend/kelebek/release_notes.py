@@ -2,6 +2,15 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.5.0",
+    "date": "2026-11-11",
+    "items": [
+      "Derslikte hangi oturma düzeninin kullanılacağı \"Aktif yap\" ile belirlenir; sınavda o düzen gelir",
+      "Kullanılmayan oturma düzenleri silinebilir; bir sınavda kullanılmış düzenler korunur",
+      "Liste aktarımında alan seçiminin hemen altına \"Alanları uygula ve devam et\" düğmesi eklendi"
+    ]
+  },
+  {
     "version": "0.4.2",
     "date": "2026-11-11",
     "items": [

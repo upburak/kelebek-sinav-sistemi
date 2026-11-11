@@ -40,6 +40,7 @@ type RoomOption = {
   available_seats: number
   can_select: boolean
   is_latest: boolean
+  is_active?: boolean
 }
 type ExamPeriod = {
   id: string
@@ -859,7 +860,7 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
                 const canSelect = layouts.some((layout) => layout.can_select)
                 return <article className={`exam-room-option ${selectedLayoutId ? 'selected' : ''}`} key={classroomId}>
                   <label className="exam-room-check"><input type="checkbox" checked={Boolean(selectedLayoutId)} disabled={!canSelect && !selectedLayoutId} onChange={(event) => toggleRoom(classroomId, event.target.checked)} /><span><strong>{classroomName}</strong><small>{selectedLayout ? `${selectedLayout.available_seats} / ${selectedLayout.total_seats} kullanılabilir` : `${layouts.length} düzen seçeneği`}</small></span></label>
-                  {selectedLayoutId && <label className="exam-layout-choice"><span>Oturma düzeni</span><select value={selectedLayoutId} onChange={(event) => { setSelectedLayoutByClassroom((selected) => ({ ...selected, [classroomId]: event.target.value })); setRoomMessage('') }}>{layouts.map((layout) => <option key={layout.layout_id} value={layout.layout_id} disabled={!layout.can_select}>{layout.layout_name} · v{layout.version}{layout.is_latest ? ' · Güncel' : ' · Önceki sürüm'} · {layout.available_seats} yer</option>)}</select></label>}
+                  {selectedLayoutId && <label className="exam-layout-choice"><span>Oturma düzeni</span><select value={selectedLayoutId} onChange={(event) => { setSelectedLayoutByClassroom((selected) => ({ ...selected, [classroomId]: event.target.value })); setRoomMessage('') }}>{layouts.map((layout) => <option key={layout.layout_id} value={layout.layout_id} disabled={!layout.can_select}>{layout.layout_name} · v{layout.version}{layout.is_active ? ' · Aktif' : layout.is_latest ? '' : ' · Önceki sürüm'} · {layout.available_seats} yer</option>)}</select></label>}
                   {!canSelect && <small className="exam-layout-empty">Bu dersliğin düzeninde henüz oturma yeri yok.</small>}
                 </article>
               })}
