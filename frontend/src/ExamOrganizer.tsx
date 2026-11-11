@@ -120,7 +120,10 @@ function GroupSelector({
     onChange(selected.includes(key) ? selected.filter((item) => item !== key) : [...selected, key])
   }
 
+  const allKeys = groups.map(groupKey)
+  const allSelected = allKeys.length > 0 && allKeys.every((key) => selected.includes(key))
   return <div className="exam-group-options">
+    {groups.length > 1 && <button type="button" className="exam-group-all" data-testid="exam-group-select-all" onClick={() => onChange(allSelected ? [] : allKeys)}>{allSelected ? 'Seçimi temizle' : 'Tüm sınıfları seç'}</button>}
     {groups.map((group) => {
       const key = groupKey(group)
       return <label className={selected.includes(key) ? 'selected' : ''} key={key}>
@@ -402,12 +405,29 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Organizasyon oluşturulamadı.')
       let organization = data.organization as ExamOrganization
-      // Her dersliğin aktif düzeni kendiliğinden seçilir; kapasite yetiyorsa
-      // kullanıcı doğrudan dağıtım adımına geçer, isterse sonradan değiştirir.
-      const autoLayouts = roomOptionsByClassroom
+      // Yalnızca sınava giren sınıfların kendi derslikleri kendiliğinden seçilir
+      // (içe aktarma her sınıf/şube için "9-A Derslik" adında bir derslik kurar).
+      // Koltuk yetmezse sırayla başka derslik eklenir; yine yetmezse seçim
+      // kullanıcıya bırakılır. Sınava girmeyen sınıfların dersliği boşuna dolmaz.
+      const selectedGroupNames = (withCourses ? courses.flatMap((course) => course.groupKeys) : generalGroupKeys)
+        .map(groupFromKey)
+        .filter((group): group is NonNullable<ReturnType<typeof groupFromKey>> => Boolean(group))
+        .map((group) => `${group.class_level}-${group.section}`.toLocaleLowerCase('tr-TR'))
+      const defaultLayouts = roomOptionsByClassroom
         .map((layouts) => layouts.find((item) => item.is_active && item.can_select) ?? layouts.find((item) => item.can_select))
         .filter((item): item is RoomOption => Boolean(item))
-      const autoCapacity = autoLayouts.reduce((total, item) => total + item.available_seats, 0)
+      const ownsSelectedGroup = (room: RoomOption) => {
+        const roomName = room.classroom_name.toLocaleLowerCase('tr-TR')
+        return selectedGroupNames.some((prefix) => roomName === prefix || roomName.startsWith(`${prefix} `))
+      }
+      const autoLayouts = defaultLayouts.filter(ownsSelectedGroup)
+      let autoCapacity = autoLayouts.reduce((total, item) => total + item.available_seats, 0)
+      for (const room of defaultLayouts) {
+        if (autoCapacity >= organization.participant_count) break
+        if (autoLayouts.includes(room)) continue
+        autoLayouts.push(room)
+        autoCapacity += room.available_seats
+      }
       let autoSelected = false
       if (autoLayouts.length && autoCapacity >= organization.participant_count) {
         const roomResponse = await fetch(`/api/exam-organizations/${encodeURIComponent(organization.id)}/classrooms`, {
@@ -424,7 +444,7 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
       setActiveRoomOrganizationId(autoSelected ? null : created.id)
       setSelectedLayoutByClassroom({})
       setNotice(autoSelected
-        ? `«${created.name}» oluşturuldu. ${autoLayouts.length} derslik kendiliğinden seçildi; sıradaki adım dağıtım.`
+        ? `«${created.name}» oluşturuldu. ${autoLayouts.length <= 4 ? autoLayouts.map((item) => item.classroom_name).join(', ') : `${autoLayouts.length} derslik`} kendiliğinden seçildi; sıradaki adım dağıtım. Derslikleri "Diğer seçenekler"den değiştirebilirsin.`
         : `«${created.name}» oluşturuldu. Sıradaki adım derslik seçimi.`)
       const newCourses = organization.course_names.map((courseName) => ({ id: 0, name: courseName }))
       setCourseCatalog((items) => {

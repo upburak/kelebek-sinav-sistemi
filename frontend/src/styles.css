@@ -1246,3 +1246,4 @@ button:not(.plan-seat):not(.candidate-plan-seat) { min-height: 28px; }
 .new-version-banner strong { margin-right: 6px; color: #8a3414; }
 .new-version-banner button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 9px; background: #12695c; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 .new-version-banner button.new-version-dismiss { min-width: 34px; padding: 0; background: transparent; color: #8a3414; font-size: 18px; }
+.exam-group-all { grid-column: 1 / -1; justify-self: start; min-height: 32px; padding: 0 12px; border: 1px solid #cfdcd7; border-radius: 8px; background: #fff; color: #12695c; font-size: 12px; font-weight: 700; cursor: pointer; }

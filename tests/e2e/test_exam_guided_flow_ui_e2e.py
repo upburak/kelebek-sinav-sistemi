@@ -68,3 +68,57 @@ def test_exam_is_prepared_by_following_the_single_next_step(page):
     # 4) Raporlar.
     card.locator("[data-testid^=exam-reports-]").click()
     page.get_by_text("Sınav raporları").wait_for()
+
+
+def test_only_the_participating_classes_rooms_are_preselected(page):
+    """İki sınıf seçilince bütün derslikler değil, yalnızca o iki sınıfın dersliği gelmeli.
+
+    Gerileme (0.5.0): derslikler kendiliğinden seçilirken sınava kaç sınıfın
+    girdiğine bakılmıyor, koltuk yetiyorsa okulun bütün derslikleri seçiliyordu.
+    """
+    import requests
+
+    api = f"{BASE_URL}/api"
+    year = requests.get(f"{api}/academic-years", timeout=30).json()["selected_academic_year_id"]
+    groups = requests.get(f"{api}/student-groups", params={"academic_year_id": year}, timeout=30).json()["groups"][:2]
+    room_names = [f"{group['class_level']}-{group['section']} Derslik" for group in groups]
+    # İçe aktarmanın kurduğu gibi, her sınıfın kendi adını taşıyan dersliği.
+    for name, group in zip(room_names, groups, strict=True):
+        created = requests.post(f"{api}/classrooms", json={"name": name}, timeout=30)
+        if created.status_code == 409:
+            continue
+        assert created.status_code == 201, created.text
+        classroom_id = created.json()["classroom"]["id"]
+        layout = requests.post(f"{api}/classrooms/{classroom_id}/layouts", timeout=30,
+                               json={"name": "Sınıf düzeni", "academic_year_id": year}).json()["layout"]
+        rows = (group["student_count"] + 3) // 4
+        generated = requests.post(
+            f"{api}/classrooms/{classroom_id}/layouts/{layout['id']}/generate", timeout=60,
+            json={"columns": 2, "column_lengths": [rows, rows], "cell_seats": [[2] * rows, [2] * rows],
+                  "aisle_after": [True]})
+        assert generated.status_code in (200, 201), generated.text
+
+    page.goto(BASE_URL)
+    page.wait_for_selector("[data-testid=dashboard]")
+    closer = page.locator(".whats-new-backdrop button").last
+    if closer.count() and closer.is_visible():
+        closer.click()
+    page.locator("nav button", has_text="Sınav organizasyonlar").click()
+    page.get_by_test_id("exam-new-btn").click()
+    form = page.locator(".exam-create-form")
+    form.locator('input[maxlength="160"]').fill("İKİ SINIFLI SINAV")
+    form.locator("input[type=date]").fill("2026-12-18")
+    for group in groups:
+        label = f"{group['class_level']}/{group['section']}"
+        form.locator(".exam-general-groups label", has_text=label).first.locator("input").check()
+    page.get_by_test_id("exam-create-submit").click()
+
+    card = page.locator("[data-testid^=exam-card-]", has_text="İKİ SINIFLI SINAV")
+    card.locator("[data-testid^=exam-guide-title-]").get_by_text("Öğrencileri dersliklere dağıt").wait_for(timeout=20_000)
+    organizations = requests.get(f"{api}/exam-organizations", params={"academic_year_id": year},
+                                 timeout=30).json()["organizations"]
+    exam = next(item for item in organizations if item["name"] == "İKİ SINIFLI SINAV")
+    selected = sorted(room["classroom_name"] for room in exam["room_selections"])
+    assert selected == sorted(room_names), selected
+    notice = page.get_by_test_id("exam-notice").inner_text()
+    assert all(name in notice for name in room_names), notice
