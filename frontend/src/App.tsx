@@ -163,6 +163,7 @@ export default function App() {
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null)
   const [studentEditDraft, setStudentEditDraft] = useState<StudentDraft | null>(null)
   const [classroomPanelOpen, setClassroomPanelOpen] = useState(false)
+  const [newVersion, setNewVersion] = useState('')
   const [studentQuery, setStudentQuery] = useState('')
   const [studentClassFilter, setStudentClassFilter] = useState('')
   const [activeSection, setActiveSection] = useState('overview')
@@ -185,6 +186,12 @@ export default function App() {
         if (error instanceof Error && error.name === 'AbortError') return
         setHealth('offline')
       })
+
+    // Açılışta yeni sürüm denetimi: ayar kapalıysa ya da internet yoksa sessizce geçilir.
+    fetch('/api/updates/online?auto=1', { signal: controller.signal })
+      .then((response) => response.json())
+      .then((data: { update_available?: boolean; latest_version?: string }) => { if (data.update_available && data.latest_version) setNewVersion(data.latest_version) })
+      .catch(() => undefined)
 
     fetch('/api/academic-years', { signal: controller.signal })
       .then(async (response) => {
@@ -684,6 +691,14 @@ export default function App() {
           <div><div className="eyebrow">KELEBEK <span>·</span> OKUL YÖNETİMİ</div><h1 id="welcome-title">{sectionTitle}</h1><p>{activeSection === 'school' ? 'Okul kimliği ve yönetici bilgileri.' : activeSection === 'students' ? 'Öğrenci listesini içeri aktarın ve kayıt farklarını inceleyin.' : activeSection === 'classrooms' ? 'Derslikleri ve fiziksel oturma düzenlerini yönetin.' : activeSection === 'exams' ? 'Farklı ders ve sınıf gruplarını tek sınav planında bir araya getirin.' : activeSection === 'backup' ? 'Okul verilerini taşınabilir pakette koruyun ve bilgisayarlar arasında aktarın.' : activeSection === 'reports' ? 'Kesinleşen sınavların krokilerini, yoklama ve dağıtım listelerini yazdırın.' : 'Okulunuzu ve sınav hazırlık sürecinizi tek çalışma alanından yönetin.'}</p></div>
           <div className="current-year-pill"><small>ÇALIŞMA YILI</small><strong>{activeYear?.label ?? 'Yıl bilgisi yükleniyor'}</strong></div>
         </div>
+
+        {newVersion && activeSection !== 'backup' && (
+          <div className="new-version-banner" role="status" data-testid="new-version-banner">
+            <span><strong>Yeni sürüm hazır: {newVersion}</strong> Tek tıkla indirip kurabilirsin; verilerin korunur.</span>
+            <button type="button" onClick={() => { setActiveSection('backup'); setClassroomPanelOpen(false) }}>Güncellemeyi göster</button>
+            <button type="button" className="new-version-dismiss" aria-label="Bildirimi kapat" onClick={() => setNewVersion('')}>×</button>
+          </div>
+        )}
 
         {activeYear?.is_archive && (
           <div className="archive-banner" role="status">

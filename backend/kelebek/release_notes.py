@@ -2,6 +2,15 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.6.0",
+    "date": "2026-11-11",
+    "items": [
+      "Yeni sürüm denetimi: uygulama açılışta ve istenince son sürümü sorar, yeni sürüm varsa bildirir",
+      "Yeni sürüm tek tıkla indirilir, doğrulanır ve kurulum penceresi açılır; önce güvenlik yedeği alınır",
+      "Denetim kapatılabilir; internet yoksa uygulama aynen çalışır, hiçbir okul verisi gönderilmez"
+    ]
+  },
+  {
     "version": "0.5.0",
     "date": "2026-11-11",
     "items": [

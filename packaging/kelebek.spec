@@ -15,7 +15,7 @@ datas = [
 ]
 binaries = []
 hiddenimports = collect_submodules("kelebek") + ["waitress", "logging.config"]
-for package in ("ortools", "reportlab", "alembic", "pdfplumber", "pdfminer", "openpyxl"):
+for package in ("ortools", "reportlab", "alembic", "pdfplumber", "pdfminer", "openpyxl", "certifi"):
     package_datas, package_binaries, package_hidden = collect_all(package)
     datas += package_datas
     binaries += package_binaries

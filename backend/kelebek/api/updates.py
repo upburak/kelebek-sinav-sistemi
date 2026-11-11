@@ -8,7 +8,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from kelebek.config import get_data_dir
 from kelebek.release_notes import RELEASE_NOTES
-from kelebek.services import app_update
+from kelebek.services import app_update, online_update
 from kelebek.services.backup import create_safety_backup
 from kelebek.version import APP_VERSION
 
@@ -93,3 +93,62 @@ def apply_update():
     if shutdown:
         threading.Timer(0.8, shutdown).start()
     return jsonify({"applying": True, "safety_backup": safety_backup.name, "to_version": job["to_version"]})
+
+
+def _read_ui_state() -> dict:
+    try:
+        return json.loads(_ui_state_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _auto_check_enabled() -> bool:
+    return _read_ui_state().get("auto_update_check", True) is not False
+
+
+@updates_api.get("/updates/online")
+def check_online_update():
+    """GitHub'daki son sürümü sor. `auto=1` açılış denetimidir ve ayar kapalıysa internete çıkmaz."""
+    enabled = _auto_check_enabled()
+    if request.args.get("auto") == "1" and not enabled:
+        return jsonify({"checked": False, "auto_check": False, "current_version": APP_VERSION})
+    try:
+        result = online_update.check_latest()
+    except online_update.OnlineUpdateError as error:
+        return jsonify({"checked": False, "auto_check": enabled, "current_version": APP_VERSION,
+                        "error": str(error)})
+    return jsonify({"checked": True, "auto_check": enabled, **result})
+
+
+@updates_api.put("/updates/online/settings")
+def put_online_update_settings():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or not isinstance(payload.get("auto_check"), bool):
+        return jsonify({"error": "Ayar geçersiz."}), 400
+    _ui_state_path().write_text(
+        json.dumps({**_read_ui_state(), "auto_update_check": payload["auto_check"]}), encoding="utf-8"
+    )
+    return jsonify({"auto_check": payload["auto_check"]})
+
+
+@updates_api.post("/updates/online/download")
+def download_online_update():
+    """Son sürümün kurulum paketini indir, doğrula ve kurulumu başlat."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or payload.get("confirm") is not True:
+        return jsonify({"error": "İndirme için açık onay gereklidir."}), 400
+    try:
+        latest = online_update.check_latest()
+        if not latest["update_available"]:
+            return jsonify({"error": "Kurulu sürüm zaten güncel."}), 409
+        if not latest["asset"]:
+            return jsonify({"error": "Bu bilgisayar için kurulum paketi bulunamadı; indirme sayfasını kullanın.",
+                            "release_url": latest["release_url"]}), 409
+        # Kurulumdan önce veriler yedeklenir (Karar 72); yedek veri klasöründe kalır.
+        safety_backup = create_safety_backup("app-update")
+        path = online_update.download_package(latest["asset"])
+    except online_update.OnlineUpdateError as error:
+        return jsonify({"error": str(error)}), 502
+    opened = online_update.open_package(path)
+    return jsonify({"downloaded": True, "opened": opened, "path": str(path), "version": latest["latest_version"],
+                    "safety_backup": safety_backup.name})

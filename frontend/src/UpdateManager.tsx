@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type Summary = {
   from_version: string; to_version: string; platform: string; changed_file_count: number; removed_file_count: number
@@ -8,6 +8,11 @@ type Summary = {
 type Status = {
   current_version: string; platform: string; can_apply: boolean; trusted_key_ids: string[]
   last_result: { status: string; from_version: string; to_version: string; finished_at: string; message: string } | null
+}
+
+type OnlineCheck = {
+  checked: boolean; auto_check: boolean; current_version: string; latest_version?: string; update_available?: boolean
+  release_url?: string; platform?: string; error?: string; asset?: { name: string; size: number } | null
 }
 
 const resultLabels: Record<string, string> = { success: 'Başarılı', rolled_back: 'Geri alındı', failed: 'Uygulanmadı' }
@@ -22,9 +27,45 @@ export default function UpdateManager() {
   const [error, setError] = useState('')
   const [applying, setApplying] = useState('')
   const [inputKey, setInputKey] = useState(0)
+  const [online, setOnline] = useState<OnlineCheck | null>(null)
+  const [onlineBusy, setOnlineBusy] = useState('')
+  const [autoCheck, setAutoCheckState] = useState(true)
+  // Kullanıcı kutuya dokunduysa, o sırada süren denetimin yanıtı seçimini ezmemeli.
+  const autoTouched = useRef(false)
+  const [onlineMessage, setOnlineMessage] = useState('')
+  const [onlineError, setOnlineError] = useState('')
+
+  async function checkOnline(auto = false) {
+    setOnlineBusy('check'); setOnlineError(''); setOnlineMessage('')
+    try {
+      const response = await fetch(`/api/updates/online${auto ? '?auto=1' : ''}`)
+      const data = await response.json() as OnlineCheck
+      setOnline(data)
+      if (!autoTouched.current) setAutoCheckState(data.auto_check !== false)
+      if (data.error && !auto) setOnlineError(data.error)
+    } catch { if (!auto) setOnlineError('Sürüm denetimi yapılamadı.') } finally { setOnlineBusy('') }
+  }
+  async function setAutoCheck(enabled: boolean) {
+    autoTouched.current = true
+    setAutoCheckState(enabled)
+    await fetch('/api/updates/online/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto_check: enabled }) }).catch(() => undefined)
+  }
+  async function downloadOnline() {
+    if (!window.confirm(`Sürüm ${online?.latest_version} indirilecek ve kurulum penceresi açılacak. Önce verilerin güvenlik yedeği alınır. Devam edilsin mi?`)) return
+    setOnlineBusy('download'); setOnlineError(''); setOnlineMessage('')
+    try {
+      const response = await fetch('/api/updates/online/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error ?? 'Paket indirilemedi.')
+      setOnlineMessage(data.opened
+        ? `Sürüm ${data.version} indirildi ve kurulum penceresi açıldı. Kurulum isterse sağ üstteki "Uygulamayı kapat" düğmesiyle uygulamayı kapat, kurulumu tamamla; verilerin korunur.`
+        : `Sürüm ${data.version} indirildi: ${data.path}. Dosyayı açıp kurulumu başlat; verilerin korunur.`)
+    } catch (reason) { setOnlineError(reason instanceof Error ? reason.message : 'Paket indirilemedi.') } finally { setOnlineBusy('') }
+  }
 
   useEffect(() => {
     fetch('/api/updates/status').then((response) => response.json()).then(setStatus).catch(() => undefined)
+    void checkOnline(true)
   }, [])
 
   async function inspect() {
@@ -55,7 +96,20 @@ export default function UpdateManager() {
 
   return <article className="backup-card update-card" data-testid="update-manager">
     <div className="backup-card-heading"><span className="backup-icon" aria-hidden="true">⟳</span><div><span className="eyebrow">UYGULAMA GÜNCELLEMESİ</span><h2>Sürüm {status?.current_version ?? '…'}</h2></div></div>
-    <p>Kurulu sürüm <strong data-testid="update-current-version">{status?.current_version ?? '…'}</strong> · {status?.platform ?? ''}. Yalnızca değişen dosyaları içeren paketle güncellenir; önce güvenlik yedeği alınır, sorun çıkarsa önceki sürüm ve veriler otomatik geri yüklenir.</p>
+    <p>Kurulu sürüm <strong data-testid="update-current-version">{status?.current_version ?? '…'}</strong> · {status?.platform ?? ''}. Yeni sürüm çıktığında buradan indirip kurabilirsin; önce güvenlik yedeği alınır ve verilerin korunur.</p>
+    <div className={`online-update ${online?.update_available ? 'has-update' : ''}`} data-testid="online-update">
+      <strong data-testid="online-update-status">{onlineBusy === 'check' ? 'Yeni sürüm denetleniyor…' : !online?.checked ? 'Yeni sürüm denetlenmedi' : online.update_available ? `Yeni sürüm hazır: ${online.latest_version}` : `Uygulama güncel (son sürüm ${online.latest_version})`}</strong>
+      <small>Denetim yalnızca sürüm numarasını sorar; okul ve öğrenci verisi hiçbir yere gönderilmez. İnternet yoksa uygulama aynen çalışır.</small>
+      <div className="update-actions">
+        <button type="button" className="update-secondary-button" data-testid="online-update-check" disabled={Boolean(onlineBusy)} onClick={() => void checkOnline()}>Şimdi denetle</button>
+        {online?.update_available && online.asset && <button type="button" className="backup-create-button" data-testid="online-update-download" disabled={Boolean(onlineBusy)} onClick={() => void downloadOnline()}>{onlineBusy === 'download' ? 'İndiriliyor… (1-2 dakika sürebilir)' : `Sürüm ${online.latest_version}'i indir ve kur`}</button>}
+        {online?.update_available && online.release_url && <a className="update-secondary-button" href={online.release_url} target="_blank" rel="noreferrer">İndirme sayfasını aç</a>}
+      </div>
+      <label className="online-update-toggle"><input type="checkbox" data-testid="online-update-auto" checked={autoCheck} onChange={(event) => void setAutoCheck(event.target.checked)} />Uygulama açılırken yeni sürümü kendiliğinden denetle</label>
+      {onlineMessage && <p className="backup-feedback success" role="status" data-testid="online-update-message">{onlineMessage}</p>}
+      {onlineError && <p className="backup-feedback error" role="alert" data-testid="online-update-error">{onlineError}</p>}
+    </div>
+    <details className="update-manual"><summary>Elle güncelleme paketi yükle (ileri düzey)</summary>
     <p data-testid="update-trust-status">{status && (status.trusted_key_ids.length ? `Yalnızca yayıncı anahtarınızla imzalanmış paketler kabul edilir (anahtar ${status.trusted_key_ids.join(', ')}).` : 'Bu kurulumda yayıncı anahtarı tanımlı değil; güncelleme paketleri kabul edilmez. Tam kurulum paketiyle güncelleyin.')}</p>
     {status?.last_result && <p className={`backup-feedback ${status.last_result.status === 'success' ? 'success' : 'error'}`} data-testid="update-last-result">Son güncelleme ({status.last_result.from_version} → {status.last_result.to_version}): <strong>{resultLabels[status.last_result.status] ?? status.last_result.status}</strong> · {status.last_result.message}</p>}
     {applying ? <p className="backup-feedback success" role="status" data-testid="update-applying">{applying}</p> : status && !status.trusted_key_ids.length ? null : <>
@@ -70,5 +124,6 @@ export default function UpdateManager() {
       </div>}
     </>}
     {error && <p className="backup-feedback error" role="alert" data-testid="update-error">{error}</p>}
+    </details>
   </article>
 }
