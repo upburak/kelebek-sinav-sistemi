@@ -1,3 +1,4 @@
+import { bulkDelete } from './bulkDelete'
 import { Dashboard } from './Dashboard'
 import { Notifications, notify } from './notify'
 import { useEffect, useState, type FormEvent } from 'react'
@@ -1036,6 +1037,7 @@ export default function App() {
               </div>
               <div className="student-registry-actions">
                 <span className="student-total"><strong>{students.filter((student) => student.is_active !== false).length}</strong> aktif öğrenci</span>
+                {!activeYear?.is_archive && students.length > 0 && activeYearId && <button type="button" className="bulk-delete-button" data-testid="bulk-delete-students" onClick={() => void bulkDelete('students', activeYearId).then((done) => { if (done) setStudents([]) })}>Tüm öğrencileri sil</button>}
                 <button type="button" className="student-add-button" onClick={() => setShowInactiveStudents((shown) => !shown)}>{showInactiveStudents ? 'Pasifleri gizle' : 'Pasif kayıtları göster'}</button>
                 <button type="button" className="student-add-button" disabled={!activeYearId || activeYear?.is_archive} onClick={() => { setStudentFormOpen((open) => !open); setStudentMessage('') }}>
                   {studentFormOpen ? 'Formu kapat' : '+ Öğrenci ekle'}

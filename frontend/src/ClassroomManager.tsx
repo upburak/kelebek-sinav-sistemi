@@ -1,3 +1,4 @@
+import { bulkDelete } from './bulkDelete'
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { notify } from './notify'
 
@@ -455,7 +456,14 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
           <h2 id="classroom-manager-title">Derslikler ve oturma planları</h2>
           <p>Bir dersliğe tıkla; oturma planı açılır. Planı gerçek sınıfa göre düzenleyebilirsin.</p>
         </div>
-        <button className="panel-close" type="button" onClick={onClose}>Kapat</button>
+        <div className="classroom-heading-actions">
+          {!readOnly && classrooms.length > 0 && academicYearId && <button type="button" className="bulk-delete-button" data-testid="bulk-delete-classrooms" onClick={() => void bulkDelete('classrooms', academicYearId).then(async (done) => {
+            if (!done) return
+            setSelectedClassroomId(null); setSelectedLayout(null); setLayouts([]); setPlanInfo(null); setEditingLayout(false)
+            await loadClassrooms()
+          })}>Tüm derslikleri sil</button>}
+          <button className="panel-close" type="button" onClick={onClose}>Kapat</button>
+        </div>
       </div>
 
       {readOnly && <p className="archive-banner">Arşiv yılı seçili. Bu ekranda kayıt eklenemez.</p>}

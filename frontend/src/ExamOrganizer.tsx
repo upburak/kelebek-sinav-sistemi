@@ -1,3 +1,4 @@
+import { bulkDelete } from './bulkDelete'
 import { notify } from './notify'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import ReportCenter from './ReportCenter'
@@ -795,6 +796,7 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
         <p>Bir sınavı aç; sayfası sıradaki adımı ve basman gereken düğmeyi gösterir: derslikler, dağıtım, kontrol, kesinleştirme, raporlar.</p>
       </div>
       {!readOnly && <div className="exam-header-actions">
+        {organizations.length > 0 && academicYearId && <button type="button" className="bulk-delete-button" data-testid="bulk-delete-exams" onClick={() => void bulkDelete('exams', academicYearId).then((done) => { if (done) { setOrganizations([]); setCandidates({}); setReloadKey((key) => key + 1) } })}>Tüm sınavları sil</button>}
         <button type="button" className="exam-period-manage-btn" data-testid="exam-period-manage-btn" onClick={() => { setPeriodPanelOpen((open) => !open); setPeriodError('') }}>
           {periodPanelOpen ? 'Dönem düzenlemeyi kapat' : 'Sınav dönemleri'}
         </button>

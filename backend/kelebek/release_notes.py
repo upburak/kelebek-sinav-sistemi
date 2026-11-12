@@ -2,6 +2,14 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.8.0",
+    "date": "2026-11-12",
+    "items": [
+      "Toplu silme: Sınavlar, Öğrenci kayıtları ve Derslikler bölümlerinde içeriğin tamamı tek düğmeyle silinebilir",
+      "Silmeden önce silinecek kayıt sayıları gösterilir ve veriler kendiliğinden yedeklenir"
+    ]
+  },
+  {
     "version": "0.7.0",
     "date": "2026-11-12",
     "items": [

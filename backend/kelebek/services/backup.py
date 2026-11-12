@@ -162,7 +162,7 @@ def ensure_daily_backup(now: datetime | None = None) -> Path | None:
 
 def create_safety_backup(reason: str) -> Path:
     """Create a named pre-operation package for a supported critical action."""
-    if reason not in {"student-import", "app-update"}:
+    if reason not in {"student-import", "app-update", "bulk-delete"}:
         raise ValueError("Güvenlik yedeği nedeni desteklenmiyor.")
     backup_dir = get_data_dir() / "backups"
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f-UTC")

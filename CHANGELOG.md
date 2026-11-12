@@ -1,5 +1,24 @@
 # Değişiklik günlüğü
 
+## 0.8.0 — 12 Kasım 2026
+
+### Toplu silme (Karar 73)
+
+Kullanıcı isteği: her bölümde içeriğin komple silinebilmesi. Karar belgesi tek tek
+kayıtların silinmemesini öngördüğü için bu, kullanıcının açık onayıyla **yeni bir
+karar** olarak eklendi (Karar 73); mevcut kararların metni değişmedi.
+
+- Sınavlar, Öğrenci kayıtları ve Derslikler bölümlerinde "Tümünü sil" düğmesi.
+  Kesinleşmiş ve arşivlenmiş sınavlar da silinir.
+- Öğrenciler ve derslik planları sınavlara bağlı olduğu için ikisinin silinmesi o
+  yılın sınavlarını da siler; onay sorusu sayıları ayrı ayrı yazar.
+- Her silmeden önce güvenlik yedeği alınır (`safety-bulk-delete-…zip`); yanlış
+  silme Yedek ve arşiv bölümünden geri yüklenebilir.
+- Yalnızca güncel eğitim yılında çalışır; arşiv yılları ve başka yılların
+  kayıtları etkilenmez. Üretilmiş rapor PDF dosyaları da silinir.
+- Testler: `backend/tests/test_bulk_delete.py` (9 test) ve
+  `tests/e2e/test_zz_bulk_delete_ui_e2e.py` (ortak veriyi sildiği için en son koşar).
+
 ## 0.7.0 — 12 Kasım 2026
 
 ### Sade arayüz: derslikler, sınavlar ve sonuç bildirimi
