@@ -12,6 +12,7 @@ from kelebek.models import (
     Classroom,
     ClassroomLayout,
     Course,
+    DistributionRun,
     ExamCourse,
     ExamCourseParticipant,
     ExamOrganization,
@@ -21,6 +22,7 @@ from kelebek.models import (
     Seat,
     StudentYearEnrollment,
 )
+from kelebek.services.fingerprint import distribution_fingerprint
 from kelebek.services.reporting import REPORT_TYPES, all_report_statuses
 
 
@@ -170,6 +172,41 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
     period_names = dict(
         session.execute(select(ExamPeriod.id, ExamPeriod.name)).all()
     )
+    group_counts = {
+        organization_id: count for organization_id, count in session.execute(
+            select(
+                ExamParticipant.organization_id,
+                func.count(func.distinct(ExamParticipant.class_level + "/" + func.lower(ExamParticipant.section))),
+            )
+            .where(ExamParticipant.organization_id.in_(ids), ExamParticipant.is_active.is_(True))
+            .group_by(ExamParticipant.organization_id)
+        ).all()
+    }
+    # Taslak sınavın dağıtımı var ama hiçbiri güncel girdilerle (plan, katılımcı,
+    # kural) eşleşmiyorsa yeniden dağıtmak gerekir.
+    needs_redistribution = {}
+    for item in organizations:
+        if item.status != "draft" or item.archived_at:
+            needs_redistribution[item.id] = False
+            continue
+        run_hashes = session.scalars(
+            select(DistributionRun.config_hash).where(DistributionRun.organization_id == item.id)
+        ).all()
+        needs_redistribution[item.id] = bool(run_hashes) and (
+            distribution_fingerprint(session, item) not in run_hashes
+        )
+
+    def stage_of(item, capacity_sufficient: bool) -> str:
+        if item.archived_at:
+            return "archived"
+        if item.status == "completed":
+            return "done"
+        if not capacity_sufficient:
+            return "rooms"
+        if not item.selected_candidate_id or needs_redistribution[item.id]:
+            return "distribute"
+        return "review"
+
     return [
         {
             "id": item.id,
@@ -196,6 +233,14 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
             ),
             "rules": _serialize_rules(item),
             "selected_candidate_id": item.selected_candidate_id,
+            "needs_redistribution": needs_redistribution[item.id],
+            "group_count": group_counts.get(item.id, 0),
+            "stage": stage_of(
+                item,
+                bool(room_selections_by_org.get(item.id)) and sum(
+                    room["available_seats"] for room in room_selections_by_org.get(item.id, [])
+                ) >= participant_counts.get(item.id, 0),
+            ),
             "archived_at": item.archived_at.isoformat() if item.archived_at else None,
             "copied_from_organization_id": item.copied_from_organization_id,
             "report_status": report_status_by_org[item.id].get("seating_plan_pdf", {}).get("report_status", "not_generated"),
@@ -448,6 +493,9 @@ def create_organization(session: Session, payload: dict) -> dict:
         "capacity_deficit": len(participants_by_enrollment),
         "rules": {field: True for field in RULE_FIELDS},
         "selected_candidate_id": None,
+        "needs_redistribution": False,
+        "group_count": len({(p.class_level, p.section.casefold()) for p in participants_by_enrollment.values()}),
+        "stage": "rooms",
         "archived_at": None,
         "copied_from_organization_id": None,
     }

@@ -25,6 +25,7 @@ from kelebek.services.layouts import (
     layout_exam_count,
     layout_finalized_exam_count,
     prepare_layout_for_edit,
+    rebind_draft_exams,
 )
 
 classrooms_api = Blueprint("classrooms", __name__)
@@ -491,12 +492,22 @@ def activate_classroom_layout(classroom_id: str, layout_id: str):
             return jsonify({"error": "Derslik düzeni bulunamadı."}), 404
         if _is_archive_layout(session, layout):
             return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
+        previous = session.scalars(
+            select(ClassroomLayout).where(
+                ClassroomLayout.classroom_id == layout.classroom_id,
+                ClassroomLayout.academic_year_id == layout.academic_year_id,
+                ClassroomLayout.is_active.is_(True),
+                ClassroomLayout.id != layout.id,
+            )
+        ).all()
         try:
             activate_layout(session, layout)
         except ValueError as error:
             return jsonify({"error": str(error)}), 409
+        # Taslak sınavlar dersliğin aktif planını izler.
+        affected = sum(rebind_draft_exams(session, old, layout) for old in previous)
         result = _layout_payload(session, layout)
-    return jsonify({"layout": result})
+    return jsonify({"layout": result, "affected_draft_exam_count": affected})
 
 
 @classrooms_api.delete("/classrooms/<classroom_id>/layouts/<layout_id>")

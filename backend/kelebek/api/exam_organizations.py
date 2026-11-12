@@ -1,6 +1,5 @@
 """Sınav organizasyonu taslakları ve ders kataloğu API'si."""
 
-import hashlib
 import json
 from io import BytesIO
 
@@ -41,6 +40,7 @@ from kelebek.services.exam_organizer import (
     update_organization_rooms,
     update_organization_rules,
 )
+from kelebek.services.fingerprint import distribution_fingerprint as _distribution_fingerprint
 from kelebek.services.reporting import (
     ATTENDANCE_REPORT_TYPE,
     CLASS_STUDENT_LIST_REPORT_TYPE,
@@ -99,40 +99,6 @@ def _candidate_history_state(events):
             "undo_count": len(undo_stack), "redo_count": len(redo_stack),
             "undo_event_id": undo_stack[-1].id if undo_stack else None,
             "redo_event_id": redo_stack[-1].id if redo_stack else None}
-
-
-def _distribution_fingerprint(session, organization):
-    participant_rows = session.execute(
-        select(ExamParticipant.id, ExamParticipant.class_level, ExamParticipant.section, ExamParticipant.area)
-        .where(
-            ExamParticipant.organization_id == organization.id,
-            ExamParticipant.is_active.is_(True),
-        )
-        .order_by(ExamParticipant.id)
-    ).all()
-    layout_ids = session.scalars(
-        select(ExamOrganizationClassroom.layout_id)
-        .where(ExamOrganizationClassroom.organization_id == organization.id)
-        .order_by(ExamOrganizationClassroom.layout_id)
-    ).all()
-    physical_layouts = []
-    for layout_id in layout_ids:
-        desks = session.execute(
-            select(Desk.id, Desk.x, Desk.y, Desk.block_label)
-            .where(Desk.layout_id == layout_id).order_by(Desk.id)
-        ).all()
-        seats = session.execute(
-            select(Seat.id, Seat.desk_id, Seat.seat_index, Seat.is_available)
-            .where(Seat.layout_id == layout_id).order_by(Seat.id)
-        ).all()
-        physical_layouts.append({"desks": [list(row) for row in desks], "seats": [list(row) for row in seats]})
-    snapshot = {
-        "participants": [list(row) for row in participant_rows],
-        "layouts": layout_ids,
-        "physical_layouts": physical_layouts,
-        "rules": [bool(getattr(organization, name)) for name in RULE_NAMES],
-    }
-    return hashlib.sha256(json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def _candidate_summary(assignments, room_capacities):
