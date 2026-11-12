@@ -116,7 +116,7 @@ export default function ReportCenter({ academicYearId, academicYearLabel, onExam
         if (!active) return
         const completed = (data.organizations as Exam[]).filter((exam) => exam.status === 'completed')
         setExams(completed)
-        setSelectedId((current) => organizationId && completed.some((exam) => exam.id === organizationId) ? organizationId : completed.some((exam) => exam.id === current) ? current : completed[0]?.id ?? '')
+        setSelectedId((current) => organizationId ? (completed.some((exam) => exam.id === organizationId) ? organizationId : '') : completed.some((exam) => exam.id === current) ? current : completed[0]?.id ?? '')
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : 'Rapor listesi yüklenemedi.')
       } finally {

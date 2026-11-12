@@ -76,7 +76,7 @@ type ExamOrganization = {
   copied_from_organization_id: string | null
   needs_redistribution?: boolean
   group_count?: number
-  groups?: { class_level: string; section: string; area: string | null; student_count: number }[]
+  groups?: { class_level: string; section: string; area: string | null; student_count: number; class_total?: number }[]
 }
 
 type Props = {
@@ -393,6 +393,13 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
       const group = groups.find((item) => groupKey(item) === key)
       return group ? { class_level: group.class_level, section: group.section, area: group.area ?? '' } : null
     }
+    // İşaretli görünen ama listede karşılığı olmayan bir seçim sessizce düşmemeli.
+    const chosenKeys = withCourses ? courses.flatMap((course) => course.groupKeys) : generalGroupKeys
+    if (chosenKeys.some((key) => !groupFromKey(key))) {
+      setError('Seçilen sınıflardan biri artık listede yok. Sayfayı yenileyip sınıfları yeniden seç.')
+      setSaving(false)
+      return
+    }
     const payload = {
       academic_year_id: academicYearId,
       name,
@@ -450,7 +457,8 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
       setActiveRoomOrganizationId(autoSelected ? null : created.id)
       setSelectedLayoutByClassroom({})
       const ownRoomCount = defaultLayouts.filter(ownsSelectedGroup).length
-      const createdSummary = `${selectedGroupNames.length} sınıf · ${created.participant_count} öğrenci`
+      // Sayılar sunucunun oluşturduğu kayıttan gelir; formdaki seçimle uyuşmazlık böylece görünür olur.
+      const createdSummary = `${created.group_count ?? created.groups?.length ?? 0} sınıf · ${created.participant_count} öğrenci`
       setNotice(autoSelected
         ? `«${created.name}» oluşturuldu: ${createdSummary}. ${autoLayouts.length} derslik kendiliğinden seçildi${autoLayouts.length <= 6 ? `: ${autoLayouts.map((item) => item.classroom_name).join(', ')}` : ''}${ownRoomCount > 0 && autoLayouts.length > ownRoomCount ? ` (sınıfların kendi dersliklerinde koltuk yetmediği için ${autoLayouts.slice(ownRoomCount).map((item) => item.classroom_name).join(', ')} eklendi)` : ''}. Sıradaki adım dağıtım.`
         : `«${created.name}» oluşturuldu: ${createdSummary}. Sıradaki adım derslik seçimi.`)
@@ -842,7 +850,7 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
         <GroupSelector groups={groups} selected={generalGroupKeys} onChange={(update) => setGeneralGroupKeys(update)} />
       </div>}
 
-      <div className="exam-selection-summary"><span>Sınava girecekler</span><strong data-testid="exam-create-summary">{new Set(withCourses ? courses.flatMap((course) => course.groupKeys) : generalGroupKeys).size} sınıf · {selectedStudentCount} öğrenci</strong></div>
+      <div className="exam-selection-summary"><span>Sınava girecekler</span><strong data-testid="exam-create-summary">{new Set((withCourses ? courses.flatMap((course) => course.groupKeys) : generalGroupKeys).map((key) => key.split('|').slice(0, 2).join('|').toLocaleLowerCase('tr-TR'))).size} sınıf · {selectedStudentCount} öğrenci</strong></div>
       {error && <p className="exam-error" role="alert">{error}</p>}
       <div className="exam-form-footer"><span>Derslikler kendiliğinden seçilir; sonraki adımda değiştirebilirsin.</span><button type="submit" data-testid="exam-create-submit" disabled={saving || !selectedStudentCount || !selectionsComplete || !name.trim()}>{saving ? 'Oluşturuluyor…' : 'Sınavı oluştur'}</button></div>
     </form>}
@@ -908,7 +916,8 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
           </div>
           <div className="exam-classes" data-testid="exam-classes">
             <span>Sınava giren sınıflar</span>
-            <ul>{(organization.groups ?? []).map((group) => <li key={`${group.class_level}-${group.section}`}><b>{group.class_level}/{group.section}</b> {group.student_count} öğrenci</li>)}</ul>
+            <ul>{(organization.groups ?? []).map((group) => <li key={`${group.class_level}-${group.section}`} className={(group.class_total ?? 0) > group.student_count ? 'partial' : ''}><b>{group.class_level}/{group.section}</b> {group.student_count} öğrenci{(group.class_total ?? 0) > group.student_count ? ` (sınıfta ${group.class_total})` : ''}</li>)}</ul>
+            {(organization.groups ?? []).some((group) => (group.class_total ?? 0) > group.student_count) && <p className="exam-partial-warning" role="status" data-testid="exam-partial-warning">{(organization.groups ?? []).filter((group) => (group.class_total ?? 0) > group.student_count).map((group) => `${group.class_level}/${group.section}`).join(', ')} sınıfının tamamı bu sınavda değil. Aynı sınıfta alanı farklı öğrenciler ayrı satırda listelenir; hepsini sınava almak için yeni sınav oluştururken o sınıfın bütün satırlarını işaretle.</p>}
           </div>
           <div className={`exam-guide step-${guideStep}${isDone ? ' done' : ''}`} data-testid={`exam-guide-${organization.id}`}>
             <ol className="exam-guide-steps" aria-label="Sınav hazırlık adımları">

@@ -44,6 +44,20 @@ yapısını (düzen sürümü, şablon, aday) olduğu gibi ekrana dökmesiydi. T
   kullanıcı kapatana kadar kalır. Liste aktarımı, okul bilgileri, derslik adı,
   plan düzenleme, derslik seçimi ve yedek indirme bunu kullanır.
 
+**Bağımsız incelemede bulunup düzeltilenler**
+
+- "Sınıf" üç yerde üç farklı biçimde sayılıyordu (formda kutu başına, sınav
+  sayfasında sınıf/şube başına). Aynı sınıfta alanı farklı öğrenciler iki ayrı
+  kutu olduğu için birini seçmek sınıfın geri kalanını sessizce dışarıda
+  bırakıyordu. Sayım artık her yerde sınıf/şube; sınıfın tamamı sınavda değilse
+  "12/Z 2 öğrenci (sınıfta 3)" ve bir uyarı görünür. Bildirimdeki sayı sunucunun
+  oluşturduğu kayıttan gelir.
+- "Aktif yap" ve plan silme sonrası derslik ekranı eski planı göstermeye devam
+  ediyordu; koltuğu olmayan plan aktif yapılabiliyordu; aktif olmayan bir planı
+  düzenlemek dersliğin aktif plan seçimini değiştiriyordu.
+- Başarı bildirimi açık bir hata bildirimini düşürebiliyordu.
+- İki test yanlış nedenle geçiyordu (arşiv yılı düzenlemesi, hızlı tıklama).
+
 **Bu sürümde yapılmayanlar**
 
 - Tasarımdaki bileşenlere ayırma (`ExamOrganizer.tsx`, `ClassroomManager.tsx`)

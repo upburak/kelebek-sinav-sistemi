@@ -58,6 +58,17 @@ def test_at_most_four_notifications_are_shown(page):
     expect(notes.last).to_contain_text("Hata 5")
 
 
+def test_a_success_never_pushes_out_an_open_error(page):
+    open_app(page)
+    for index in range(4):
+        page.evaluate(f"window.__kelebekNotify.error('Hata {index}')")
+    page.evaluate("window.__kelebekNotify.success('Sonradan gelen başarı')")
+    notes = page.get_by_test_id("notification")
+    expect(notes).to_have_count(4)
+    expect(page.locator("[data-testid=notification][data-kind=error]")).to_have_count(4)
+    expect(notes.first).to_contain_text("Hata 0")
+
+
 def test_saving_school_profile_is_announced(page):
     open_app(page, "Okul ve yöneticiler")
     page.locator(".school-form-card button[type=submit]").click()

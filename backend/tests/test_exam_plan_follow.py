@@ -97,6 +97,36 @@ class ExamPlanFollowTests(PlanTestMixin, unittest.TestCase):
         self.assertEqual(sum(g["student_count"] for g in self.exam(exam_id)["groups"]),
                          self.exam(exam_id)["participant_count"])
 
+    def test_partially_included_class_is_exposed(self):
+        """Sınıfın yalnızca bir bölümü sınava alındıysa (alanı farklı öğrenciler dışarıda) bu görünmeli."""
+        from kelebek.models import Student, StudentYearEnrollment
+
+        with self.factory.begin() as session:
+            for index, area in enumerate(("Sayısal", "Sayısal", None)):
+                student = Student()
+                session.add(student)
+                session.flush()
+                session.add(StudentYearEnrollment(
+                    academic_year_id=self.year_id, student_id=student.id, school_number=f"ALAN-{index}",
+                    first_name=f"ALAN AD {index}", last_name="SENTETİK", class_level="11", section="A", area=area))
+        period = self.client.get(f"/api/exam-periods?academic_year_id={self.year_id}").get_json()["periods"][0]
+        created = self.client.post("/api/exam-organizations", json={
+            "academic_year_id": self.year_id, "name": "KISMİ SINIF", "exam_date": "2026-12-01",
+            "exam_period_id": period["id"],
+            "participant_groups": [{"class_level": "11", "section": "A", "area": "Sayısal"}],
+        })
+        self.assertEqual(created.status_code, 201, created.get_json())
+        for exam in (created.get_json()["organization"], self.exam(created.get_json()["organization"]["id"])):
+            self.assertEqual(exam["group_count"], 1)
+            self.assertEqual(
+                [(g["class_level"], g["section"], g["student_count"], g["class_total"]) for g in exam["groups"]],
+                [("11", "A", 2, 3)])
+
+    def test_group_count_matches_the_listed_classes(self):
+        exam = self.exam(self.make_exam())
+        self.assertEqual(exam["group_count"], len(exam["groups"]))
+        self.assertTrue(all(g["student_count"] == g["class_total"] for g in exam["groups"]))
+
     def test_group_count_counts_class_sections(self):
         exam_id = self.make_exam()
         groups = self.client.get(f"/api/student-groups?academic_year_id={self.year_id}").get_json()["groups"]

@@ -58,6 +58,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   // Taslak sınav / kopya bilgisi düzenleme oturumunda bir kez duyurulur.
   const editAnnounced = useRef(false)
   const editChanged = useRef(false)
+  const editBusy = useRef(false)
   const selectedClassroom = classrooms.find((item) => item.id === selectedClassroomId)
   const maxDeskX = selectedLayout?.desks.length
     ? Math.max(...selectedLayout.desks.map((desk) => desk.x))
@@ -250,7 +251,10 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       const response = await fetch(`/api/classrooms/${classroomId}/layouts/${layout.id}/activate`, { method: 'POST' })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Düzen aktif yapılamadı.')
-      await Promise.all([loadLayouts(classroomId), loadClassrooms()])
+      setEditingLayout(false)
+      await Promise.all([loadLayouts(classroomId), loadClassrooms(), loadPlan(classroomId)])
+      const drafts = (data.affected_draft_exam_count as number | undefined) ?? 0
+      notify.success(`“${layout.name}” dersliğin aktif planı oldu.${drafts ? ` ${drafts} taslak sınav bu planı kullanacak; o sınavları yeniden dağıtman gerekir.` : ''}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Düzen aktif yapılamadı.')
     } finally {
@@ -269,11 +273,10 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       const response = await fetch(`/api/classrooms/${classroomId}/layouts/${layout.id}`, { method: 'DELETE' })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Düzen silinemedi.')
-      if (selectedLayout?.layout.id === layout.id) {
-        setSelectedLayout(null)
-        setEditingLayout(false)
-      }
-      await Promise.all([loadLayouts(classroomId), loadClassrooms()])
+      setEditingLayout(false)
+      // Aktif plan silindiyse kalan plan aktif olur; görünüm onu göstermeli.
+      await Promise.all([loadLayouts(classroomId), loadClassrooms(), loadPlan(classroomId)])
+      notify.success(`“${layout.name}” planı silindi.`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Düzen silinemedi.')
     } finally {
@@ -380,7 +383,8 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   }
 
   async function moveDesk(deskId: string, x: number, y: number) {
-    if (!selectedClassroomId || !selectedLayout || !editingLayout) return
+    if (!selectedClassroomId || !selectedLayout || !editingLayout || editBusy.current) return
+    editBusy.current = true
     try {
       const response = await fetch(
         `/api/classrooms/${selectedClassroomId}/layouts/${selectedLayout.layout.id}/desks/${deskId}`,
@@ -398,11 +402,15 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       setEditingLayout(true)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Masa taşınamadı.')
+    } finally {
+      editBusy.current = false
     }
   }
 
   async function toggleSeatAvailability(seat: Desk['seats'][number]) {
-    if (!selectedClassroomId || !selectedLayout || !editingLayout) return
+    // Önceki kayıt bitmeden gelen tıklama eski plan kimliğiyle giderdi (plan kopyalanmış olabilir).
+    if (!selectedClassroomId || !selectedLayout || !editingLayout || editBusy.current) return
+    editBusy.current = true
     try {
       const response = await fetch(
         `/api/classrooms/${selectedClassroomId}/layouts/${selectedLayout.layout.id}/seats/${seat.id}`,
@@ -422,6 +430,8 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       setEditingLayout(true)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Oturma yeri durumu değiştirilemedi.')
+    } finally {
+      editBusy.current = false
     }
   }
 

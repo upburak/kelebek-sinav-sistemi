@@ -26,12 +26,16 @@ function dismiss(id: number) {
 
 function push(kind: Kind, message: string, action?: NotifyAction, testId?: string) {
   const item: Item = { id: nextId++, kind, message, action, testId }
-  // En fazla MAX_VISIBLE bildirim: yer açmak gerekirse önce en eski başarı, yoksa en eski hata gider.
+  // En fazla MAX_VISIBLE bildirim. Yer açmak için önce en eski başarı gider; hata
+  // yalnızca yeni bir hataya yer açmak için düşer. Başarı, açık bir hatayı asla düşürmez.
   const next = [...items, item]
   while (next.length > MAX_VISIBLE) {
-    const oldestSuccess = next.findIndex((entry) => entry.kind === 'success' && entry.id !== item.id)
-    next.splice(oldestSuccess >= 0 ? oldestSuccess : 0, 1)
+    const oldestSuccess = next.findIndex((entry) => entry.kind === 'success')
+    if (oldestSuccess >= 0) next.splice(oldestSuccess, 1)
+    else if (kind === 'error') next.splice(0, 1)
+    else break
   }
+  if (!next.includes(item)) return
   items = next
   publish()
   if (kind === 'success') window.setTimeout(() => dismiss(item.id), SUCCESS_MS)

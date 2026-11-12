@@ -3,7 +3,7 @@
 import test_exam_flow
 from sqlalchemy import func, select
 
-from kelebek.models import AcademicYear, ClassroomLayout, Seat
+from kelebek.models import AcademicYear, ClassroomLayout, Desk, Seat
 
 
 class PlanTestMixin:
@@ -95,4 +95,11 @@ class PlanTestMixin:
                                      name="Arşiv planı", version=1)
             session.add(layout)
             session.flush()
+            desk = Desk(layout_id=layout.id, label="S1-M1", block_label="B1", x=0.0, y=0.0, rotation_degrees=0)
+            session.add(desk)
+            session.flush()
+            seat = Seat(layout_id=layout.id, desk_id=desk.id, seat_number=1, seat_index=1, x=0.0, y=0.0)
+            session.add(seat)
+            session.flush()
+            self.archive_seat_id, self.archive_desk_id = seat.id, desk.id
             return layout.id

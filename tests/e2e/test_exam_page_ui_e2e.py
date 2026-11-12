@@ -42,7 +42,11 @@ def test_list_shows_one_row_per_exam_and_no_inline_controls(page):
     row = page.locator("[data-testid^=exam-row-]", has_text="SAYFA LİSTE SINAVI")
     expect(row.locator("button")).to_have_count(1)
     expect(row.locator("[data-testid^=exam-stage-]")).to_have_text("Derslik seçilecek")
-    expect(row).to_contain_text("8 sınıf · 48 öğrenci")
+    year = requests.get(api("/academic-years"), timeout=30).json()["selected_academic_year_id"]
+    groups = requests.get(api("/student-groups"), params={"academic_year_id": year}, timeout=30).json()["groups"]
+    classes = {(g["class_level"], g["section"]) for g in groups}
+    students = sum(g["student_count"] for g in groups)
+    expect(row).to_contain_text(f"{len(classes)} sınıf · {students} öğrenci")
     expect(page.locator(".exam-guide")).to_have_count(0)
     assert "PDF" not in row.inner_text()
 
@@ -85,6 +89,15 @@ def test_quick_clicks_on_class_boxes_all_register(page):
     }""")
     expect(page.locator(".exam-create-form .exam-general-groups input[type=checkbox]:checked")).to_have_count(5)
     expect(page.get_by_test_id("exam-create-summary")).to_have_text("5 sınıf · 30 öğrenci")
+    form = page.locator(".exam-create-form")
+    form.locator('input[maxlength="160"]').fill("SAYFA HIZLI TIKLAMA SINAVI")
+    form.locator("input[type=date]").fill("2026-12-27")
+    page.get_by_test_id("exam-create-submit").click()
+    expect(page.get_by_test_id("exam-classes").locator("li")).to_have_count(5)
+    year = requests.get(api("/academic-years"), timeout=30).json()["selected_academic_year_id"]
+    exams = requests.get(api("/exam-organizations"), params={"academic_year_id": year}, timeout=30).json()
+    created = next(item for item in exams["organizations"] if item["name"] == "SAYFA HIZLI TIKLAMA SINAVI")
+    assert (created["group_count"], created["participant_count"]) == (5, 30)
 
 
 def test_exam_short_of_seats_stays_on_rooms_step(page):
@@ -189,3 +202,43 @@ def test_notice_says_why_an_extra_room_was_added(page):
     expect(notice).to_contain_text("1 sınıf · 6 öğrenci")
     expect(notice).to_contain_text("koltuk yetmediği için")
     expect(notice).to_contain_text(own["name"])
+
+
+def test_a_class_split_by_area_counts_once_and_a_partial_class_is_flagged(page):
+    """Aynı sınıfta alanı farklı öğrenciler iki ayrı kutudur; sayım ve uyarı bunu saklamamalı.
+
+    Gerileme: form "sınıf" sayısını kutu başına, sınav sayfası sınıf/şube başına
+    sayıyordu; sınıfın yalnızca bir bölümü seçilince eksik öğrenci görünmüyordu.
+    """
+    year = requests.get(api("/academic-years"), timeout=30).json()["selected_academic_year_id"]
+    added = []
+    try:
+        for index, area in enumerate(("Sayısal", "Sayısal", "Sözel")):
+            response = requests.post(api("/students"), timeout=30, json={
+                "academic_year_id": year, "school_number": f"BOLUNMUS-{index}", "first_name": f"BÖLÜNMÜŞ {index}",
+                "last_name": "SENTETİK", "class_level": "12", "section": "Z", "area": area})
+            assert response.status_code in (201, 409), response.text
+            if response.status_code == 201:
+                added.append(response.json()["student"]["id"])
+        open_app(page, "Sınav organizasyonlar")
+        page.get_by_test_id("exam-new-btn").click()
+        form = page.locator(".exam-create-form")
+        boxes = form.locator(".exam-general-groups label", has_text="12/Z")
+        expect(boxes).to_have_count(2)
+        boxes.nth(0).locator("input").check()
+        boxes.nth(1).locator("input").check()
+        expect(page.get_by_test_id("exam-create-summary")).to_have_text("1 sınıf · 3 öğrenci")
+        boxes.filter(has_text="Sözel").locator("input").uncheck()
+        expect(page.get_by_test_id("exam-create-summary")).to_have_text("1 sınıf · 2 öğrenci")
+        form.locator('input[maxlength="160"]').fill("SAYFA BÖLÜNMÜŞ SINIF SINAVI")
+        form.locator("input[type=date]").fill("2026-12-28")
+        page.get_by_test_id("exam-create-submit").click()
+        expect(page.get_by_test_id("exam-notice")).to_contain_text("1 sınıf · 2 öğrenci")
+        expect(page.get_by_test_id("exam-classes").locator("li")).to_have_text("12/Z 2 öğrenci (sınıfta 3)")
+        expect(page.get_by_test_id("exam-partial-warning")).to_contain_text("12/Z")
+    finally:
+        # Diğer testlerin öğrenci sayısı bozulmasın: eklenenler pasife alınır.
+        for student_id in added:
+            done = requests.post(api(f"/students/{student_id}/deactivate"), timeout=30,
+                                 json={"confirmed": True, "academic_year_id": year})
+            assert done.status_code == 200, done.text

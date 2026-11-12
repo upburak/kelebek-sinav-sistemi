@@ -76,3 +76,25 @@ def test_other_plans_live_under_advanced(page):
     expect(advanced.locator(".layout-list")).not_to_be_visible()
     advanced.locator("summary").click()
     expect(advanced.locator(".layout-list li")).to_have_count(1)
+
+
+def test_activating_another_plan_switches_the_view_and_says_what_changed(page):
+    room = make_room("PLAN-UI AKTİF SALONU")
+    year = requests.get(api("/academic-years"), timeout=30).json()["selected_academic_year_id"]
+    layouts = requests.get(api(f"/classrooms/{room['classroom_id']}/layouts"), timeout=30).json()["layouts"]
+    if len(layouts) == 1:
+        second = requests.post(api(f"/classrooms/{room['classroom_id']}/layouts"), timeout=30,
+                               json={"name": "Küçük plan", "academic_year_id": year}).json()["layout"]
+        requests.post(api(f"/classrooms/{room['classroom_id']}/layouts/{second['id']}/generate"), timeout=60,
+                      json={"columns": 2, "column_lengths": [2, 2], "cell_seats": [[2, 2], [2, 2]],
+                            "aisle_after": [True]})
+    make_exam("PLAN-UI AKTİF TASLAK", layout_ids=[room["layout_id"]], group_limit=1)
+    open_classroom(page, room["name"])
+    expect(page.get_by_test_id("plan-status")).to_contain_text("48 koltuk")
+    page.get_by_test_id("classroom-advanced").locator("summary").click()
+    page.locator("[data-testid^=layout-activate-]").first.click()
+    expect(page.get_by_test_id("plan-status")).to_contain_text("8 koltuk")
+    expect(page.get_by_test_id("notification").filter(has_text="aktif")).to_contain_text("taslak sınav")
+    # geri al: diğer testler için büyük plan aktif kalsın
+    page.locator("[data-testid^=layout-activate-]").first.click()
+    expect(page.get_by_test_id("plan-status")).to_contain_text("48 koltuk")

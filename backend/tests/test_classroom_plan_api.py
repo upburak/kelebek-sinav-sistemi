@@ -120,11 +120,38 @@ class ClassroomPlanApiTests(PlanTestMixin, unittest.TestCase):
         classroom_id = self.make_classroom()
         archive_id = self.make_archive_layout(classroom_id)
         before = len(self.layouts(classroom_id))
-        response = self.client.patch(
-            f"/api/classrooms/{classroom_id}/layouts/{archive_id}/seats/olmayan",
+        seat = self.client.patch(
+            f"/api/classrooms/{classroom_id}/layouts/{archive_id}/seats/{self.archive_seat_id}",
             json={"is_available": False})
-        self.assertIn(response.status_code, (403, 404))
+        desk = self.client.patch(
+            f"/api/classrooms/{classroom_id}/layouts/{archive_id}/desks/{self.archive_desk_id}",
+            json={"x": 4.0, "y": 4.0})
+        self.assertEqual((seat.status_code, desk.status_code), (403, 403))
         self.assertEqual(len(self.layouts(classroom_id)), before)
+        self.assertEqual(self.seat_count(archive_id, available_only=True), 1)
+
+    def test_editing_a_non_active_plan_does_not_steal_the_active_flag(self):
+        """Aktif olmayan (ikinci) plan kesinleşmiş sınavda kullanılıyor ve düzenleniyor."""
+        classroom_id, first_id, _exam_id = self._finalized()
+        second_id = self.make_layout(classroom_id, "İkinci plan")["id"]
+        self.client.post(f"/api/classrooms/{classroom_id}/layouts/{second_id}/activate")
+        _desk, seat = self._first_seat(classroom_id, first_id)
+        data = self.client.patch(
+            f"/api/classrooms/{classroom_id}/layouts/{first_id}/seats/{seat['id']}",
+            json={"is_available": False}).get_json()
+        self.assertTrue(data["copied"])
+        active = [item["id"] for item in self.layouts(classroom_id) if item["is_active"]]
+        self.assertEqual(active, [second_id])
+
+    def test_plan_without_seats_cannot_be_activated(self):
+        classroom_id = self.make_classroom()
+        first = self.make_layout(classroom_id)
+        empty = self.make_layout(classroom_id, "Boş plan", seats=False)
+        exam_id = self.make_exam(layout_ids=[first["id"]])
+        response = self.client.post(f"/api/classrooms/{classroom_id}/layouts/{empty['id']}/activate")
+        self.assertEqual(response.status_code, 409, response.get_json())
+        self.assertIn("koltuk", response.get_json()["error"].casefold())
+        self.assertEqual(self.exam(exam_id)["room_selections"][0]["layout_id"], first["id"])
 
     def test_older_plan_state_can_no_longer_be_edited_directly(self):
         """Eski hâl (aktif olmayan, daha yeni sürümü olan plan) düzenlenemez."""

@@ -187,13 +187,16 @@ def rebind_draft_exams(session: Session, old_layout: ClassroomLayout, new_layout
 def prepare_layout_for_edit(session: Session, layout: ClassroomLayout) -> tuple[ClassroomLayout, int]:
     """Düzenlenecek planı döndür: kesinleşmiş sınavda kullanılıyorsa kopyası, değilse kendisi.
 
-    Kopya dersliğin aktif planı olur ve taslak sınavlar ona bağlanır; kesinleşmiş
-    sınavlar eski planı, dolayısıyla krokilerini korur.
+    Eski planı kullanan taslak sınavlar kopyaya bağlanır; kesinleşmiş sınavlar eski
+    planı, dolayısıyla krokilerini korur.
     """
     if is_archive_layout(session, layout):
         raise LayoutReadOnlyError("Arşiv yılı düzenleri salt okunur.")
     if layout.academic_year_id is None or not is_layout_frozen(session, layout.id):
         return layout, 0
     copy = clone_layout(session, layout)
-    activate_layout(session, copy)
+    # Kopya, yalnızca kaynağı aktifse dersliğin aktif planı olur; aktif olmayan
+    # (ikinci) bir plan düzenlenirken dersliğin aktif plan seçimi değişmez.
+    if layout.is_active:
+        activate_layout(session, copy)
     return copy, rebind_draft_exams(session, layout, copy)

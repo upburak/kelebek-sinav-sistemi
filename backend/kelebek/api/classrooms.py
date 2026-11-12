@@ -495,6 +495,13 @@ def activate_classroom_layout(classroom_id: str, layout_id: str):
             return jsonify({"error": "Derslik düzeni bulunamadı."}), 404
         if _is_archive_layout(session, layout):
             return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
+        # Koltuğu olmayan plan sınavda kullanılamaz; taslak sınavları ona bağlamak
+        # derslik seçimlerini geçersiz kılardı.
+        available_seats = session.scalar(
+            select(func.count(Seat.id)).where(Seat.layout_id == layout.id, Seat.is_available.is_(True))
+        ) or 0
+        if layout.academic_year_id is not None and available_seats == 0:
+            return jsonify({"error": "Bu planda kullanılabilir koltuk yok; önce sıraları ve koltukları tanımlayın."}), 409
         previous = session.scalars(
             select(ClassroomLayout).where(
                 ClassroomLayout.classroom_id == layout.classroom_id,
