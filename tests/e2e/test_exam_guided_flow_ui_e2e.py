@@ -65,9 +65,10 @@ def test_exam_is_prepared_by_following_the_single_next_step(page):
     page.get_by_test_id("finalize-submit-btn").click()
     title.get_by_text("Sınav kesinleşti").wait_for(timeout=30_000)
 
-    # 4) Raporlar.
-    card.locator("[data-testid^=exam-reports-]").click()
-    page.get_by_text("Sınav raporları").wait_for()
+    # 4) Raporlar: kesinleşince sınav sayfasının son adımı olarak doğrudan açılır.
+    step = page.get_by_test_id("exam-reports-step")
+    step.wait_for(timeout=30_000)
+    step.get_by_text("PDF raporları").wait_for()
 
 
 def test_only_the_participating_classes_rooms_are_preselected(page):

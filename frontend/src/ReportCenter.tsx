@@ -66,10 +66,12 @@ function statusLabel(status: ReportStatus) {
   return 'Oluştur'
 }
 
-export default function ReportCenter({ academicYearId, academicYearLabel, onExams }: {
+export default function ReportCenter({ academicYearId, academicYearLabel, onExams, organizationId }: {
   academicYearId: string | null
   academicYearLabel: string
   onExams: () => void
+  /** Verilirse yalnızca bu sınavın raporları gösterilir (sınav sayfasının son adımı). */
+  organizationId?: string
 }) {
   const [exams, setExams] = useState<Exam[]>([])
   const [selectedId, setSelectedId] = useState('')
@@ -114,7 +116,7 @@ export default function ReportCenter({ academicYearId, academicYearLabel, onExam
         if (!active) return
         const completed = (data.organizations as Exam[]).filter((exam) => exam.status === 'completed')
         setExams(completed)
-        setSelectedId((current) => completed.some((exam) => exam.id === current) ? current : completed[0]?.id ?? '')
+        setSelectedId((current) => organizationId && completed.some((exam) => exam.id === organizationId) ? organizationId : completed.some((exam) => exam.id === current) ? current : completed[0]?.id ?? '')
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : 'Rapor listesi yüklenemedi.')
       } finally {
@@ -123,7 +125,7 @@ export default function ReportCenter({ academicYearId, academicYearLabel, onExam
     }
     void load()
     return () => { active = false }
-  }, [academicYearId])
+  }, [academicYearId, organizationId])
 
   const exam = exams.find((item) => item.id === selectedId)
   const ready = Boolean(exam) && readyExamId === exam?.id && !review?.unassigned_count && (!review?.violation_count || violationsAccepted)
@@ -248,12 +250,12 @@ export default function ReportCenter({ academicYearId, academicYearLabel, onExam
   }
 
   return <section className="report-center" aria-labelledby="report-center-title">
-    <header className="report-center-heading">
+    {!organizationId && <header className="report-center-heading">
       <div><span className="eyebrow">KESİNLEŞMİŞ DAĞITIMLAR</span><h2 id="report-center-title">Sınav raporları</h2><p>Raporlar seçtiğin güncel dağıtımdan hazırlanır. Excel kopyasını kendi ihtiyacına göre düzenleyebilirsin.</p></div>
       <span className="report-year">{academicYearLabel}</span>
-    </header>
+    </header>}
     {loading ? <div className="exam-empty">Kesinleşmiş sınavlar yükleniyor…</div> : exams.length === 0 ? <div className="report-empty"><strong>Bu eğitim yılında kesinleşmiş sınav yok.</strong><span>Rapor oluşturmak için önce bir sınav dağıtımını son kontrolden geçirip kesinleştir.</span><button type="button" onClick={onExams}>Sınav organizasyonlarına git</button></div> : <>
-      <label className="report-exam-select"><span>Raporlanacak sınav</span><select data-testid="report-exam-select" value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setError(''); setMessage('') }}>{exams.map((item) => <option key={item.id} value={item.id}>{item.name} · {new Date(`${item.exam_date}T12:00:00`).toLocaleDateString('tr-TR')}</option>)}</select></label>
+{!organizationId &&       <label className="report-exam-select"><span>Raporlanacak sınav</span><select data-testid="report-exam-select" value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setError(''); setMessage('') }}>{exams.map((item) => <option key={item.id} value={item.id}>{item.name} · {new Date(`${item.exam_date}T12:00:00`).toLocaleDateString('tr-TR')}</option>)}</select></label>}
       {exam && <>
         <div className="report-exam-summary"><strong>{exam.name}</strong><span>{exam.course_names.length ? exam.course_names.join(' · ') : 'Genel sınav'} · {exam.participant_count} öğrenci · {exam.room_selections.map((room) => room.classroom_name).join(', ') || 'Derslik bilgisi yok'}</span></div>
         <section className="report-settings" aria-label="PDF sayfa ayarları"><div><strong>PDF sayfa ayarları</strong><small>Otomatik yön, raporun varsayılan yönünü kullanır.</small></div><label><span>Kâğıt boyutu</span><select value={paper} onChange={(event) => setPaper(event.target.value)}><option value="A4">A4</option><option value="A3">A3</option><option value="A5">A5</option><option value="LETTER">Letter</option><option value="LEGAL">Legal</option></select></label><label><span>Sayfa yönü</span><select value={orientation} onChange={(event) => setOrientation(event.target.value)}><option value="auto">Otomatik</option><option value="portrait">Dikey</option><option value="landscape">Yatay</option></select></label><label><span>Kenar boşluğu (mm)</span><input type="number" min="5" max="30" step="1" value={margin} onChange={(event) => setMargin(event.target.value)} /></label></section>

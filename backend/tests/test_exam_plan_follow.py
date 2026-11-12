@@ -87,6 +87,16 @@ class ExamPlanFollowTests(PlanTestMixin, unittest.TestCase):
         self.assertEqual(data["affected_draft_exam_count"], 0)
         self.assertEqual(self.exam(exam_id)["room_selections"][0]["layout_id"], first_id)
 
+    def test_exam_lists_its_classes_with_student_counts(self):
+        """Sınava giren sınıflar her zaman görülebilmeli; eksik bir sınıf gözden kaçmamalı."""
+        exam_id = self.make_exam()
+        groups = self.client.get(f"/api/student-groups?academic_year_id={self.year_id}").get_json()["groups"]
+        expected = sorted((g["class_level"], g["section"], g["student_count"]) for g in groups)
+        listed = sorted((g["class_level"], g["section"], g["student_count"]) for g in self.exam(exam_id)["groups"])
+        self.assertEqual(listed, expected)
+        self.assertEqual(sum(g["student_count"] for g in self.exam(exam_id)["groups"]),
+                         self.exam(exam_id)["participant_count"])
+
     def test_group_count_counts_class_sections(self):
         exam_id = self.make_exam()
         groups = self.client.get(f"/api/student-groups?academic_year_id={self.year_id}").get_json()["groups"]

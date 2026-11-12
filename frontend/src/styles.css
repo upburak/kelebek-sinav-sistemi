@@ -1269,3 +1269,36 @@ button:not(.plan-seat):not(.candidate-plan-seat) { min-height: 28px; }
 .classroom-advanced { margin-top: 16px; }
 .classroom-advanced > summary { color: #5e707b; font-size: 12px; font-weight: 600; cursor: pointer; }
 .classroom-advanced-body { margin-top: 10px; padding: 12px; border: 1px dashed #cfdcd7; border-radius: 12px; background: #fbfdfc; }
+
+/* Sınavlar: yalın liste ve tek sınav sayfası */
+.exam-rows { display: grid; gap: 8px; }
+.exam-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 10px 14px; border: 1px solid #e3ebe7; border-radius: 12px; background: #fffefa; }
+.exam-row:hover { border-color: #1c9b79; }
+.exam-row-copy { display: grid; gap: 3px; min-width: 0; }
+.exam-row-copy strong { overflow: hidden; color: #173247; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.exam-row-copy small { color: #5e707b; font-size: 12px; }
+.exam-row-stage { padding: 3px 10px; border-radius: 99px; background: #fdf1d8; color: #7a5a10; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.exam-row-stage.done { background: #dff3ec; color: #0d5247; }
+.exam-row-open { min-height: 36px; padding: 0 18px; border: 0; border-radius: 9px; background: #12695c; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+.exam-row-open:hover { background: #0d5247; }
+.exam-back { min-height: 36px; margin: 0 0 10px; padding: 0 12px; border: 1px solid #cfdcd7; border-radius: 9px; background: #fff; color: #12695c; font-size: 13px; font-weight: 700; cursor: pointer; }
+.exam-back:hover { border-color: #1c9b79; background: #f1faf6; }
+.exam-classes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 18px; border: 1px solid #e3ebe7; border-top: 0; background: #fffefa; }
+.exam-classes > span { color: #5e707b; font-size: 12px; font-weight: 650; }
+.exam-classes ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.exam-classes li { padding: 3px 9px; border-radius: 8px; background: #eef4f1; color: #4b5d68; font-size: 12px; }
+.exam-classes li b { color: #173247; }
+.exam-guide-steps li > button { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.exam-guide-steps li > button:disabled { cursor: default; }
+.exam-guide-steps li > button:not(:disabled):hover { background: #e7f3ef; }
+.exam-guide-steps li.shown > button { text-decoration: underline; text-underline-offset: 4px; }
+.exam-guide-steps li > button > span { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #cfdcd7; border-radius: 50%; background: #fff; color: #5b6f7e; font-size: 11px; font-weight: 700; }
+.exam-guide-steps li.complete > button > span { border-color: #1c9b79; background: #1c9b79; color: #fff; }
+.exam-guide-steps li.current > button > span { border-color: #c54210; background: #c54210; color: #fff; }
+.exam-rooms-summary { display: grid; justify-items: start; gap: 8px; margin: 10px 18px; padding: 14px; border: 1px solid #e3ebe7; border-radius: 12px; background: #fff; }
+.exam-rooms-summary strong { color: #173247; font-size: 13px; }
+.exam-rooms-summary ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.exam-rooms-summary li { padding: 3px 9px; border-radius: 8px; background: #eef4f1; color: #4b5d68; font-size: 12px; }
+.distribution-back { margin: 8px 18px; }
+.exam-reports-step { margin: 10px 0 0; }
+@media (max-width: 640px) { .exam-row { grid-template-columns: 52px minmax(0, 1fr); } .exam-row-stage, .exam-row-open { grid-column: 2; justify-self: start; } }

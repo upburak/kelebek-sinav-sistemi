@@ -182,6 +182,21 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
             .group_by(ExamParticipant.organization_id)
         ).all()
     }
+    # Sınava giren sınıflar, öğrenci sayılarıyla: eksik bir sınıf gözden kaçmasın.
+    groups_by_org: dict[str, dict] = {}
+    for organization_id, class_level, section, area, count in session.execute(
+        select(
+            ExamParticipant.organization_id, ExamParticipant.class_level, ExamParticipant.section,
+            ExamParticipant.area, func.count(ExamParticipant.id),
+        )
+        .where(ExamParticipant.organization_id.in_(ids), ExamParticipant.is_active.is_(True))
+        .group_by(ExamParticipant.organization_id, ExamParticipant.class_level,
+                  ExamParticipant.section, ExamParticipant.area)
+    ).all():
+        key = (class_level, section.casefold())
+        entry = groups_by_org.setdefault(organization_id, {}).setdefault(
+            key, {"class_level": class_level, "section": section, "area": area, "student_count": 0})
+        entry["student_count"] += count
     # Taslak sınavın dağıtımı var ama hiçbiri güncel girdilerle (plan, katılımcı,
     # kural) eşleşmiyorsa yeniden dağıtmak gerekir.
     needs_redistribution = {}
@@ -235,6 +250,10 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
             "selected_candidate_id": item.selected_candidate_id,
             "needs_redistribution": needs_redistribution[item.id],
             "group_count": group_counts.get(item.id, 0),
+            "groups": sorted(
+                groups_by_org.get(item.id, {}).values(),
+                key=lambda group: natural_sort_key(f"{group['class_level']}-{group['section']}"),
+            ),
             "stage": stage_of(
                 item,
                 bool(room_selections_by_org.get(item.id)) and sum(
@@ -339,6 +358,14 @@ def _validated_group(group, available_by_group):
     if not rows:
         raise ExamOrganizerError(f"{grade}/{section} grubunda aktif öğrenci bulunamadı.", 409)
     return rows
+
+
+def _count_groups(participants) -> dict:
+    counts: dict[tuple, int] = {}
+    for participant in participants:
+        key = (participant.class_level, participant.section, participant.area)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def create_organization(session: Session, payload: dict) -> dict:
@@ -495,6 +522,11 @@ def create_organization(session: Session, payload: dict) -> dict:
         "selected_candidate_id": None,
         "needs_redistribution": False,
         "group_count": len({(p.class_level, p.section.casefold()) for p in participants_by_enrollment.values()}),
+        "groups": sorted(
+            ({"class_level": level, "section": section, "area": area, "student_count": count}
+             for (level, section, area), count in _count_groups(participants_by_enrollment.values()).items()),
+            key=lambda group: natural_sort_key(f"{group['class_level']}-{group['section']}"),
+        ),
         "stage": "rooms",
         "archived_at": None,
         "copied_from_organization_id": None,
