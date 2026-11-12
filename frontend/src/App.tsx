@@ -542,6 +542,7 @@ export default function App() {
       if (!response.ok) throw new Error(data.error ?? 'Okul bilgileri kaydedilemedi.')
       setSchoolProfile(data.profile as SchoolProfile)
       setSchoolMessage('Okul bilgileri bu bilgisayara kaydedildi.')
+      notify.success('Okul bilgileri kaydedildi. Raporlarda bu bilgiler görünecek.')
     } catch (error) {
       setSchoolError(error instanceof Error ? error.message : 'Okul bilgileri kaydedilemedi.')
     } finally {

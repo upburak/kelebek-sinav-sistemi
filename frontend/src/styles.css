@@ -1302,3 +1302,4 @@ button:not(.plan-seat):not(.candidate-plan-seat) { min-height: 28px; }
 .distribution-back { margin: 8px 18px; }
 .exam-reports-step { margin: 10px 0 0; }
 @media (max-width: 640px) { .exam-row { grid-template-columns: 52px minmax(0, 1fr); } .exam-row-stage, .exam-row-open { grid-column: 2; justify-self: start; } }
+.exam-back { justify-self: start; width: auto; display: inline-flex; align-items: center; }

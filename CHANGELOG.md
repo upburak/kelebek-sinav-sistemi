@@ -1,5 +1,61 @@
 # Değişiklik günlüğü
 
+## 0.7.0 — 12 Kasım 2026
+
+### Sade arayüz: derslikler, sınavlar ve sonuç bildirimi
+
+İlk gerçek kullanımda üç şey zorladı: parçaların ilişkisi çözülemedi, ekranlar
+çok kalabalıktı, yapılan işin sonucu görülmedi. Kök neden uygulamanın iç veri
+yapısını (düzen sürümü, şablon, aday) olduğu gibi ekrana dökmesiydi. Tasarım:
+`docs/superpowers/specs/2026-11-11-sade-arayuz-design.md`.
+
+**Derslikler**
+
+- Derslik kartına tıklayınca doğrudan o dersliğin oturma planı açılır.
+  "Kopyala ve düzenle" adımı kalktı; "Planı düzenle" doğrudan düzenler.
+- Plan kesinleşmiş bir sınavda kullanılıyorsa uygulama eski hâli kendiliğinden
+  saklar ve değişikliği yeni hâle yazar; kesinleşmiş sınavın krokisi değişmez.
+  Değilse plan yerinde kaydedilir. **Kapatılan açık:** kesinleşmiş sınavın planı
+  arka uçta doğrudan değiştirilebiliyordu; koruma yalnızca arayüzdeydi.
+- Taslak sınavlar dersliğin aktif planını izler. Plan değişince sınav sayfası
+  "Derslik planı değişti, yeniden dağıt" der; koltuk öğrenci sayısının altına
+  düşerse sınav derslik adımına döner.
+- İkinci plan, şablon, aktif yapma, eski hâller ve silme "İleri düzey" altında.
+
+**Sınavlar**
+
+- Sınav listesi yalın satırlardır (tarih, ad, sınıf ve öğrenci sayısı, durum,
+  "Aç"). Her sınavın kendi sayfası vardır; sayfada yalnızca geçerli adımın
+  içeriği görünür. Tamamlanmış adımlara şeritten dönülebilir.
+- Raporlar sınav sayfasının son adımıdır; menüdeki Raporlar bölümü aynı
+  bileşeni kullanır. Listeden PDF düğmeleri kalktı.
+- "Aday" kelimesi kalktı; önceki yerleşime dönmek için tek "Önceki dağıtıma dön".
+- **Sınava giren sınıflar her zaman görünür** (öğrenci sayılarıyla). Kullanıcı
+  beş sınıf seçtiğini düşündüğü bir sınavın dört sınıfla oluştuğunu ancak
+  dağıtımdan sonra fark etmişti. Oluşturma formu ve bildirimi artık
+  "5 sınıf · 166 öğrenci" yazar; sınıfın kendi dersliğinde koltuk yetmediği
+  için eklenen derslik varsa adı ve nedeni söylenir. Sınıf işaretleme, art arda
+  tıklamada işaret kaybetmeyecek biçimde sağlamlaştırıldı. İşaretin neden kayda
+  geçmediği yeniden üretilemedi; kök neden doğrulanmış değildir.
+
+**Sonuç bildirimi**
+
+- Ortak bildirim (`frontend/src/notify.tsx`): başarı kendiliğinden kapanır, hata
+  kullanıcı kapatana kadar kalır. Liste aktarımı, okul bilgileri, derslik adı,
+  plan düzenleme, derslik seçimi ve yedek indirme bunu kullanır.
+
+**Bu sürümde yapılmayanlar**
+
+- Tasarımdaki bileşenlere ayırma (`ExamOrganizer.tsx`, `ClassroomManager.tsx`)
+  yapılmadı; davranışlar aynı dosyalarda yeniden düzenlendi. Kod sağlığı işi
+  ayrı bir sürüme kaldı.
+- Dağıtım, yer değiştirme ve kesinleştirme sonuçları hâlâ kendi yerlerinde
+  gösteriliyor; ortak bildirime taşınmadı.
+
+Testler: 4 yeni birim test modülü (plan düzenleme kuralı, derslik planı ucu,
+sınavın plan izlemesi), 3 yeni tarayıcı test dosyası (bildirimler, derslik
+planı, sınav sayfası).
+
 ## 0.6.1 — 11 Kasım 2026
 
 - **İki sınıf seçilince bütün derslikler seçiliyordu.** 0.5.0'da gelen

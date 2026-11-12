@@ -1,3 +1,4 @@
+import { notify } from './notify'
 import { useEffect, useState } from 'react'
 
 type BackupDetails = {
@@ -80,6 +81,7 @@ export default function BackupManager() {
       link.click()
       link.remove()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      notify.success(`Yedek indirildi: ${fileName}. Dosyayı güvenli bir yerde sakla.`)
       setBackup({
         createdAt: response.headers.get('x-backup-created-at') ?? new Date().toISOString(),
         fileCount: Number(response.headers.get('x-backup-file-count') ?? '1'),

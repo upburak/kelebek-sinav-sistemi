@@ -234,6 +234,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Derslik adı değiştirilemedi.')
       setRenamingClassroom(false)
+      notify.success('Derslik adı kaydedildi.')
       await loadClassrooms()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Derslik adı değiştirilemedi.')

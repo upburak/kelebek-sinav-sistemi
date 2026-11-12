@@ -1,3 +1,4 @@
+import { notify } from './notify'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import ReportCenter from './ReportCenter'
 import ExamLifecyclePanel from './ExamLifecyclePanel'
@@ -521,6 +522,7 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
         updated.room_selections.map((room) => [room.classroom_id, room.layout_id]),
       ))
       setRoomMessage('Derslik seçimi kaydedildi.')
+      notify.success(updated.capacity_sufficient ? 'Derslik seçimi kaydedildi. Sıradaki adım dağıtım.' : `Derslik seçimi kaydedildi; ${updated.capacity_deficit} koltuk eksik.`)
       // Kapasite yetiyorsa panel kapanır ve rehber dağıtım adımını gösterir.
       if (updated.capacity_sufficient && updated.room_selections.length) setActiveRoomOrganizationId(null)
     } catch (reason) {
@@ -782,7 +784,7 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
         {/* Sayfa başlığı ve eğitim yılı üstte zaten yazıyor; burada tekrar
             etmek yerine yalnızca ne yapılacağını anlatan tek satır kalır. */}
         <h2 id="exam-organizer-title" className="visually-hidden">Sınav organizasyonları</h2>
-        <p>Sınavı oluştur, öğrencileri dağıt, kontrol edip kesinleştir. Her sınav kartı sıradaki adımı ve basman gereken düğmeyi gösterir.</p>
+        <p>Bir sınavı aç; sayfası sıradaki adımı ve basman gereken düğmeyi gösterir: derslikler, dağıtım, kontrol, kesinleştirme, raporlar.</p>
       </div>
       {!readOnly && <div className="exam-header-actions">
         <button type="button" className="exam-period-manage-btn" data-testid="exam-period-manage-btn" onClick={() => { setPeriodPanelOpen((open) => !open); setPeriodError('') }}>

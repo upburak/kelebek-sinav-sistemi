@@ -56,3 +56,41 @@ def test_at_most_four_notifications_are_shown(page):
     notes = page.get_by_test_id("notification")
     expect(notes).to_have_count(4)
     expect(notes.last).to_contain_text("Hata 5")
+
+
+def test_saving_school_profile_is_announced(page):
+    open_app(page, "Okul ve yöneticiler")
+    page.locator(".school-form-card button[type=submit]").click()
+    expect(page.get_by_test_id("notification").filter(has_text="Okul bilgileri kaydedildi")).to_be_visible()
+
+
+def test_renaming_a_classroom_is_announced(page):
+    from _ui import make_room
+
+    room = make_room("BİLDİRİM AD SALONU")
+    open_app(page, "Derslikler")
+    card = page.locator("[data-testid^=classroom-card-]", has_text=room["name"])
+    card.get_by_role("button", name="Adını düzenle").click()
+    page.locator("#classroom-name-edit").fill("BİLDİRİM AD SALONU")
+    page.get_by_role("button", name="Adı kaydet").click()
+    expect(page.get_by_test_id("notification").filter(has_text="Derslik adı kaydedildi")).to_be_visible()
+
+
+def test_saving_room_selection_is_announced(page):
+    from _ui import make_exam, make_room
+
+    room = make_room("BİLDİRİM SEÇİM SALONU")
+    make_exam("BİLDİRİM SEÇİM SINAVI", group_limit=2)
+    open_app(page, "Sınav organizasyonlar")
+    page.locator("[data-testid^=exam-row-]", has_text="BİLDİRİM SEÇİM SINAVI").locator(
+        "[data-testid^=exam-open-]").click()
+    page.locator(".exam-room-option", has_text=room["name"]).locator("input[type=checkbox]").check()
+    page.locator("[data-testid^=exam-room-save-]").click()
+    expect(page.get_by_test_id("notification").filter(has_text="Derslik seçimi kaydedildi")).to_be_visible()
+
+
+def test_backup_download_is_announced(page):
+    open_app(page, "Yedek ve arşiv")
+    with page.expect_download(timeout=60_000):
+        page.get_by_role("button", name="Yedek paketini oluştur ve indir").click()
+    expect(page.get_by_test_id("notification").filter(has_text="Yedek")).to_be_visible()
