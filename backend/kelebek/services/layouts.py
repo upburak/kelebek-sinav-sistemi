@@ -151,6 +151,10 @@ def _is_frozen_exam():
     return (ExamOrganization.status == "completed") | ExamOrganization.archived_at.is_not(None)
 
 
+def layout_finalized_exam_count(session: Session, layout_id: str) -> int:
+    return len(session.scalars(_exams_using(layout_id).where(_is_frozen_exam())).all())
+
+
 def is_layout_frozen(session: Session, layout_id: str) -> bool:
     """Plan kesinleşmiş ya da arşivlenmiş bir sınavda kullanılıyor mu?"""
     return session.scalars(_exams_using(layout_id).where(_is_frozen_exam()).limit(1)).first() is not None

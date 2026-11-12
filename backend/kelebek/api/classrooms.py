@@ -23,6 +23,8 @@ from kelebek.services.layouts import (
     delete_layout,
     ensure_active_layout,
     layout_exam_count,
+    layout_finalized_exam_count,
+    prepare_layout_for_edit,
 )
 
 classrooms_api = Blueprint("classrooms", __name__)
@@ -227,6 +229,41 @@ def list_classroom_layouts(classroom_id: str):
     return jsonify({"layouts": result})
 
 
+@classrooms_api.get("/classrooms/<classroom_id>/plan")
+def get_classroom_plan(classroom_id: str):
+    """Dersliğin seçili yıldaki aktif planını, kullanım sayılarıyla birlikte döndür."""
+    academic_year_id = request.args.get("academic_year_id")
+    if not academic_year_id:
+        return jsonify({"error": "Eğitim-öğretim yılı seçili değil."}), 400
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    with session_factory() as session:
+        classroom = session.get(Classroom, classroom_id)
+        if classroom is None:
+            return jsonify({"error": "Derslik bulunamadı."}), 404
+        active = session.scalars(
+            select(ClassroomLayout).where(
+                ClassroomLayout.classroom_id == classroom_id,
+                ClassroomLayout.academic_year_id == academic_year_id,
+                ClassroomLayout.is_active.is_(True),
+            ).limit(1)
+        ).first()
+        layout_total = session.scalar(
+            select(func.count(ClassroomLayout.id)).where(ClassroomLayout.classroom_id == classroom_id)
+        ) or 0
+        plan = None
+        if active is not None:
+            plan = _layout_detail(session, active)
+            plan["exam_count"] = layout_exam_count(session, active.id)
+            plan["finalized_exam_count"] = layout_finalized_exam_count(session, active.id)
+            plan["read_only"] = _is_archive_layout(session, active)
+        result = {
+            "classroom": {"id": classroom.id, "name": classroom.name},
+            "plan": plan,
+            "other_layout_count": layout_total - (1 if active is not None else 0),
+        }
+    return jsonify(result)
+
+
 @classrooms_api.get("/classrooms/<classroom_id>/layouts/<layout_id>")
 def get_classroom_layout(classroom_id: str, layout_id: str):
     """Bir düzenin fiziksel masa ve oturma yeri görünümünü döndür."""
@@ -317,7 +354,13 @@ def move_layout_desk(classroom_id: str, layout_id: str, desk_id: str):
         if _is_archive_layout(session, layout):
             return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
         if not _is_latest_layout_version(session, layout):
-            return jsonify({"error": "Önce bu düzenin yeni bir sürümünü oluşturun."}), 409
+            return jsonify({"error": "Bu, planın eski bir hâli; güncel planı açıp orada düzenleyin."}), 409
+        # Kesinleşmiş sınavda kullanılan plan kopyalanır; değişiklik kopyadaki aynı masaya yazılır.
+        target, affected_drafts = prepare_layout_for_edit(session, layout)
+        copied = target.id != layout.id
+        if copied:
+            desk = session.scalar(select(Desk).where(Desk.layout_id == target.id, Desk.label == desk.label))
+            layout_id, desk_id = target.id, desk.id
 
         x, y = float(x), float(y)
         others = session.scalars(
@@ -334,13 +377,14 @@ def move_layout_desk(classroom_id: str, layout_id: str, desk_id: str):
             seat.x += delta_x
             seat.y += delta_y
         session.flush()
+        edit_info = {"layout_id": layout_id, "copied": copied, "affected_draft_exam_count": affected_drafts}
         response = {
             "id": desk.id,
             "x": desk.x,
             "y": desk.y,
             "seats": [{"id": seat.id, "x": seat.x, "y": seat.y} for seat in seats],
         }
-    return jsonify({"desk": response})
+    return jsonify({"desk": response, **edit_info})
 
 
 @classrooms_api.patch("/classrooms/<classroom_id>/layouts/<layout_id>/seats/<seat_id>")
@@ -365,16 +409,23 @@ def set_layout_seat_availability(classroom_id: str, layout_id: str, seat_id: str
         if _is_archive_layout(session, layout):
             return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
         if not _is_latest_layout_version(session, layout):
-            return jsonify({"error": "Önce bu düzenin yeni bir sürümünü oluşturun."}), 409
+            return jsonify({"error": "Bu, planın eski bir hâli; güncel planı açıp orada düzenleyin."}), 409
+        target, affected_drafts = prepare_layout_for_edit(session, layout)
+        copied = target.id != layout.id
+        if copied:
+            seat = session.scalar(
+                select(Seat).where(Seat.layout_id == target.id, Seat.seat_number == seat.seat_number)
+            )
         seat.is_available = payload["is_available"]
         seat.unavailable_reason = reason or None if not seat.is_available else None
         session.flush()
+        edit_info = {"layout_id": target.id, "copied": copied, "affected_draft_exam_count": affected_drafts}
         result = {
             "id": seat.id,
             "is_available": seat.is_available,
             "unavailable_reason": seat.unavailable_reason,
         }
-    return jsonify({"seat": result})
+    return jsonify({"seat": result, **edit_info})
 
 
 @classrooms_api.post("/classrooms/<classroom_id>/layouts")
@@ -506,9 +557,9 @@ def generate_classroom_layout(classroom_id: str, layout_id: str):
             if academic_year and academic_year.start_year < current_academic_year_start():
                 return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
         if not _is_latest_layout_version(session, layout):
-            return jsonify({"error": "Önce bu düzenin yeni bir sürümünü oluşturun."}), 409
+            return jsonify({"error": "Bu, planın eski bir hâli; güncel planı açıp orada düzenleyin."}), 409
         if session.scalar(select(func.count(Desk.id)).where(Desk.layout_id == layout_id)):
-            return jsonify({"error": "Bu düzende masalar var. Yeni bir düzen sürümü oluşturarak devam edin."}), 409
+            return jsonify({"error": "Bu planda masalar var. Sıfırdan kurmak için ileri düzey bölümünden yeni bir plan oluşturun."}), 409
 
         seat_number = 1
         desk_counter = 0
