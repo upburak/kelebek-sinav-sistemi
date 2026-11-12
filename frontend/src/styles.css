@@ -1247,3 +1247,16 @@ button:not(.plan-seat):not(.candidate-plan-seat) { min-height: 28px; }
 .new-version-banner button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 9px; background: #12695c; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 .new-version-banner button.new-version-dismiss { min-width: 34px; padding: 0; background: transparent; color: #8a3414; font-size: 18px; }
 .exam-group-all { grid-column: 1 / -1; justify-self: start; min-height: 32px; padding: 0 12px; border: 1px solid #cfdcd7; border-radius: 8px; background: #fff; color: #12695c; font-size: 12px; font-weight: 700; cursor: pointer; }
+
+/* Ortak sonuç bildirimi */
+.notifications { position: fixed; right: 20px; bottom: 20px; z-index: 80; display: grid; gap: 8px; width: min(440px, calc(100vw - 32px)); pointer-events: none; }
+.notification { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: start; gap: 4px 10px; padding: 12px 12px 12px 14px; border: 1px solid #bfe0d4; border-left: 4px solid #1c9b79; border-radius: 12px; background: #f3fbf8; color: #173247; box-shadow: 0 10px 28px rgb(23 50 71 / 16%); pointer-events: auto; }
+.notification.error { border-color: #ecc3b3; border-left-color: #c54210; background: #fff5f0; }
+.notification p { margin: 0; font-size: 13px; line-height: 1.45; }
+.notification-mark { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #1c9b79; color: #fff; font-size: 12px; font-weight: 800; }
+.notification.error .notification-mark { background: #c54210; }
+.notification-close { width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: #5e707b; font-size: 18px; line-height: 1; cursor: pointer; }
+.notification-close:hover { background: rgb(23 50 71 / 8%); }
+.notification-action { grid-column: 2; justify-self: start; min-height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: #12695c; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+@media (prefers-reduced-motion: no-preference) { .notification { animation: notification-in .18s ease-out; } }
+@keyframes notification-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

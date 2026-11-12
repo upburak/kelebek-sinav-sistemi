@@ -1,4 +1,5 @@
 import { Dashboard } from './Dashboard'
+import { Notifications, notify } from './notify'
 import { useEffect, useState, type FormEvent } from 'react'
 import ClassroomManager from './ClassroomManager'
 import BackupManager from './BackupManager'
@@ -502,6 +503,13 @@ export default function App() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Öğrenci listesi kaydedilemedi.')
       setImportCommitResult(data as StudentImportCommitResult)
+      const committed = data as StudentImportCommitResult
+      const importedStudents = committed.classes.reduce((total, item) => total + item.student_count, 0)
+      const roomCount = committed.classrooms?.length ?? 0
+      notify.success(
+        `${importedStudents} öğrenci${roomCount ? ` ve ${roomCount} derslik` : ''} hazır. Dersliklerin oturma planlarını gerçek sınıflarla karşılaştır.`,
+        { label: 'Derslik planlarını kontrol et', onClick: () => { setActiveSection('classrooms'); setClassroomPanelOpen(true) } },
+      )
       if (activeYearId) {
         const listResponse = await fetch(`/api/students?academic_year_id=${encodeURIComponent(activeYearId)}`)
         const listData = await listResponse.json()
@@ -509,6 +517,7 @@ export default function App() {
       }
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Öğrenci listesi kaydedilemedi.')
+      notify.error(error instanceof Error ? error.message : 'Öğrenci listesi kaydedilemedi. Dosyayı kontrol edip tekrar deneyin.')
     } finally {
       setImportLoading(false)
     }
@@ -1069,6 +1078,7 @@ export default function App() {
         )}
       </section>
 
+      <Notifications />
       <footer className="page-footer">
         Çevrimdışı çalışmak üzere tasarlanmıştır <span aria-hidden="true">·</span> Veriler bu bilgisayarda kalır
       </footer>
