@@ -228,6 +228,8 @@ class BackupRestoreTests(unittest.TestCase):
                 database.execute("ALTER TABLE exam_organizations DROP COLUMN prevent_same_grade_front_back")
                 # 0020'nin eklediği aktif düzen sütunu
                 database.execute("ALTER TABLE classroom_layouts DROP COLUMN is_active")
+                # 0021'in eklediği derslik kapatma sütunu
+                database.execute("ALTER TABLE classrooms DROP COLUMN is_closed")
                 database.execute(
                     "UPDATE alembic_version SET version_num=?",
                     ("0014_completed_distribution_edits",),

@@ -100,7 +100,8 @@ def list_room_options(session: Session, academic_year_id: str) -> list[dict]:
             "version": layout.version,
             "total_seats": total,
             "available_seats": available,
-            "can_select": total > 0,
+            "can_select": total > 0 and not classroom.is_closed,
+            "classroom_closed": bool(classroom.is_closed),
             "is_latest": layout.version == latest_version,
             "is_active": bool(layout.is_active),
         })

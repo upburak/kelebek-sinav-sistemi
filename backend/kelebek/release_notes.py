@@ -2,6 +2,17 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.9.0",
+    "date": "2026-11-13",
+    "items": [
+      "Yeni görünüm: kara tahta yeşili, daha büyük yazı ve her ekranda aynı düğme ve kart dili",
+      "Oturma planı düzenleyici: satır ve sütun ekle, satır ya da sütunu başlığından sürükle, masayı tekli/çiftli/üçlü yap ya da sil",
+      "Derslik kapatılabilir (yeni sınavlarda görünmez) ve sınavda kullanılmamışsa planıyla birlikte silinebilir",
+      "\"Pasif kayıtları göster\" artık yalnızca pasife alınan öğrencileri listeler",
+      "Bu pencere yalnızca son sürümü gösterir; önceki sürümler Yedek ve arşiv bölümündeki Sürüm notları'nda"
+    ]
+  },
+  {
     "version": "0.8.1",
     "date": "2026-11-12",
     "items": [

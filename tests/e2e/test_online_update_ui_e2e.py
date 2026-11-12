@@ -21,7 +21,7 @@ if not BASE_URL:
 def _open_backup(page):
     page.goto(BASE_URL)
     page.wait_for_selector("[data-testid=dashboard]")
-    closer = page.locator(".whats-new-backdrop button").last
+    closer = page.locator("[data-testid=whats-new-close]")
     if closer.count() and closer.is_visible():
         closer.click()
     page.locator("nav button", has_text="Yedek ve arşiv").click()

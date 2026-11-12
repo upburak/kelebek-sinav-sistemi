@@ -1,3 +1,3 @@
 """Tek sürüm kaynağı: paket adı, yedek manifesti ve güncelleme denetimi aynı değeri kullanır."""
 
-APP_VERSION = "0.8.1"
+APP_VERSION = "0.9.0"

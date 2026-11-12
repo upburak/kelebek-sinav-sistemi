@@ -6,6 +6,7 @@ import ClassroomManager from './ClassroomManager'
 import BackupManager from './BackupManager'
 import UpdateManager from './UpdateManager'
 import WhatsNewDialog from './WhatsNewDialog'
+import ReleaseNotes from './ReleaseNotes'
 import ExamOrganizer from './ExamOrganizer'
 import ReportCenter from './ReportCenter'
 
@@ -249,7 +250,9 @@ export default function App() {
   const studentClassOptions = [...new Set(students.map((student) => `${student.class_level}/${student.section}`))]
     .sort((first, second) => first.localeCompare(second, 'tr-TR', { numeric: true }))
   const normalizedStudentQuery = studentQuery.trim().toLocaleLowerCase('tr-TR')
-  const filteredStudents = students.filter((student) => {
+  // "Pasif kayıtları göster" yalnızca pasife alınanları listeler; aktif öğrenciler gizlenir.
+  const studentPool = showInactiveStudents ? students.filter((student) => student.is_active === false) : students
+  const filteredStudents = studentPool.filter((student) => {
     if (studentClassFilter && `${student.class_level}/${student.section}` !== studentClassFilter) return false
     if (!normalizedStudentQuery) return true
     return `${student.school_number} ${student.first_name} ${student.last_name}`.toLocaleLowerCase('tr-TR').includes(normalizedStudentQuery)
@@ -654,7 +657,7 @@ export default function App() {
 
       <div className="app-main">
       <header className="topbar">
-        <div className="breadcrumb"><span>Çalışma alanı</span><b>/</b><strong>{sectionTitle}</strong></div>
+        <div className="topbar-school">{schoolProfile.school_name || 'Kelebek Sınav Sistemi'}</div>
         <div className="topbar-actions">
           <div className="year-control">
             <label htmlFor="academic-year-select">Eğitim-öğretim yılı</label>
@@ -699,8 +702,7 @@ export default function App() {
 
       <section className="welcome-card" aria-labelledby="welcome-title">
         <div className="page-heading">
-          <div><div className="eyebrow">KELEBEK <span>·</span> OKUL YÖNETİMİ</div><h1 id="welcome-title">{sectionTitle}</h1><p>{activeSection === 'school' ? 'Okul kimliği ve yönetici bilgileri.' : activeSection === 'students' ? 'Öğrenci listesini içeri aktarın ve kayıt farklarını inceleyin.' : activeSection === 'classrooms' ? 'Derslikleri ve fiziksel oturma düzenlerini yönetin.' : activeSection === 'exams' ? 'Farklı ders ve sınıf gruplarını tek sınav planında bir araya getirin.' : activeSection === 'backup' ? 'Okul verilerini taşınabilir pakette koruyun ve bilgisayarlar arasında aktarın.' : activeSection === 'reports' ? 'Kesinleşen sınavların krokilerini, yoklama ve dağıtım listelerini yazdırın.' : 'Okulunuzu ve sınav hazırlık sürecinizi tek çalışma alanından yönetin.'}</p></div>
-          <div className="current-year-pill"><small>ÇALIŞMA YILI</small><strong>{activeYear?.label ?? 'Yıl bilgisi yükleniyor'}</strong></div>
+          <div><h1 id="welcome-title">{sectionTitle}</h1><p>{activeSection === 'school' ? 'Okul kimliği ve yönetici bilgileri.' : activeSection === 'students' ? 'Öğrenci listesini içeri aktarın ve kayıt farklarını inceleyin.' : activeSection === 'classrooms' ? 'Derslikleri ve fiziksel oturma düzenlerini yönetin.' : activeSection === 'exams' ? 'Farklı ders ve sınıf gruplarını tek sınav planında bir araya getirin.' : activeSection === 'backup' ? 'Okul verilerini taşınabilir pakette koruyun ve bilgisayarlar arasında aktarın.' : activeSection === 'reports' ? 'Kesinleşen sınavların krokilerini, yoklama ve dağıtım listelerini yazdırın.' : 'Okulunuzu ve sınav hazırlık sürecinizi tek çalışma alanından yönetin.'}</p></div>
         </div>
 
         {newVersion && activeSection !== 'backup' && (
@@ -814,8 +816,8 @@ export default function App() {
           onReports={() => setActiveSection('reports')}
         />}
 
-        {activeSection === 'backup' && <><BackupManager /><UpdateManager /></>}
-        <WhatsNewDialog />
+        {activeSection === 'backup' && <><BackupManager /><UpdateManager /><ReleaseNotes /></>}
+        <WhatsNewDialog onShowAll={() => { setActiveSection('backup'); setClassroomPanelOpen(false); window.setTimeout(() => document.getElementById('release-notes')?.scrollIntoView({ block: 'start' }), 150) }} />
 
         {activeSection === 'reports' && <ReportCenter
           academicYearId={activeYearId}
@@ -1038,7 +1040,7 @@ export default function App() {
               <div className="student-registry-actions">
                 <span className="student-total"><strong>{students.filter((student) => student.is_active !== false).length}</strong> aktif öğrenci</span>
                 {!activeYear?.is_archive && students.length > 0 && activeYearId && <button type="button" className="bulk-delete-button" data-testid="bulk-delete-students" onClick={() => void bulkDelete('students', activeYearId).then((done) => { if (done) setStudents([]) })}>Tüm öğrencileri sil</button>}
-                <button type="button" className="student-add-button" onClick={() => setShowInactiveStudents((shown) => !shown)}>{showInactiveStudents ? 'Pasifleri gizle' : 'Pasif kayıtları göster'}</button>
+                <button type="button" className="student-add-button" data-testid="student-inactive-toggle" aria-pressed={showInactiveStudents} onClick={() => setShowInactiveStudents((shown) => !shown)}>{showInactiveStudents ? 'Aktif öğrencilere dön' : 'Pasif kayıtları göster'}</button>
                 <button type="button" className="student-add-button" disabled={!activeYearId || activeYear?.is_archive} onClick={() => { setStudentFormOpen((open) => !open); setStudentMessage('') }}>
                   {studentFormOpen ? 'Formu kapat' : '+ Öğrenci ekle'}
                 </button>
@@ -1068,10 +1070,10 @@ export default function App() {
             {studentsLoading ? <p className="student-empty">Öğrenci listesi yükleniyor…</p> : students.length === 0 ? <div className="student-empty"><strong>Bu eğitim yılında henüz öğrenci yok.</strong><span>Excel şablonunu kullanabilir veya yukarıdan tek öğrenci ekleyebilirsin. İndirilen demo kayıtları yalnızca sen içe aktarırsan kaydedilir.</span></div> : <><div className="student-filter-bar">
               <label><span>Ara</span><input type="search" data-testid="student-search" placeholder="Ad, soyad veya okul no" value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} /></label>
               <label><span>Sınıf / şube</span><select data-testid="student-class-filter" value={studentClassFilter} onChange={(event) => setStudentClassFilter(event.target.value)}><option value="">Tüm sınıflar</option>{studentClassOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-              <span className="student-filter-count" data-testid="student-filter-count" role="status">{filteredStudents.length === students.length ? `${students.length} kayıt` : `${filteredStudents.length} / ${students.length} kayıt`}</span>
+              <span className="student-filter-count" data-testid="student-filter-count" role="status">{showInactiveStudents ? `${filteredStudents.length} pasif kayıt` : filteredStudents.length === students.length ? `${students.length} kayıt` : `${filteredStudents.length} / ${students.length} kayıt`}</span>
               {(studentQuery || studentClassFilter) && <button type="button" className="student-add-button" onClick={() => { setStudentQuery(''); setStudentClassFilter('') }}>Filtreyi temizle</button>}
             </div>
-            {filteredStudents.length === 0 ? <div className="student-empty"><strong>Aramayla eşleşen öğrenci yok.</strong><span>Yazımı kontrol et veya filtreyi temizle.</span></div> : <div className="table-scroll student-table-scroll">
+            {filteredStudents.length === 0 ? <div className="student-empty" data-testid="student-empty">{showInactiveStudents && studentPool.length === 0 ? <><strong>Pasife alınmış öğrenci yok.</strong><span>Bir öğrenciyi pasife aldığında burada görünür.</span></> : <><strong>Aramayla eşleşen öğrenci yok.</strong><span>Yazımı kontrol et veya filtreyi temizle.</span></>}</div> : <div className="table-scroll student-table-scroll">
               <table>
                 <thead><tr><th>Okul no</th><th>Ad soyad</th><th>Sınıf / şube</th><th>Alan</th><th>İşlemler</th></tr></thead>
                 <tbody>{filteredStudents.map((student) => <tr className={student.is_active === false ? 'inactive-student-row' : ''} key={student.id}><td>{student.school_number}</td><td>{student.first_name} {student.last_name}{student.is_active === false && <small className="inactive-student-label">Pasif · geçmiş kayıt korunuyor</small>}</td><td>{student.class_level}/{student.section}</td><td>{student.area || '—'}</td><td className="student-row-actions">{student.is_active === false ? <button type="button" disabled={activeYear?.is_archive || studentSaving} onClick={() => void changeStudentActive(student, true)}>Yeniden etkinleştir</button> : <><button type="button" disabled={activeYear?.is_archive || studentSaving} onClick={() => startStudentEdit(student)}>Düzenle</button><button type="button" disabled={activeYear?.is_archive || studentSaving} onClick={() => void changeStudentActive(student, false)}>Pasife al</button></>}</td></tr>)}</tbody>

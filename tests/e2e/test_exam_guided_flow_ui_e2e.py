@@ -23,7 +23,7 @@ EXAM_NAME = "REHBER AKIŞ SINAVI"
 def test_exam_is_prepared_by_following_the_single_next_step(page):
     page.goto(BASE_URL)
     page.wait_for_selector("[data-testid=dashboard]")
-    closer = page.locator(".whats-new-backdrop button").last
+    closer = page.locator("[data-testid=whats-new-close]")
     if closer.count() and closer.is_visible():
         closer.click()
     page.locator("nav button", has_text="Sınav organizasyonlar").click()
@@ -101,7 +101,7 @@ def test_only_the_participating_classes_rooms_are_preselected(page):
 
     page.goto(BASE_URL)
     page.wait_for_selector("[data-testid=dashboard]")
-    closer = page.locator(".whats-new-backdrop button").last
+    closer = page.locator("[data-testid=whats-new-close]")
     if closer.count() and closer.is_visible():
         closer.click()
     page.locator("nav button", has_text="Sınav organizasyonlar").click()

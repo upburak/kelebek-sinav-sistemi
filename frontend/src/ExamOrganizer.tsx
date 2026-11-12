@@ -42,6 +42,7 @@ type RoomOption = {
   total_seats: number
   available_seats: number
   can_select: boolean
+  classroom_closed?: boolean
   is_latest: boolean
   is_active?: boolean
 }
@@ -277,8 +278,9 @@ export default function ExamOrganizer({ academicYearId, readOnly: yearReadOnly, 
     for (const room of roomOptions) {
       result.set(room.classroom_id, [...(result.get(room.classroom_id) ?? []), room])
     }
-    return Array.from(result.values())
-  }, [roomOptions])
+    // Kapatılmış derslik yalnızca bu sınavda zaten seçiliyse gösterilir.
+    return Array.from(result.values()).filter((layouts) => !layouts[0].classroom_closed || Boolean(selectedLayoutByClassroom[layouts[0].classroom_id]))
+  }, [roomOptions, selectedLayoutByClassroom])
   const selectedRoomCapacity = Object.values(selectedLayoutByClassroom).reduce((total, layoutId) => {
     const room = roomOptions.find((item) => item.layout_id === layoutId)
     return total + (room?.available_seats ?? 0)
