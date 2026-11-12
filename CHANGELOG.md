@@ -1,5 +1,15 @@
 # Değişiklik günlüğü
 
+## 0.8.1 — 12 Kasım 2026
+
+### Açılışta "Not Found" sayfası
+
+- Başlatıcı, kayıtlı örneğe yönlenmeden önce onun gerçekten bu uygulamanın masaüstü
+  örneği olduğunu ve arayüzü sunduğunu denetler. Kayıt eski kalmışsa ya da aynı
+  portu arayüzsüz bir geliştirme sunucusu almışsa yeni örnek başlatılır.
+- Arayüz dosyaları pakette bulunamazsa boş 404 yerine ne yapılacağını söyleyen bir
+  sayfa gösterilir ve durum günlüğe yazılır.
+
 ## 0.8.0 — 12 Kasım 2026
 
 ### Toplu silme (Karar 73)

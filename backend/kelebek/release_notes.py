@@ -2,6 +2,13 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.8.1",
+    "date": "2026-11-12",
+    "items": [
+      "Uygulama açılırken tarayıcıda \"Not Found\" sayfası çıkması giderildi: başlatıcı artık yalnızca gerçekten çalışan uygulamaya yönlenir, değilse yenisini açar"
+    ]
+  },
+  {
     "version": "0.8.0",
     "date": "2026-11-12",
     "items": [
