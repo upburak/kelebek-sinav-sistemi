@@ -1,5 +1,40 @@
 # Değişiklik günlüğü
 
+## 0.9.0 — 13 Kasım 2026
+
+### "Tahta" görünümü
+
+- Renkler okulun kendi dünyasından: kara tahta yeşili (kenar çubuğu, başlık şeridi, ana
+  düğmeler), sarı tebeşir (yalnızca "neredesin / sırada ne var"), kâğıt beyazı kartlar,
+  kırmızı kalem (uyarı ve silme). Yazı ailesi IBM Plex Sans; uygulamayla birlikte gelir.
+- Sayfa adı, yıl seçimi ve durum tek başlık şeridinde; tekrar eden üst yazı, yol ve
+  "Çalışma yılı" kutusu kalktı. En küçük yazı 13 piksel, düğmeler en az 36–40 piksel.
+- Bulanık cam efektleri ve süs amaçlı renk geçişleri kaldırıldı. Tema `frontend/src/tahta.css`
+  içinde; kurallar `.ux-profile.md` dosyasında.
+
+### Oturma planı ince ayarı
+
+- Plan oluşturulduktan sonra da (elle ya da kendiliğinden) satır ve sütun eklenebilir.
+- Satır ve sütun başlıkları tutamaktır: sürükleyince bütün satır ya da sütun taşınır;
+  araya boş sütun bırakmak koridor açar.
+- Masanın adına tıklayınca (ya da sağ tuşla) menü açılır: tekli / çiftli / üçlü yap, masayı sil.
+- Her işlemden sonra masa adları, bloklar ve koltuk numaraları ızgaraya göre yeniden verilir.
+- Kesinleşmiş sınavda kullanılan plan eskisi gibi kopyalanarak düzenlenir. Koltuk silen bir
+  işlem, koltukları taslak bir dağıtımda geçen planı da kopyalar; dağıtım kayıtları bozulmaz.
+
+### Derslik kapatma ve silme
+
+- "Dersliği kapat": derslik yeni sınavlarda seçilemez; eski sınavlardaki yeri ve planı korunur
+  (migration 0021, `classrooms.is_closed`).
+- "Dersliği sil": hiçbir sınavda kullanılmamış derslik planlarıyla birlikte silinir. Sınavda
+  kullanılmış derslik silinmez; kapatılması önerilir.
+
+### Diğer
+
+- "Pasif kayıtları göster" yalnızca pasife alınan öğrencileri listeler.
+- Açılıştaki "Yenilikler" penceresi yalnızca son sürümü gösterir ve ekrana sığar; tüm sürümler
+  Yedek ve arşiv bölümündeki "Sürüm notları"nda (`GET /api/app/release-notes`).
+
 ## 0.8.1 — 12 Kasım 2026
 
 ### Açılışta "Not Found" sayfası

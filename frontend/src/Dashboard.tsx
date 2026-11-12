@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 type Group = { class_level: string; section: string; area: string | null; student_count: number }
-type Room = { classroom_id: string; available_seats: number; is_latest: boolean; is_active?: boolean; can_select: boolean }
+type Room = { classroom_id: string; available_seats: number; is_latest: boolean; is_active?: boolean; can_select: boolean; classroom_closed?: boolean }
 type Organization = {
   id: string; name: string; exam_date: string; status: string; archived_at: string | null
   exam_period_name: string | null; participant_count: number; selected_candidate_id: string | null
@@ -89,7 +89,7 @@ export function Dashboard({ academicYearId, readOnly, schoolName, schoolPlace, p
 
   const studentCount = groups.reduce((total, group) => total + group.student_count, 0)
   // Kapasite, her dersliğin aktif düzeninden hesaplanır.
-  const latestRooms = rooms.filter((room) => room.is_active)
+  const latestRooms = rooms.filter((room) => room.is_active && !room.classroom_closed)
   const roomCount = new Set(latestRooms.map((room) => room.classroom_id)).size
   const seatCount = latestRooms.reduce((total, room) => total + room.available_seats, 0)
   const completedCount = organizations.filter((item) => item.status === 'completed' || item.archived_at).length

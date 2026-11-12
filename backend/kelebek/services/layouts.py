@@ -13,9 +13,11 @@ from kelebek.models import (
     AcademicYear,
     ClassroomLayout,
     Desk,
+    DistributionEvent,
     ExamOrganization,
     ExamOrganizationClassroom,
     Seat,
+    SeatAssignment,
 )
 
 
@@ -184,15 +186,31 @@ def rebind_draft_exams(session: Session, old_layout: ClassroomLayout, new_layout
     return len(drafts)
 
 
-def prepare_layout_for_edit(session: Session, layout: ClassroomLayout) -> tuple[ClassroomLayout, int]:
+def layout_has_seat_references(session: Session, layout_id: str) -> bool:
+    """Bu planın koltukları bir dağıtımda (taslak dahil) kullanılmış mı?"""
+    seat_ids = select(Seat.id).where(Seat.layout_id == layout_id)
+    if session.scalars(select(SeatAssignment.id).where(SeatAssignment.seat_id.in_(seat_ids)).limit(1)).first():
+        return True
+    return session.scalars(
+        select(DistributionEvent.id)
+        .where(DistributionEvent.from_seat_id.in_(seat_ids) | DistributionEvent.to_seat_id.in_(seat_ids))
+        .limit(1)
+    ).first() is not None
+
+
+def prepare_layout_for_edit(session: Session, layout: ClassroomLayout,
+                            removes_seats: bool = False) -> tuple[ClassroomLayout, int]:
     """Düzenlenecek planı döndür: kesinleşmiş sınavda kullanılıyorsa kopyası, değilse kendisi.
 
     Eski planı kullanan taslak sınavlar kopyaya bağlanır; kesinleşmiş sınavlar eski
-    planı, dolayısıyla krokilerini korur.
+    planı, dolayısıyla krokilerini korur. Koltuk silen bir düzenlemede
+    (``removes_seats``) taslak dağıtımların koltuk kayıtları da bozulmasın diye
+    plan, koltukları herhangi bir dağıtımda geçiyorsa yine kopyalanır.
     """
     if is_archive_layout(session, layout):
         raise LayoutReadOnlyError("Arşiv yılı düzenleri salt okunur.")
-    if layout.academic_year_id is None or not is_layout_frozen(session, layout.id):
+    frozen = layout.academic_year_id is not None and is_layout_frozen(session, layout.id)
+    if not frozen and not (removes_seats and layout_has_seat_references(session, layout.id)):
         return layout, 0
     copy = clone_layout(session, layout)
     # Kopya, yalnızca kaynağı aktifse dersliğin aktif planı olur; aktif olmayan

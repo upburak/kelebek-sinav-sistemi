@@ -49,6 +49,12 @@ def get_whats_new():
     return jsonify({"show": bool(notes), "current_version": APP_VERSION, "previous_version": last_seen, "notes": notes})
 
 
+@updates_api.get("/app/release-notes")
+def get_release_notes():
+    """Bu sürüme kadarki tüm sürüm notları (en yeni başta)."""
+    return jsonify({"current_version": APP_VERSION, "notes": RELEASE_NOTES})
+
+
 @updates_api.post("/app/whats-new/seen")
 def mark_whats_new_seen():
     try:

@@ -1310,3 +1310,29 @@ button:not(.plan-seat):not(.candidate-plan-seat) { min-height: 28px; }
 .bulk-delete-button { min-height: 36px; padding: 0 14px; border: 1px solid #ecc3b3; border-radius: 9px; background: #fff; color: #a8421c; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .bulk-delete-button:hover { border-color: #c54210; background: #fdeee6; }
 .classroom-heading-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Plan düzenleyici: satır/sütun tutamakları, ekleme düğmeleri, masa menüsü */
+.plan-line-handle { position: absolute; display: grid; place-items: center; min-width: 44px; height: 24px; padding: 0 6px; border: 1px solid transparent; border-radius: 4px; color: #526176; font-size: 11px; font-weight: 700; white-space: nowrap; user-select: none; }
+.plan-line-handle.row { left: 8px; min-width: 62px; }
+.layout-canvas.editable .plan-line-handle { border-color: #b9c6c1; background: #fff; cursor: grab; }
+.layout-canvas.editable .plan-line-handle:hover { border-color: #146b68; color: #146b68; }
+.plan-line-handle.dragging { opacity: .45; }
+.layout-canvas .plan-block-label { top: 30px; }
+button.plan-add-line { position: absolute; min-height: 32px; padding: 0 12px; border: 1px dashed #146b68; border-radius: 4px; background: #fff; color: #146b68; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+button.plan-add-line.row { left: 8px; }
+button.plan-add-line:hover { background: #e9f5f2; }
+.plan-desk-position.menu-open { z-index: 4; border-color: #146b68; }
+button.plan-desk-menu-btn { min-height: 20px; padding: 0 4px; border: 0; border-radius: 3px; background: transparent; color: #44566b; font-size: 10px; font-weight: 700; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+button.plan-desk-menu-btn:hover, button.plan-desk-menu-btn[aria-expanded=true] { background: #e9f5f2; color: #146b68; }
+.plan-desk-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; display: grid; min-width: 132px; padding: 4px; border: 1px solid #b9c6c1; border-radius: 6px; background: #fff; box-shadow: 0 8px 20px rgb(19 32 29 / 16%); }
+.plan-desk-menu button { min-height: 36px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #13201d; font-size: 13px; text-align: left; cursor: pointer; }
+.plan-desk-menu button:hover:not(:disabled) { background: #eef3f0; }
+.plan-desk-menu button.danger { color: #b23a2e; }
+.plan-desk-menu button:disabled { opacity: .5; cursor: default; }
+.classroom-panel-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.classroom-panel-actions button { min-height: 36px; padding: 0 12px; border: 1px solid #b9c6c1; border-radius: 4px; background: #fff; color: #13201d; font-size: 13px; cursor: pointer; }
+.classroom-panel-actions button.danger { border-color: #b23a2e; color: #b23a2e; }
+.classroom-panel-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.classroom-closed-tag { margin-left: 10px; padding: 2px 8px; border: 1px solid #b23a2e; border-radius: 3px; color: #b23a2e; font-size: 12px; font-weight: 600; vertical-align: middle; }
+.classroom-delete-hint { margin: 0 0 12px; color: #4a5a55; font-size: 13px; }
+.classroom-list-item.closed { opacity: .7; border-style: dashed; }

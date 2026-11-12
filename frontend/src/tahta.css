@@ -1,0 +1,230 @@
+/* "Tahta" teması: kara tahta, tebeşir, sınav kâğıdı ve kırmızı kalem.
+   styles.css'ten sonra yüklenir ve onun üzerine yazar; ayrıntı .ux-profile.md içinde. */
+:root { --t-board:#152e29; --t-board2:#1d3f38; --t-board3:#2a564c; --t-chalk:#eef0e6; --t-chalk2:#a9bdb4; --t-yellow:#f2bd3d; --t-canvas:#d3dbd6; --t-paper:#f8f9f6; --t-line:#bfcac4; --t-ink:#13201d; --t-ink2:#4a5a55; --t-red:#b23a2e; --t-ok:#2c7a58; }
+html, body, .app-shell { background: var(--t-canvas) !important; color: var(--t-ink) !important; }
+body, button, input, select, textarea { font-family: "IBM Plex Sans", system-ui, sans-serif !important; }
+* { letter-spacing: normal !important; }
+h1, h2, h3, .dash-stat strong, .dash-date b, .exam-date-block, .exam-guide-copy h4 { font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif !important; }
+/* Kenar çubuğu: kara tahta */
+.app-sidebar { background: var(--t-board) !important; color: var(--t-chalk) !important; box-shadow: none !important; }
+.app-sidebar .brand span { font-family: "IBM Plex Sans Condensed" !important; font-size: 18px !important; font-weight: 600 !important; color: var(--t-chalk) !important; }
+.app-sidebar .brand strong { color: var(--t-chalk2) !important; font-size: 12px !important; font-weight: 400 !important; }
+.app-sidebar .brand-mark { background: var(--t-yellow) !important; color: var(--t-board) !important; border-radius: 4px !important; box-shadow: none !important; }
+.sidebar-school { background: transparent !important; border: 0 !important; border-top: 1px solid var(--t-board3) !important; border-bottom: 1px solid var(--t-board3) !important; border-radius: 0 !important; box-shadow: none !important; padding: 14px 4px !important; }
+.sidebar-school .school-avatar { display: none !important; }
+.sidebar-school strong { color: var(--t-chalk) !important; font-size: 13px !important; }
+.sidebar-school small { color: var(--t-chalk2) !important; font-size: 12px !important; }
+.sidebar-caption { display: none !important; }
+.main-navigation { margin-top: 14px !important; gap: 2px !important; }
+.main-navigation button { color: #cfdcd5 !important; font-size: 14px !important; font-weight: 500 !important; min-height: 42px !important; border-radius: 4px !important; background: transparent !important; box-shadow: none !important; border-left: 3px solid transparent !important; padding-left: 11px !important; }
+.main-navigation button.active { background: var(--t-board2) !important; color: #fff !important; border-left-color: var(--t-yellow) !important; font-weight: 600 !important; }
+.main-navigation button.active svg { color: var(--t-yellow) !important; }
+.sidebar-footer { border-top-color: var(--t-board3) !important; }
+.sidebar-footer, .sidebar-footer * { color: var(--t-chalk2) !important; font-size: 12px !important; }
+.sidebar-footer .status-dot.online { background: #5fcf9a !important; }
+/* Başlık şeridi: tahtanın devamı, sayfa adı ve yıl tek yerde */
+.topbar { background: var(--t-board2) !important; backdrop-filter: none !important; border: 0 !important; min-height: 56px !important; }
+.topbar-school { color: var(--t-chalk2); font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.topbar-actions { gap: 10px !important; }
+@media (min-width: 981px) { .topbar, .topbar-actions { flex-wrap: nowrap !important; } }
+.year-control { display: flex !important; align-items: center !important; gap: 8px !important; }
+.year-control label { color: var(--t-chalk2) !important; font-size: 13px !important; text-transform: none !important; font-weight: 400 !important; white-space: nowrap !important; }
+.year-control select { background: var(--t-board) !important; color: var(--t-chalk) !important; border: 1px solid var(--t-board3) !important; border-radius: 4px !important; font-size: 13px !important; min-height: 36px !important; }
+.year-control .confirm-year { background: var(--t-yellow) !important; color: var(--t-board) !important; border: 0 !important; border-radius: 4px !important; font-size: 13px !important; font-weight: 600 !important; min-height: 36px !important; box-shadow: none !important; }
+.year-control .confirm-year:disabled { background: transparent !important; color: var(--t-chalk2) !important; border: 1px solid var(--t-board3) !important; }
+.service-status { background: transparent !important; border: 0 !important; color: var(--t-chalk2) !important; font-size: 13px !important; white-space: nowrap !important; }
+.service-status .status-dot { background: #5fcf9a !important; }
+[data-testid=app-shutdown-btn] { background: transparent !important; color: var(--t-chalk) !important; border: 1px solid var(--t-board3) !important; border-radius: 4px !important; box-shadow: none !important; font-size: 13px !important; min-height: 36px !important; white-space: nowrap !important; font-weight: 500 !important; }
+.welcome-card { padding-top: 0 !important; margin-top: 0 !important; }
+.page-heading { background: var(--t-board2) !important; box-shadow: 0 0 0 100vmax var(--t-board2) !important; clip-path: inset(0 -100vmax) !important; padding: 2px 0 22px !important; margin-bottom: 24px !important; }
+.page-heading h1 { color: #fff !important; font-size: 30px !important; font-weight: 600 !important; margin: 0 0 4px !important; }
+.page-heading p { color: var(--t-chalk2) !important; font-size: 14px !important; }
+/* Yüzeyler */
+.eyebrow { display: none !important; }
+h2 { font-size: 19px !important; font-weight: 600 !important; color: var(--t-ink) !important; }
+.dash-school, .dash-card, .exam-organization-card, .exam-classes, .exam-guide, .exam-room-panel, .exam-advanced-body, .classroom-manager { background: var(--t-paper) !important; background-image: none !important; border: 1px solid var(--t-line) !important; box-shadow: none !important; border-radius: 6px !important; }
+.dash-school { border-left: 4px solid var(--t-yellow) !important; padding: 12px 18px !important; }
+.dash-school .school-avatar { display: none !important; }
+.dash-school strong { font-family: "IBM Plex Sans Condensed" !important; font-size: 18px !important; }
+.dash-school small, .dash-school span { font-size: 13px !important; color: var(--t-ink2) !important; }
+.dash-link { color: var(--t-board2) !important; font-size: 13px !important; font-weight: 600 !important; text-decoration: underline !important; text-underline-offset: 3px !important; }
+/* Sayılar: dört kart yerine tek şerit */
+.dash-stats { background: var(--t-paper) !important; border: 1px solid var(--t-line) !important; border-radius: 6px !important; gap: 0 !important; overflow: hidden !important; }
+.dash-stat { background: transparent !important; border: 0 !important; border-left: 1px solid var(--t-line) !important; border-radius: 0 !important; box-shadow: none !important; padding: 16px 20px !important; }
+.dash-stat:first-child { border-left: 0 !important; }
+.dash-stat > span:first-child { font-size: 13px !important; color: var(--t-ink2) !important; font-weight: 500 !important; }
+.dash-stat strong { font-size: 34px !important; font-weight: 600 !important; color: var(--t-ink) !important; line-height: 1.1 !important; }
+.dash-stat strong.dash-stat-text { font-size: 24px !important; line-height: 1.55 !important; }
+.dash-stat small { font-size: 13px !important; color: var(--t-ink2) !important; }
+.dash-stat.warn { background: #f6e3df !important; } .dash-stat.warn small { color: var(--t-red) !important; }
+/* Yol haritası */
+.dash-progress { display: none !important; }
+.step-count { background: transparent !important; border: 0 !important; color: var(--t-ink2) !important; font-size: 13px !important; font-weight: 500 !important; }
+.dash-steps li { border-top-color: #dfe5e1 !important; min-height: 52px !important; }
+.dash-steps li strong { font-size: 14px !important; color: var(--t-ink) !important; }
+.dash-steps li small { font-size: 13px !important; color: var(--t-ink2) !important; }
+.dash-steps li.complete > span { background: transparent !important; border-color: var(--t-ok) !important; color: var(--t-ok) !important; }
+.dash-steps li.complete strong { font-weight: 500 !important; }
+.dash-steps li.complete > b { color: var(--t-ok) !important; font-size: 13px !important; }
+.dash-steps li.current { background: #fbf1d6 !important; margin: 0 -22px !important; padding: 10px 22px !important; border-top: 0 !important; box-shadow: inset 4px 0 0 var(--t-yellow) !important; }
+.dash-steps li.current > span { background: var(--t-board) !important; border-color: var(--t-board) !important; color: var(--t-yellow) !important; }
+/* Düğmeler */
+.dash-primary, .school-save-button, .exam-form-footer button, .plan-edit-btn, .exam-guide-actions button, .classroom-manager form button { background: var(--t-board2) !important; background-image: none !important; color: #fff !important; border: 0 !important; border-radius: 4px !important; box-shadow: none !important; font-size: 14px !important; font-weight: 600 !important; min-height: 40px !important; padding: 0 16px !important; }
+.exam-back, .exam-room-select-all { background: var(--t-paper) !important; border: 1px solid var(--t-line) !important; color: var(--t-ink) !important; border-radius: 4px !important; font-size: 13px !important; font-weight: 500 !important; min-height: 36px !important; box-shadow: none !important; }
+/* Sınav listesi ve sayfası */
+.dash-exams li { border: 0 !important; border-top: 1px solid #dfe5e1 !important; border-radius: 0 !important; background: transparent !important; padding: 12px 0 !important; }
+.dash-exams li:first-child { border-top: 0 !important; }
+.dash-date, .exam-date-block { background: var(--t-board) !important; color: var(--t-chalk) !important; border: 0 !important; border-radius: 4px !important; font-size: 11px !important; font-weight: 500 !important; }
+.dash-date b, .exam-date-block b, .exam-date-block strong { color: #fff !important; font-size: 20px !important; }
+.exam-date-block * { color: var(--t-chalk) !important; }
+.dash-exam-copy strong { font-size: 14px !important; } .dash-exam-copy small { font-size: 13px !important; color: var(--t-ink2) !important; }
+.dash-pill, .exam-status { background: transparent !important; border: 1px solid #c79a2a !important; color: #7a5a10 !important; border-radius: 3px !important; font-size: 12px !important; font-weight: 600 !important; padding: 1px 7px !important; }
+.dash-next { color: var(--t-board2) !important; font-size: 13px !important; font-weight: 600 !important; }
+.exam-organization-card { border-radius: 6px 6px 0 0 !important; }
+.exam-organization-card h3 { font-size: 22px !important; font-weight: 600 !important; }
+.exam-organization-meta { font-size: 13px !important; color: var(--t-ink2) !important; }
+.exam-classes { border-radius: 0 !important; border-top: 0 !important; font-size: 13px !important; }
+.exam-classes li { background: transparent !important; border: 1px solid var(--t-line) !important; border-radius: 3px !important; color: var(--t-ink) !important; font-size: 13px !important; }
+.exam-guide { border-radius: 0 0 6px 6px !important; border-top: 0 !important; background: var(--t-board2) !important; padding-bottom: 18px !important; }
+.exam-guide-steps li, .exam-guide-steps li button { color: var(--t-chalk2) !important; font-size: 13px !important; }
+.exam-guide-steps li.current, .exam-guide-steps li.current button { color: #fff !important; font-weight: 600 !important; }
+.exam-guide-steps li > span, .exam-guide-steps li button > span:first-child { border-color: var(--t-board3) !important; color: var(--t-chalk2) !important; background: transparent !important; }
+.exam-guide-steps li.current > span, .exam-guide-steps li.current button > span:first-child { background: var(--t-yellow) !important; border-color: var(--t-yellow) !important; color: var(--t-board) !important; }
+.exam-guide-steps li::after, .exam-guide-steps li::before { background: var(--t-board3) !important; border-color: var(--t-board3) !important; }
+.exam-guide-copy > :first-child { color: var(--t-yellow) !important; text-transform: none !important; font-size: 13px !important; font-weight: 500 !important; }
+.exam-guide-copy h4, .exam-guide-copy strong, .exam-guide-copy h3 { color: #fff !important; font-size: 22px !important; font-weight: 600 !important; }
+.exam-guide-copy p, .exam-guide p { color: var(--t-chalk) !important; font-size: 14px !important; }
+.exam-room-panel { margin-top: 14px !important; border-radius: 6px !important; }
+.exam-room-panel p, .exam-room-panel small { font-size: 13px !important; color: var(--t-ink2) !important; }
+.exam-room-option { background: #fff !important; border: 1px solid var(--t-line) !important; border-radius: 4px !important; box-shadow: none !important; }
+.exam-room-option strong { font-size: 15px !important; font-family: "IBM Plex Sans Condensed" !important; }
+.exam-room-option small, .exam-room-option span { font-size: 13px !important; }
+.exam-capacity-check { border-radius: 4px !important; font-size: 13px !important; background: #f6e3df !important; border-color: #dcaaa2 !important; color: #7d241b !important; }
+input[type=text], input:not([type]), select { font-size: 14px !important; border-radius: 4px !important; }
+.dash-bar { background: #dfe5e1 !important; border-radius: 2px !important; } .dash-bar i { background: var(--t-board3) !important; background-image: none !important; border-radius: 2px !important; }
+:focus-visible { outline: 2px solid var(--t-yellow) !important; outline-offset: 2px !important; }
+.page-footer { font-size: 12px !important; color: var(--t-ink2) !important; }
+
+.app-sidebar { position: relative !important; z-index: 8 !important; }
+.classroom-manager { border-top: 1px solid var(--t-line) !important; }
+.classroom-manager h2, .classroom-manager h3 { font-family: "IBM Plex Sans Condensed" !important; }
+.classroom-manager p, .classroom-manager label { font-size: 13px !important; color: var(--t-ink2) !important; }
+.classroom-list > *, [data-testid^=classroom-card-] { background: #fff !important; border: 1px solid var(--t-line) !important; border-radius: 4px !important; box-shadow: none !important; }
+[data-testid^=classroom-card-] strong, .classroom-list-select strong { font-family: "IBM Plex Sans Condensed" !important; font-size: 17px !important; font-weight: 600 !important; }
+.classroom-list .selected, .classroom-list [aria-pressed=true], .classroom-list .active { background: #fbf1d6 !important; border-color: #c79a2a !important; box-shadow: inset 0 3px 0 var(--t-yellow) !important; }
+.classroom-list small, .classroom-list span { font-size: 13px !important; color: var(--t-ink2) !important; }
+.layout-edit-button, .panel-close { border-radius: 4px !important; font-size: 13px !important; min-height: 32px !important; background: transparent !important; border: 1px solid var(--t-line) !important; color: var(--t-ink) !important; }
+.room-create-form button { background: var(--t-board2) !important; color: #fff !important; border-radius: 4px !important; min-height: 40px !important; font-size: 14px !important; }
+[data-testid=plan-edit-btn] { background: var(--t-board2) !important; color: #fff !important; border-radius: 4px !important; min-height: 40px !important; font-size: 14px !important; padding: 0 16px !important; }
+[data-testid=bulk-delete-classrooms] { background: transparent !important; border: 1px solid var(--t-red) !important; color: var(--t-red) !important; border-radius: 4px !important; font-size: 13px !important; }
+.layout-plan, .layout-editor { background: var(--t-paper) !important; border-color: var(--t-line) !important; border-radius: 6px !important; }
+.scheme-board { background: var(--t-board) !important; color: var(--t-chalk) !important; border: 0 !important; border-radius: 3px !important; }
+.plan-seats > *, .plan-seats span { background: #e2ebe6 !important; color: var(--t-board) !important; border-radius: 3px !important; }
+.plan-corridor-label { color: #8a6a17 !important; }
+
+/* ---- Tüm ekranlarda ortak dil ---- */
+.app-sidebar { position: sticky !important; top: 0 !important; z-index: 8 !important; }
+@media (max-width: 680px) { .app-sidebar { position: static !important; } .page-heading { padding-top: 14px !important; } }
+
+/* Kartlar: tek biçim, renkli üst şerit yok */
+.school-profile-card, .setup-card, .feature-card, .school-form-card, .import-preview, .student-registry, .exam-create-form,
+.backup-card, .backup-side-note, .classroom-layout-panel, .exam-period-section > *, .report-center, .release-notes, .dash-empty, .plan-empty {
+  background: var(--t-paper) !important; background-image: none !important; border: 1px solid var(--t-line) !important;
+  border-radius: 6px !important; box-shadow: none !important; }
+.feature-card::after, .feature-card::before, .school-profile-card::after { display: none !important; }
+.feature-card > span:first-child, .module-number { display: none !important; }
+.classroom-layout-panel { border: 0 !important; border-top: 1px solid var(--t-line) !important; border-radius: 0 !important; background: transparent !important; }
+.welcome-card h3 { font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif; font-size: 17px !important; font-weight: 600 !important; color: var(--t-ink) !important; }
+.welcome-card h4 { font-size: 15px !important; font-weight: 600 !important; color: var(--t-ink) !important; }
+.welcome-card p, .welcome-card li, .welcome-card small, .welcome-card label, .welcome-card td, .welcome-card th { font-size: 13px; }
+.welcome-card p, .welcome-card small { color: var(--t-ink2); }
+.page-heading p { color: var(--t-chalk2) !important; }
+.backup-icon, .school-section-icon, .section-icon, .notice-icon { display: none !important; }
+
+/* Düğmeler: köşe, gölge ve geçiş her yerde aynı; ana eylem tahta yeşili */
+.welcome-card button, .whats-new-card button, .notifications button { border-radius: 4px !important; background-image: none !important; box-shadow: none !important; font-size: 13px !important; }
+.backup-create-button, .commit-import, .exam-empty button, .exam-guide-primary, .exam-new-button, .exam-room-footer button, .exam-row-open,
+.new-version-banner button, .student-add-button, .student-entry-footer button, .whats-new-card button, .school-save-button, .layout-edit-button,
+.layout-generator > button[type=submit], .layout-create-form button[type=submit], .room-create-form button {
+  background: var(--t-board2) !important; color: #fff !important; border: 0 !important; min-height: 40px !important; padding: 0 16px !important; font-weight: 600 !important; }
+.welcome-card button:disabled { opacity: .55 !important; }
+.exam-guide .exam-guide-primary, .exam-guide-actions button { background: var(--t-yellow) !important; color: var(--t-board) !important; }
+.exam-guide-actions button.secondary, .exam-guide-actions .exam-guide-secondary { background: transparent !important; color: var(--t-chalk) !important; border: 1px solid var(--t-board3) !important; }
+.student-row-actions button, .update-secondary-button, .restore-cancel-button, .layout-open, .exam-row-actions button, .table-actions button, .dash-empty button, .exam-advanced button, .report-center button:not([class]), .student-registry .secondary {
+  min-height: 34px !important; padding: 0 12px !important; border: 1px solid var(--t-line) !important; background: #fff !important; color: var(--t-ink) !important; font-weight: 500 !important; cursor: pointer; }
+.student-row-actions { display: flex; gap: 6px; }
+.bulk-delete-button, .layout-delete, .welcome-card button.danger { background: transparent !important; border: 1px solid var(--t-red) !important; color: var(--t-red) !important; min-height: 36px !important; padding: 0 12px !important; font-weight: 600 !important; }
+.student-add-button[aria-pressed=true] { background: var(--t-yellow) !important; color: var(--t-board) !important; }
+
+/* Form alanları */
+.welcome-card input:not([type=checkbox]):not([type=radio]):not([type=file]), .welcome-card select, .welcome-card textarea {
+  min-height: 40px; border: 1px solid #aebbb5 !important; border-radius: 4px !important; background: #fff !important; color: var(--t-ink) !important; font-size: 14px !important; box-shadow: none !important; }
+.welcome-card input:focus-visible, .welcome-card select:focus-visible, .welcome-card textarea:focus-visible { outline: 2px solid var(--t-board3) !important; outline-offset: 1px !important; border-color: var(--t-board3) !important; }
+.welcome-card label { color: var(--t-ink2); font-weight: 500; }
+
+/* Tablolar */
+.welcome-card table { border-collapse: collapse; }
+.welcome-card th { background: #e6ece8 !important; color: var(--t-ink2) !important; font-weight: 600 !important; text-transform: none !important; border-bottom: 1px solid var(--t-line) !important; }
+.welcome-card td { border-bottom: 1px solid #dfe5e1 !important; color: var(--t-ink) !important; font-size: 14px !important; }
+.welcome-card td:first-child { font-variant-numeric: tabular-nums; color: var(--t-ink) !important; font-weight: 500 !important; }
+.inactive-student-row td { color: var(--t-ink2) !important; }
+.inactive-student-label { display: block; color: var(--t-red) !important; font-size: 12px !important; }
+
+/* Uyarı ve bilgi şeritleri: pastel kutu yerine sol çizgi */
+.privacy-note, .archive-banner, .backup-warning, .exam-partial-warning, .new-version-banner { background: #f3ecd6 !important; border: 0 !important; border-left: 3px solid var(--t-yellow) !important; border-radius: 0 4px 4px 0 !important; color: #4c3d12 !important; font-size: 13px !important; box-shadow: none !important; }
+.import-error, .exam-error, .backup-feedback.error { background: #f6e3df !important; border: 0 !important; border-left: 3px solid var(--t-red) !important; border-radius: 0 4px 4px 0 !important; color: #7d241b !important; font-size: 13px !important; }
+.student-count-pill, .exam-room-count, [class*="count-pill"] { background: transparent !important; border: 1px solid var(--t-line) !important; border-radius: 4px !important; color: var(--t-ink) !important; }
+
+/* Yenilikler penceresi ve sürüm notları */
+.whats-new-backdrop, .distribution-overlay { backdrop-filter: none !important; background: rgb(13 28 25 / 62%) !important; }
+.whats-new-card { max-height: calc(100vh - 48px); overflow: auto; border-radius: 6px !important; padding: 24px !important; font-size: 14px !important; }
+.whats-new-card h2 { font-size: 22px !important; }
+.whats-new-items { margin: 0 !important; line-height: 1.55 !important; }
+.whats-new-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.whats-new-card button.whats-new-all { background: transparent !important; color: var(--t-board2) !important; border: 0 !important; padding: 0 4px !important; text-decoration: underline; text-underline-offset: 3px; font-weight: 600 !important; }
+.release-notes { margin-top: 16px; padding: 22px 24px; }
+.release-notes h2 { margin: 0 0 12px; }
+.release-notes section { padding: 14px 0; border-top: 1px solid #dfe5e1; }
+.release-notes h3 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px; }
+.release-notes h3 small { font-family: "IBM Plex Sans", sans-serif; font-weight: 400; color: var(--t-ink2); font-size: 13px; }
+.release-notes ul { margin: 0; padding-left: 20px; line-height: 1.6; max-width: 78ch; }
+.release-notes li { font-size: 14px; color: var(--t-ink); }
+
+/* Plan tuvali */
+.layout-canvas { background-color: #fff !important; background-image: none !important; border: 1px solid var(--t-line) !important; border-radius: 4px !important; }
+.layout-canvas.editable { border-color: var(--t-board3) !important; }
+.layout-canvas .board-label { background: var(--t-board) !important; color: var(--t-chalk) !important; border: 0 !important; border-radius: 0 0 3px 3px !important; }
+.plan-desk-position { border-color: #aebbb5 !important; border-radius: 4px !important; box-shadow: none !important; }
+.plan-seat { background: #dfe9e4 !important; color: var(--t-board) !important; border-radius: 3px !important; }
+.plan-seat.unavailable { background: #f6e3df !important; color: var(--t-red) !important; text-decoration: line-through; }
+.layout-plan, .layout-editor { overflow-x: auto; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* Dar ekran: sayfa yana taşmaz; menü kendi içinde kayar */
+@media (max-width: 680px) {
+  .app-shell { grid-template-columns: minmax(0, 1fr) !important; }
+  .app-sidebar, .app-main { min-width: 0 !important; }
+  .main-navigation { overflow-x: auto !important; margin-top: 0 !important; }
+  .main-navigation button { min-height: 44px !important; white-space: nowrap; border-left: 0 !important; border-bottom: 3px solid transparent !important; }
+  .main-navigation button.active { border-bottom-color: var(--t-yellow) !important; }
+  .topbar-school { display: none; }
+  .dash-stats { grid-template-columns: 1fr 1fr !important; }
+  .dash-stat { border-left: 0 !important; border-top: 1px solid var(--t-line) !important; }
+  .dash-steps li.current { margin: 0 -16px !important; padding: 10px 16px !important; }
+  .classroom-panel-title { flex-direction: column; align-items: flex-start !important; }
+  .welcome-card button { min-height: 44px !important; }
+  .plan-seat, .plan-desk-menu-btn { min-height: 0 !important; }
+}
+.feature-card a, .feature-card button.link, .template-download, .welcome-card a { color: var(--t-board2) !important; }
+
+/* Öğrenci listesi başlığı dar ekranda alt satıra iner; tablo kendi içinde kayar */
+.student-registry-heading, .student-registry-actions { flex-wrap: wrap !important; }
+.student-registry, .feature-card, .backup-card { min-width: 0 !important; max-width: 100% !important; }
+.table-scroll { max-width: 100% !important; overflow-x: auto !important; }
+/* Dağıtım sonucu ve oturma planı panelleri */
+[class^="exam-candidate"], [class*=" exam-candidate"], .candidate-history-panel, .candidate-plan-room, .candidate-waiting-pool, .candidate-violations, .candidate-breakdown {
+  background-color: var(--t-paper) !important; background-image: none !important; border-color: var(--t-line) !important; border-radius: 6px !important; box-shadow: none !important; }
+.candidate-layout-canvas { background-color: #fff !important; background-image: none !important; border-color: var(--t-line) !important; border-radius: 4px !important; }
+.plan-room-tabs button { background: #fff !important; color: var(--t-ink) !important; border: 1px solid var(--t-line) !important; min-height: 36px !important; }
+.plan-room-tabs button.active { background: var(--t-board2) !important; color: #fff !important; border-color: var(--t-board2) !important; }
+.candidate-result-line { background: transparent !important; border: 0 !important; border-left: 3px solid var(--t-ok) !important; border-radius: 0 !important; color: var(--t-ink) !important; }

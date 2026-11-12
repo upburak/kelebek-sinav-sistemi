@@ -19,7 +19,7 @@ if not BASE_URL:
 def test_backup_can_be_downloaded_and_previewed_for_restore(page, tmp_path):
     page.goto(BASE_URL)
     page.wait_for_selector("[data-testid=dashboard]")
-    closer = page.locator(".whats-new-backdrop button").last
+    closer = page.locator("[data-testid=whats-new-close]")
     if closer.count() and closer.is_visible():
         closer.click()
     page.locator("nav button", has_text="Yedek ve arşiv").click()

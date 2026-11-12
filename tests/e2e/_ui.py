@@ -11,7 +11,7 @@ def open_app(page, section: str | None = None):
     """Uygulamayı aç, varsa "Yenilikler" penceresini kapat, istenen bölüme geç."""
     page.goto(BASE_URL)
     page.wait_for_selector("[data-testid=dashboard]")
-    closer = page.locator(".whats-new-backdrop button").last
+    closer = page.locator("[data-testid=whats-new-close]")
     if closer.count() and closer.is_visible():
         closer.click()
     if section:

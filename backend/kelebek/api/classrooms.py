@@ -16,6 +16,7 @@ from kelebek.models import (
     ExamOrganizationClassroom,
     Seat,
 )
+from kelebek.services import layout_structure
 from kelebek.services.exam_organizer import natural_sort_key
 from kelebek.services.layouts import (
     activate_layout,
@@ -135,8 +136,12 @@ def list_classrooms():
                         Seat.layout_id == latest_layout_id, Seat.is_available.is_(True)
                     )
                 ) or 0
+            exam_count = session.scalar(select(func.count(ExamOrganizationClassroom.id)).where(
+                ExamOrganizationClassroom.classroom_id == classroom.id,
+            )) or 0
             result.append({"id": classroom.id, "name": classroom.name, "layout_count": layout_count,
-                           "seat_count": seat_count})
+                           "seat_count": seat_count, "is_closed": bool(classroom.is_closed),
+                           "exam_count": exam_count, "can_delete": exam_count == 0})
     # "9-A" < "10-A": adlardaki sayılar sayı olarak sıralanır.
     result.sort(key=lambda item: natural_sort_key(item["name"]))
     return jsonify({"classrooms": result})
@@ -166,50 +171,70 @@ def create_classroom():
 
 
 @classrooms_api.patch("/classrooms/<classroom_id>")
-def rename_classroom(classroom_id: str):
+def update_classroom(classroom_id: str):
+    """Dersliğin adını değiştir ya da dersliği kapat / yeniden aç."""
     payload = request.get_json(silent=True)
-    name = payload.get("name") if isinstance(payload, dict) else None
-    name = name.strip() if isinstance(name, str) else ""
-    if not name:
+    if not isinstance(payload, dict) or not ({"name", "is_closed"} & payload.keys()):
         return jsonify({"error": "Derslik adı gerekli."}), 400
-    if len(name) > 120:
-        return jsonify({"error": "Derslik adı 120 karakterden kısa olmalı."}), 400
+    name = None
+    if "name" in payload:
+        name = payload["name"].strip() if isinstance(payload["name"], str) else ""
+        if not name:
+            return jsonify({"error": "Derslik adı gerekli."}), 400
+        if len(name) > 120:
+            return jsonify({"error": "Derslik adı 120 karakterden kısa olmalı."}), 400
+    if "is_closed" in payload and type(payload["is_closed"]) is not bool:
+        return jsonify({"error": "Derslik durumu geçersiz."}), 400
 
     session_factory = current_app.extensions["kelebek_session_factory"]
     with session_factory.begin() as session:
         classroom = session.get(Classroom, classroom_id)
         if classroom is None:
             return jsonify({"error": "Derslik bulunamadı."}), 404
-        in_history = session.scalar(select(func.count(ExamOrganizationClassroom.id)).where(
-            ExamOrganizationClassroom.classroom_id == classroom_id,
-        )) or 0
-        if in_history:
-            return jsonify({"error": "Bu derslik sınav organizasyonlarında kullanılmış; geçmiş adını korumak için yeniden adlandırılamaz."}), 409
-        duplicates = session.scalars(select(Classroom).where(Classroom.id != classroom_id)).all()
-        if any(item.name.casefold() == name.casefold() for item in duplicates):
-            return jsonify({"error": "Bu derslik adı zaten kayıtlı."}), 409
-        classroom.name = name
-        result = {"id": classroom.id, "name": classroom.name}
+        if name is not None and name != classroom.name:
+            in_history = session.scalar(select(func.count(ExamOrganizationClassroom.id)).where(
+                ExamOrganizationClassroom.classroom_id == classroom_id,
+            )) or 0
+            if in_history:
+                return jsonify({"error": "Bu derslik sınav organizasyonlarında kullanılmış; geçmiş adını korumak için yeniden adlandırılamaz."}), 409
+            duplicates = session.scalars(select(Classroom).where(Classroom.id != classroom_id)).all()
+            if any(item.name.casefold() == name.casefold() for item in duplicates):
+                return jsonify({"error": "Bu derslik adı zaten kayıtlı."}), 409
+            classroom.name = name
+        if "is_closed" in payload:
+            classroom.is_closed = payload["is_closed"]
+        result = {"id": classroom.id, "name": classroom.name, "is_closed": bool(classroom.is_closed)}
     return jsonify({"classroom": result})
 
 
 @classrooms_api.delete("/classrooms/<classroom_id>")
-def delete_empty_classroom(classroom_id: str):
+def delete_classroom(classroom_id: str):
+    """Hiçbir sınavda kullanılmamış dersliği planlarıyla birlikte sil."""
     session_factory = current_app.extensions["kelebek_session_factory"]
     with session_factory.begin() as session:
         classroom = session.get(Classroom, classroom_id)
         if classroom is None:
             return jsonify({"error": "Derslik bulunamadı."}), 404
-        layouts = session.scalar(select(func.count(ClassroomLayout.id)).where(
-            ClassroomLayout.classroom_id == classroom_id,
-        )) or 0
         organizations = session.scalar(select(func.count(ExamOrganizationClassroom.id)).where(
             ExamOrganizationClassroom.classroom_id == classroom_id,
         )) or 0
-        if layouts or organizations:
+        if organizations:
             return jsonify({
-                "error": "Düzeni veya sınav geçmişi bulunan derslik silinemez. Kullanılmayan boş derslikler silinebilir; geçmiş kayıtlar korunur.",
+                "error": "Bu derslik bir sınavda kullanılmış; sınav kayıtları bozulmasın diye silinemez. "
+                         "Yeni sınavlarda görünmemesi için dersliği kapatabilirsiniz.",
             }), 409
+        layout_ids = session.scalars(select(ClassroomLayout.id).where(
+            ClassroomLayout.classroom_id == classroom_id)).all()
+        if layout_ids:
+            for seat in session.scalars(select(Seat).where(Seat.layout_id.in_(layout_ids))).all():
+                session.delete(seat)
+            session.flush()
+            for desk in session.scalars(select(Desk).where(Desk.layout_id.in_(layout_ids))).all():
+                session.delete(desk)
+            session.flush()
+            for layout in session.scalars(select(ClassroomLayout).where(ClassroomLayout.id.in_(layout_ids))).all():
+                session.delete(layout)
+            session.flush()
         session.delete(classroom)
     return jsonify({"deleted": True})
 
@@ -388,6 +413,33 @@ def move_layout_desk(classroom_id: str, layout_id: str, desk_id: str):
             "seats": [{"id": seat.id, "x": seat.x, "y": seat.y} for seat in seats],
         }
     return jsonify({"desk": response, **edit_info})
+
+
+@classrooms_api.post("/classrooms/<classroom_id>/layouts/<layout_id>/structure")
+def edit_layout_structure(classroom_id: str, layout_id: str):
+    """Planın yapısını değiştir: satır/sütun ekle ya da taşı, masayı tekli/çiftli yap, masayı sil."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or not isinstance(payload.get("op"), str):
+        return jsonify({"error": "Plan işlemi gerekli."}), 400
+
+    session_factory = current_app.extensions["kelebek_session_factory"]
+    try:
+        with session_factory.begin() as session:
+            layout = session.get(ClassroomLayout, layout_id)
+            if layout is None or layout.classroom_id != classroom_id:
+                return jsonify({"error": "Derslik düzeni bulunamadı."}), 404
+            if _is_archive_layout(session, layout):
+                return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
+            if not _is_latest_layout_version(session, layout):
+                return jsonify({"error": "Bu, planın eski bir hâli; güncel planı açıp orada düzenleyin."}), 409
+            target, _moved = prepare_layout_for_edit(
+                session, layout, removes_seats=layout_structure.removes_seats(session, layout.id, payload))
+            layout_structure.apply(session, target.id, payload)
+            result = {**_layout_detail(session, target), "layout_id": target.id, "copied": target.id != layout.id,
+                      "affected_draft_exam_count": layout_draft_exam_count(session, target.id)}
+    except layout_structure.StructureError as error:
+        return jsonify({"error": str(error)}), 409
+    return jsonify(result)
 
 
 @classrooms_api.patch("/classrooms/<classroom_id>/layouts/<layout_id>/seats/<seat_id>")
