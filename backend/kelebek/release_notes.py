@@ -2,6 +2,17 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.7.0",
+    "date": "2026-11-12",
+    "items": [
+      "Derslikler: bir dersliğe tıklayınca doğrudan oturma planı açılır; planı düzenlemek için ayrı kopya açmak gerekmez",
+      "Sınavlar: yalın liste ve her sınavın kendi sayfası; sayfada yalnızca sıradaki adım görünür, raporlar son adımdır",
+      "Sınava giren sınıflar öğrenci sayılarıyla her zaman görünür; oluşturma bildirimi sınıf ve öğrenci sayısını yazar",
+      "Her kaydetme ve aktarma işleminin sonucu sağ altta aynı yerde bildirilir",
+      "Derslik planı değişince taslak sınavlar yeni planı kullanır ve yeniden dağıtım gerektiği söylenir"
+    ]
+  },
+  {
     "version": "0.6.1",
     "date": "2026-11-11",
     "items": [

@@ -134,7 +134,23 @@ Dağıtım oluşturma, rapor merkezi ve yedekleme akışları bu gözle elle den
 - Genel Bakış canlı veriden çalışıyor; öğrenci listesinde arama ve filtre var.
 - Arayüz akışlarının tamamı tarayıcıda denendi (ayrıntı: CHANGELOG 0.4.1).
 
+## 0.5.0 – 0.7.0 (11–12 Kasım 2026)
+
+- 0.5.0: adım adım sınav hazırlığı, derslik başına aktif plan, plan silme.
+- 0.6.0: çevrim içi sürüm denetimi ve tek tıkla güncelleme (depo herkese açık).
+- 0.6.1: yalnızca sınava giren sınıfların derslikleri kendiliğinden seçilir.
+- 0.7.0: sade arayüz (tasarım ve plan `docs/superpowers/` altında): derslik doğrudan
+  planını açar, her sınavın kendi sayfası, ortak sonuç bildirimi.
+
 ## Açık kalanlar
+
+- **Doğrulanmamış hata:** bir sınav, kullanıcının işaretlediğini söylediği bir sınıf
+  olmadan oluştu. Yeniden üretilemedi; 0.7.0 sınıf dökümünü her zaman gösterir ve
+  işaretlemeyi sağlamlaştırır, ama kök neden bilinmiyor.
+- `ExamOrganizer.tsx` ve `ClassroomManager.tsx` hâlâ büyük tek dosyalar.
+- Kural 8'in çapraza uygulanmaması kullanıcı onayı bekliyor.
+- Kullanıcı isteği (beklemede): her bölümde içeriğin toplu silinmesi; karar
+  belgesindeki "kayıt silinmez" kurallarıyla ilişkisi kullanıcıyla netleştirilecek.
 
 - Paketlerin gerçek bir Mac ve Windows bilgisayarda elle kurulup denenmesi; simgenin
   göründüğünün doğrulanması.

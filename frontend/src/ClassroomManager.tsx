@@ -1,4 +1,5 @@
-import { useEffect, useState, type DragEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
+import { notify } from './notify'
 
 type Classroom = { id: string; name: string; layout_count: number; seat_count?: number }
 type ClassroomLayout = {
@@ -51,6 +52,13 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // Dersliğin aktif planına ait kullanım bilgisi; plan yoksa null.
+  const [planInfo, setPlanInfo] = useState<{ layoutId: string; examCount: number; otherLayoutCount: number } | null>(null)
+  const [planLoaded, setPlanLoaded] = useState(false)
+  // Taslak sınav / kopya bilgisi düzenleme oturumunda bir kez duyurulur.
+  const editAnnounced = useRef(false)
+  const editChanged = useRef(false)
+  const editBusy = useRef(false)
   const selectedClassroom = classrooms.find((item) => item.id === selectedClassroomId)
   const maxDeskX = selectedLayout?.desks.length
     ? Math.max(...selectedLayout.desks.map((desk) => desk.x))
@@ -71,14 +79,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       }))
       .sort((a, b) => (a.desks[0]?.x ?? 0) - (b.desks[0]?.x ?? 0))
     : []
-  const selectedLatestVersion = selectedLayout
-    ? Math.max(
-      ...layouts
-        .filter((layout) => layout.name === selectedLayout.layout.name && layout.academic_year_id === selectedLayout.layout.academic_year_id)
-        .map((layout) => layout.version),
-    )
-    : 0
-  const selectedIsLatest = selectedLayout?.layout.version === selectedLatestVersion
+  const viewingActivePlan = Boolean(selectedLayout && planInfo && selectedLayout.layout.id === planInfo.layoutId)
   const validGrid = columnLengths.length === Number(columnCount)
     && cellSeats.length === Number(columnCount)
     && columnLengths.every((length, index) => /^\d+$/.test(length) && Number(length) > 0 && cellSeats[index]?.length === Number(length))
@@ -151,10 +152,72 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     setSelectedLayout(null)
     setEditingLayout(false)
     setError('')
+    setPlanInfo(null)
+    setPlanLoaded(false)
     try {
-      await loadLayouts(classroomId)
+      await Promise.all([loadLayouts(classroomId), loadPlan(classroomId)])
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Derslik düzenleri yüklenemedi.')
+      setError(reason instanceof Error ? reason.message : 'Derslik planı yüklenemedi.')
+    }
+  }
+
+  /** Dersliğin aktif planını doğrudan aç; arada plan listesi gösterilmez. */
+  async function loadPlan(classroomId: string) {
+    if (!academicYearId) { setPlanLoaded(true); return }
+    const response = await fetch(`/api/classrooms/${classroomId}/plan?academic_year_id=${encodeURIComponent(academicYearId)}`)
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error ?? 'Derslik planı yüklenemedi.')
+    if (data.plan) {
+      setSelectedLayout({ layout: data.plan.layout, desks: data.plan.desks } as LayoutDetail)
+      setPlanInfo({ layoutId: data.plan.layout.id as string, examCount: data.plan.exam_count as number, otherLayoutCount: data.other_layout_count as number })
+    } else {
+      setSelectedLayout(null)
+      setPlanInfo(null)
+    }
+    setPlanLoaded(true)
+  }
+
+  /** Plansız derslik için ilk planı oluştur; ölçü formu açılır. */
+  async function createFirstPlan() {
+    if (!selectedClassroomId || !academicYearId) return
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/classrooms/${selectedClassroomId}/layouts`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Sınıf planı', is_template: false, academic_year_id: academicYearId }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Plan oluşturulamadı.')
+      await Promise.all([loadLayouts(selectedClassroomId), loadClassrooms(), loadPlan(selectedClassroomId)])
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Plan oluşturulamadı.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** Düzenleme sonucunu duyur: kopyalandıysa ya da taslak sınavları etkiliyorsa oturumda bir kez. */
+  function announceEdit(data: { copied?: boolean; affected_draft_exam_count?: number }) {
+    editChanged.current = true
+    if (editAnnounced.current) return
+    const drafts = data.affected_draft_exam_count ?? 0
+    if (!data.copied && !drafts) return
+    editAnnounced.current = true
+    notify.success([
+      data.copied ? 'Kesinleşmiş sınavların krokisi korundu; değişiklik planın yeni hâline yazılıyor.' : '',
+      drafts ? `${drafts} taslak sınav yeni planı kullanacak; o sınavları yeniden dağıtman gerekir.` : '',
+    ].filter(Boolean).join(' '))
+  }
+
+  function toggleEditing() {
+    if (editingLayout) {
+      setEditingLayout(false)
+      if (editChanged.current) notify.success('Plan kaydedildi.')
+    } else {
+      editAnnounced.current = false
+      editChanged.current = false
+      setEditingLayout(true)
     }
   }
 
@@ -172,6 +235,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Derslik adı değiştirilemedi.')
       setRenamingClassroom(false)
+      notify.success('Derslik adı kaydedildi.')
       await loadClassrooms()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Derslik adı değiştirilemedi.')
@@ -187,7 +251,10 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       const response = await fetch(`/api/classrooms/${classroomId}/layouts/${layout.id}/activate`, { method: 'POST' })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Düzen aktif yapılamadı.')
-      await Promise.all([loadLayouts(classroomId), loadClassrooms()])
+      setEditingLayout(false)
+      await Promise.all([loadLayouts(classroomId), loadClassrooms(), loadPlan(classroomId)])
+      const drafts = (data.affected_draft_exam_count as number | undefined) ?? 0
+      notify.success(`“${layout.name}” dersliğin aktif planı oldu.${drafts ? ` ${drafts} taslak sınav bu planı kullanacak; o sınavları yeniden dağıtman gerekir.` : ''}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Düzen aktif yapılamadı.')
     } finally {
@@ -206,11 +273,10 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       const response = await fetch(`/api/classrooms/${classroomId}/layouts/${layout.id}`, { method: 'DELETE' })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Düzen silinemedi.')
-      if (selectedLayout?.layout.id === layout.id) {
-        setSelectedLayout(null)
-        setEditingLayout(false)
-      }
-      await Promise.all([loadLayouts(classroomId), loadClassrooms()])
+      setEditingLayout(false)
+      // Aktif plan silindiyse kalan plan aktif olur; görünüm onu göstermeli.
+      await Promise.all([loadLayouts(classroomId), loadClassrooms(), loadPlan(classroomId)])
+      notify.success(`“${layout.name}” planı silindi.`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Düzen silinemedi.')
     } finally {
@@ -316,29 +382,9 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     }
   }
 
-  async function beginLayoutEdit() {
-    if (!selectedClassroomId || !selectedLayout) return
-    setSaving(true)
-    setError('')
-    try {
-      const response = await fetch(
-        `/api/classrooms/${selectedClassroomId}/layouts/${selectedLayout.layout.id}/versions`,
-        { method: 'POST' },
-      )
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error ?? 'Yeni düzen sürümü oluşturulamadı.')
-      setSelectedLayout(data as LayoutDetail)
-      setEditingLayout(true)
-      await loadLayouts(selectedClassroomId)
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Yeni düzen sürümü oluşturulamadı.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function moveDesk(deskId: string, x: number, y: number) {
-    if (!selectedClassroomId || !selectedLayout || !editingLayout) return
+    if (!selectedClassroomId || !selectedLayout || !editingLayout || editBusy.current) return
+    editBusy.current = true
     try {
       const response = await fetch(
         `/api/classrooms/${selectedClassroomId}/layouts/${selectedLayout.layout.id}/desks/${deskId}`,
@@ -350,15 +396,21 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       )
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Masa taşınamadı.')
-      await openLayout(selectedClassroomId, selectedLayout.layout.id)
+      announceEdit(data)
+      // Plan kopyalandıysa bundan sonra kopya (dersliğin yeni aktif planı) düzenlenir.
+      await Promise.all([loadPlan(selectedClassroomId), loadLayouts(selectedClassroomId), loadClassrooms()])
       setEditingLayout(true)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Masa taşınamadı.')
+    } finally {
+      editBusy.current = false
     }
   }
 
   async function toggleSeatAvailability(seat: Desk['seats'][number]) {
-    if (!selectedClassroomId || !selectedLayout || !editingLayout) return
+    // Önceki kayıt bitmeden gelen tıklama eski plan kimliğiyle giderdi (plan kopyalanmış olabilir).
+    if (!selectedClassroomId || !selectedLayout || !editingLayout || editBusy.current) return
+    editBusy.current = true
     try {
       const response = await fetch(
         `/api/classrooms/${selectedClassroomId}/layouts/${selectedLayout.layout.id}/seats/${seat.id}`,
@@ -373,20 +425,13 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       )
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Oturma yeri durumu değiştirilemedi.')
-      setSelectedLayout((current) => current ? {
-        ...current,
-        desks: current.desks.map((desk) => ({
-          ...desk,
-          seats: desk.seats.map((item) => item.id === seat.id ? { ...item, is_available: data.seat.is_available } : item),
-        })),
-        layout: {
-          ...current.layout,
-          available_seats: current.layout.available_seats + (data.seat.is_available ? 1 : -1),
-        },
-      } : current)
-      await loadLayouts(selectedClassroomId)
+      announceEdit(data)
+      await Promise.all([loadPlan(selectedClassroomId), loadLayouts(selectedClassroomId), loadClassrooms()])
+      setEditingLayout(true)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Oturma yeri durumu değiştirilemedi.')
+    } finally {
+      editBusy.current = false
     }
   }
 
@@ -407,8 +452,8 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       <div className="classroom-manager-heading">
         <div>
           <span className="eyebrow">DERSLİKLER</span>
-          <h2 id="classroom-manager-title">Derslik ve düzen kayıtları</h2>
-          <p>Fiziksel dersliği bir kez ekle; yıllara özel düzen veya tekrar kullanılabilir şablon oluştur.</p>
+          <h2 id="classroom-manager-title">Derslikler ve oturma planları</h2>
+          <p>Bir dersliğe tıkla; oturma planı açılır. Planı gerçek sınıfa göre düzenleyebilirsin.</p>
         </div>
         <button className="panel-close" type="button" onClick={onClose}>Kapat</button>
       </div>
@@ -437,10 +482,10 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
       ) : (
         <div className="classroom-list">
           {classrooms.map((classroom) => (
-            <div className={`classroom-list-item ${selectedClassroomId === classroom.id ? 'selected' : ''}`} key={classroom.id}>
+            <div className={`classroom-list-item ${selectedClassroomId === classroom.id ? 'selected' : ''}`} key={classroom.id} data-testid={`classroom-card-${classroom.id}`}>
               <button type="button" className="classroom-list-select" onClick={() => void selectClassroom(classroom.id)}>
                 <span>{classroom.name}</span>
-                <small>{classroom.layout_count === 0 ? 'Düzen yok' : `${classroom.seat_count ?? 0} koltuk · ${classroom.layout_count} düzen`}</small>
+                <small>{classroom.layout_count === 0 ? 'Plan yok' : `${classroom.seat_count ?? 0} koltuk`}</small>
               </button>
               {!readOnly && <span className="classroom-list-actions">
                 <button type="button" disabled={saving} onClick={() => {
@@ -457,7 +502,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
 
       {selectedClassroom && (
         <div className="classroom-layout-panel">
-          <div className="classroom-panel-title"><h3>{selectedClassroom.name} · Düzenler</h3>{!readOnly && <button type="button" onClick={() => {
+          <div className="classroom-panel-title"><h3>{selectedClassroom.name}</h3>{!readOnly && <button type="button" onClick={() => {
             setClassroomNameDraft(selectedClassroom.name)
             setRenamingClassroom((open) => !open)
           }}>{renamingClassroom ? 'Ad düzenlemesini kapat' : 'Adı düzenle'}</button>}</div>
@@ -466,62 +511,27 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
             <input id="classroom-name-edit" value={classroomNameDraft} onChange={(event) => setClassroomNameDraft(event.target.value)} maxLength={120} required disabled={saving} />
             <button type="submit" disabled={saving}>{saving ? 'Kaydediliyor…' : 'Adı kaydet'}</button>
           </form>}
-          {!readOnly && (
-            <form className="layout-create-form" onSubmit={addLayout}>
-              <label htmlFor="layout-name">Düzen adı</label>
-              <input
-                id="layout-name"
-                value={layoutName}
-                onChange={(event) => setLayoutName(event.target.value)}
-                maxLength={120}
-                required
-                disabled={saving}
-              />
-              <label className="template-check">
-                <input type="checkbox" checked={isTemplate} onChange={(event) => setIsTemplate(event.target.checked)} disabled={saving} />
-                Tekrar kullanılabilir şablon
-              </label>
-              {!isTemplate && <span className="layout-year-hint">{academicYearLabel} yılına kaydedilecek</span>}
-              <button type="submit" disabled={saving || (!isTemplate && !academicYearId)}>
-                {saving ? 'Oluşturuluyor…' : 'Boş düzen oluştur'}
-              </button>
-            </form>
-          )}
-          {layouts.length > 1 && <p className="layout-active-hint">Sınav için derslik seçildiğinde <b>Aktif</b> işaretli düzen kullanılır. Kullanılmayan düzenleri silebilirsin; bir sınavda kullanılmış düzenler korunur.</p>}
-          {layouts.length === 0 ? <p>Bu derslik için henüz düzen yok.</p> : (
-            <ul className="layout-list">
-              {layouts.map((layout) => (
-                <li key={layout.id} className={layout.is_active ? 'active-layout' : ''} data-testid={`layout-row-${layout.id}`}>
-                  <span>
-                    <strong>{layout.name} · v{layout.version}{layout.is_active && <b className="layout-active-badge" data-testid="layout-active-badge">Aktif</b>}</strong>
-                    <small>{layout.is_template ? 'Şablon' : layout.academic_year_label}{layout.exam_count ? ` · ${layout.exam_count} sınavda kullanılıyor` : ''}</small>
-                  </span>
-                  <span className="layout-actions">
-                    <small>{layout.available_seats}/{layout.total_seats} kullanılabilir oturma yeri</small>
-                    <button type="button" className="layout-open" onClick={() => openLayout(selectedClassroom.id, layout.id)}>Düzeni aç</button>
-                    {!readOnly && !layout.is_template && !layout.is_active && <button type="button" className="layout-open" data-testid={`layout-activate-${layout.id}`} disabled={saving} title="Sınav için derslik seçildiğinde bu düzen gelsin" onClick={() => void activateLayout(selectedClassroom.id, layout)}>Aktif yap</button>}
-                    {!readOnly && <button type="button" className="layout-open layout-delete" data-testid={`layout-delete-${layout.id}`} disabled={saving || layout.can_delete === false} title={layout.can_delete === false ? 'Bir sınavda kullanılan düzen silinemez' : 'Kullanılmayan düzeni sil'} onClick={() => void deleteLayout(selectedClassroom.id, layout)}>Sil</button>}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {planLoaded && !selectedLayout && (
+            <div className="plan-empty" data-testid="plan-empty">
+              <strong>Bu dersliğin oturma planı yok.</strong>
+              <span>Sıra ve koltukları tanımlayınca derslik sınavlarda kullanılabilir.</span>
+              {!readOnly && <button type="button" className="layout-edit-button" disabled={saving || !academicYearId} onClick={() => void createFirstPlan()}>{saving ? 'Oluşturuluyor…' : 'Planı oluştur'}</button>}
+            </div>
           )}
           {selectedLayout && (
             <div className="layout-editor">
               <div className="layout-editor-heading">
-                <h4>{selectedLayout.layout.name} · v{selectedLayout.layout.version}</h4>
-                {selectedLayout.desks.length > 0 && !readOnly && selectedIsLatest && (
-                  <button
-                    type="button"
-                    className="layout-edit-button"
-                    disabled={saving}
-                    onClick={() => editingLayout ? setEditingLayout(false) : void beginLayoutEdit()}
-                  >
-                    {editingLayout ? 'Düzenlemeyi bitir' : 'Kopyala ve düzenle'}
+                <div>
+                  <h4>{viewingActivePlan ? 'Oturma planı' : `${selectedLayout.layout.name} · eski ya da ikinci plan`}</h4>
+                  {viewingActivePlan && <p className="plan-status" data-testid="plan-status">{selectedLayout.layout.available_seats} koltuk{selectedLayout.layout.available_seats !== selectedLayout.layout.total_seats ? ` (${selectedLayout.layout.total_seats - selectedLayout.layout.available_seats} koltuk kullanım dışı)` : ''} · {planInfo?.examCount ? `${planInfo.examCount} sınavda kullanılıyor` : 'henüz bir sınavda kullanılmıyor'}</p>}
+                </div>
+                {selectedLayout.desks.length > 0 && !readOnly && viewingActivePlan && (
+                  <button type="button" className="layout-edit-button" data-testid="plan-edit-btn" disabled={saving} onClick={toggleEditing}>
+                    {editingLayout ? 'Düzenlemeyi bitir' : 'Planı düzenle'}
                   </button>
                 )}
               </div>
-              {!selectedIsLatest && <p className="privacy-note">Bu eski sürüm salt okunur; düzenleme için en son sürümü aç.</p>}
+              {!viewingActivePlan && <p className="privacy-note">Bu plan yalnızca görüntülenir. Sınavlarda dersliğin aktif planı kullanılır; bunu kullanmak için ileri düzey bölümünden aktif yap.</p>}
               {selectedLayout.desks.length === 0 ? (
                 <form className="layout-generator" onSubmit={generateLayout}>
                   <div className="generator-intro"><strong>Sınıf planını sütun ve hücrelerle kur</strong><p>Sütunlar tahtadan arkaya uzanır. Uzunlukları değişebilir; sütun aralarına koridor ekleyebilir, her hücreye 1–3 koltuk verebilirsin.</p></div>
@@ -540,7 +550,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
                   <p className="privacy-note">
                     {editingLayout
                       ? 'Masaları sürükleyerek taşı. Koltuğa tıklayarak kullanıma kapat veya yeniden aç; değişiklikler anında kaydedilir.'
-                      : 'Önce “Kopyala ve düzenle” ile yeni sürüm aç. Önceki düzen korunur.'}
+                      : 'Sıraları ya da koltukları değiştirmek için “Planı düzenle”ye bas.'}
                   </p>
                   <div
                     className={`layout-canvas ${editingLayout ? 'editable' : ''}`}
@@ -601,6 +611,51 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
               )}
             </div>
           )}
+          <details className="classroom-advanced" data-testid="classroom-advanced">
+            <summary>İleri düzey: ikinci plan, şablon, eski hâller{planInfo && planInfo.otherLayoutCount > 0 ? ` (${planInfo.otherLayoutCount})` : ''}</summary>
+            <div className="classroom-advanced-body">
+          {!readOnly && (
+            <form className="layout-create-form" onSubmit={addLayout}>
+              <label htmlFor="layout-name">Düzen adı</label>
+              <input
+                id="layout-name"
+                value={layoutName}
+                onChange={(event) => setLayoutName(event.target.value)}
+                maxLength={120}
+                required
+                disabled={saving}
+              />
+              <label className="template-check">
+                <input type="checkbox" checked={isTemplate} onChange={(event) => setIsTemplate(event.target.checked)} disabled={saving} />
+                Tekrar kullanılabilir şablon
+              </label>
+              {!isTemplate && <span className="layout-year-hint">{academicYearLabel} yılına kaydedilecek</span>}
+              <button type="submit" disabled={saving || (!isTemplate && !academicYearId)}>
+                {saving ? 'Oluşturuluyor…' : 'Boş düzen oluştur'}
+              </button>
+            </form>
+          )}
+          {layouts.length > 1 && <p className="layout-active-hint">Sınav için derslik seçildiğinde <b>Aktif</b> işaretli düzen kullanılır. Kullanılmayan düzenleri silebilirsin; bir sınavda kullanılmış düzenler korunur.</p>}
+          {layouts.length === 0 ? <p>Bu derslik için kayıtlı plan yok.</p> : (
+            <ul className="layout-list">
+              {layouts.map((layout) => (
+                <li key={layout.id} className={layout.is_active ? 'active-layout' : ''} data-testid={`layout-row-${layout.id}`}>
+                  <span>
+                    <strong>{layout.name} · v{layout.version}{layout.is_active && <b className="layout-active-badge" data-testid="layout-active-badge">Aktif</b>}</strong>
+                    <small>{layout.is_template ? 'Şablon' : layout.academic_year_label}{layout.exam_count ? ` · ${layout.exam_count} sınavda kullanılıyor` : ''}</small>
+                  </span>
+                  <span className="layout-actions">
+                    <small>{layout.available_seats}/{layout.total_seats} kullanılabilir oturma yeri</small>
+                    <button type="button" className="layout-open" onClick={() => openLayout(selectedClassroom.id, layout.id)}>Düzeni aç</button>
+                    {!readOnly && !layout.is_template && !layout.is_active && <button type="button" className="layout-open" data-testid={`layout-activate-${layout.id}`} disabled={saving} title="Sınav için derslik seçildiğinde bu düzen gelsin" onClick={() => void activateLayout(selectedClassroom.id, layout)}>Aktif yap</button>}
+                    {!readOnly && <button type="button" className="layout-open layout-delete" data-testid={`layout-delete-${layout.id}`} disabled={saving || layout.can_delete === false} title={layout.can_delete === false ? 'Bir sınavda kullanılan düzen silinemez' : 'Kullanılmayan düzeni sil'} onClick={() => void deleteLayout(selectedClassroom.id, layout)}>Sil</button>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+            </div>
+          </details>
         </div>
       )}
     </section>

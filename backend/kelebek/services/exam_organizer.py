@@ -12,6 +12,7 @@ from kelebek.models import (
     Classroom,
     ClassroomLayout,
     Course,
+    DistributionRun,
     ExamCourse,
     ExamCourseParticipant,
     ExamOrganization,
@@ -21,6 +22,7 @@ from kelebek.models import (
     Seat,
     StudentYearEnrollment,
 )
+from kelebek.services.fingerprint import distribution_fingerprint
 from kelebek.services.reporting import REPORT_TYPES, all_report_statuses
 
 
@@ -170,6 +172,60 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
     period_names = dict(
         session.execute(select(ExamPeriod.id, ExamPeriod.name)).all()
     )
+    # Sınava giren sınıflar, öğrenci sayılarıyla: eksik bir sınıf gözden kaçmasın.
+    groups_by_org: dict[str, dict] = {}
+    for organization_id, class_level, section, area, count in session.execute(
+        select(
+            ExamParticipant.organization_id, ExamParticipant.class_level, ExamParticipant.section,
+            ExamParticipant.area, func.count(ExamParticipant.id),
+        )
+        .where(ExamParticipant.organization_id.in_(ids), ExamParticipant.is_active.is_(True))
+        .group_by(ExamParticipant.organization_id, ExamParticipant.class_level,
+                  ExamParticipant.section, ExamParticipant.area)
+    ).all():
+        key = (class_level, section.casefold())
+        entry = groups_by_org.setdefault(organization_id, {}).setdefault(
+            key, {"class_level": class_level, "section": section, "area": area, "student_count": 0})
+        entry["student_count"] += count
+    # Sınıfın tamamı sınavda mı? Aynı sınıfta alanı farklı öğrenciler ayrı grup
+    # sayıldığı için bir bölümü dışarıda kalabilir; class_total bunu görünür kılar.
+    class_totals: dict[tuple, int] = {}
+    for class_level, section, count in session.execute(
+        select(StudentYearEnrollment.class_level, StudentYearEnrollment.section, func.count(StudentYearEnrollment.id))
+        .where(StudentYearEnrollment.academic_year_id == academic_year_id,
+               StudentYearEnrollment.is_active.is_(True))
+        .group_by(StudentYearEnrollment.class_level, StudentYearEnrollment.section)
+    ).all():
+        key = (class_level, section.casefold())
+        class_totals[key] = class_totals.get(key, 0) + count
+    for groups in groups_by_org.values():
+        for key, entry in groups.items():
+            entry["class_total"] = max(class_totals.get(key, 0), entry["student_count"])
+    # Taslak sınavın dağıtımı var ama hiçbiri güncel girdilerle (plan, katılımcı,
+    # kural) eşleşmiyorsa yeniden dağıtmak gerekir.
+    needs_redistribution = {}
+    for item in organizations:
+        if item.status != "draft" or item.archived_at:
+            needs_redistribution[item.id] = False
+            continue
+        run_hashes = session.scalars(
+            select(DistributionRun.config_hash).where(DistributionRun.organization_id == item.id)
+        ).all()
+        needs_redistribution[item.id] = bool(run_hashes) and (
+            distribution_fingerprint(session, item) not in run_hashes
+        )
+
+    def stage_of(item, capacity_sufficient: bool) -> str:
+        if item.archived_at:
+            return "archived"
+        if item.status == "completed":
+            return "done"
+        if not capacity_sufficient:
+            return "rooms"
+        if not item.selected_candidate_id or needs_redistribution[item.id]:
+            return "distribute"
+        return "review"
+
     return [
         {
             "id": item.id,
@@ -196,6 +252,18 @@ def list_organizations(session: Session, academic_year_id: str) -> list[dict]:
             ),
             "rules": _serialize_rules(item),
             "selected_candidate_id": item.selected_candidate_id,
+            "needs_redistribution": needs_redistribution[item.id],
+            "group_count": len(groups_by_org.get(item.id, {})),
+            "groups": sorted(
+                groups_by_org.get(item.id, {}).values(),
+                key=lambda group: natural_sort_key(f"{group['class_level']}-{group['section']}"),
+            ),
+            "stage": stage_of(
+                item,
+                bool(room_selections_by_org.get(item.id)) and sum(
+                    room["available_seats"] for room in room_selections_by_org.get(item.id, [])
+                ) >= participant_counts.get(item.id, 0),
+            ),
             "archived_at": item.archived_at.isoformat() if item.archived_at else None,
             "copied_from_organization_id": item.copied_from_organization_id,
             "report_status": report_status_by_org[item.id].get("seating_plan_pdf", {}).get("report_status", "not_generated"),
@@ -294,6 +362,14 @@ def _validated_group(group, available_by_group):
     if not rows:
         raise ExamOrganizerError(f"{grade}/{section} grubunda aktif öğrenci bulunamadı.", 409)
     return rows
+
+
+def _created_groups(session: Session, organization: ExamOrganization) -> dict:
+    """Yeni sınavın sınıf dökümü; liste yanıtıyla aynı hesap kullanılır."""
+    session.flush()
+    listed = next(item for item in list_organizations(session, organization.academic_year_id)
+                  if item["id"] == organization.id)
+    return {"group_count": listed["group_count"], "groups": listed["groups"]}
 
 
 def create_organization(session: Session, payload: dict) -> dict:
@@ -448,6 +524,9 @@ def create_organization(session: Session, payload: dict) -> dict:
         "capacity_deficit": len(participants_by_enrollment),
         "rules": {field: True for field in RULE_FIELDS},
         "selected_candidate_id": None,
+        "needs_redistribution": False,
+        **_created_groups(session, organization),
+        "stage": "rooms",
         "archived_at": None,
         "copied_from_organization_id": None,
     }
