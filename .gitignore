@@ -70,3 +70,6 @@ credentials.json
 
 # Sürüm kopyaları (artımlı güncelleme için yerelde saklanır)
 releases/
+
+# Plan yürütme çalışma alanı (geçici)
+.superpowers/

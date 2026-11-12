@@ -19,6 +19,7 @@ from kelebek.models import (
 from kelebek.services.exam_organizer import natural_sort_key
 from kelebek.services.layouts import (
     activate_layout,
+    clone_layout,
     delete_layout,
     ensure_active_layout,
     layout_exam_count,
@@ -280,56 +281,10 @@ def create_layout_version(classroom_id: str, layout_id: str):
         if not _is_latest_layout_version(session, source):
             return jsonify({"error": "Yeni sürüm yalnızca son düzen sürümünden başlatılabilir."}), 409
 
-        version = session.scalar(
-            select(func.max(ClassroomLayout.version)).where(
-                ClassroomLayout.classroom_id == source.classroom_id,
-                ClassroomLayout.name == source.name,
-                ClassroomLayout.academic_year_id == source.academic_year_id,
-            )
-        ) or source.version
-        updated = ClassroomLayout(
-            classroom_id=source.classroom_id,
-            academic_year_id=source.academic_year_id,
-            name=source.name,
-            version=version + 1,
-        )
-        session.add(updated)
-        session.flush()
+        updated = clone_layout(session, source)
         # Düzenlemek için açılan yeni sürüm, kaynağın aktifliğini devralır.
         if source.is_active:
             activate_layout(session, updated)
-
-        source_desks = session.scalars(
-            select(Desk).where(Desk.layout_id == source.id).order_by(Desk.y, Desk.x)
-        ).all()
-        for source_desk in source_desks:
-            desk = Desk(
-                layout_id=updated.id,
-                label=source_desk.label,
-                block_label=source_desk.block_label,
-                x=source_desk.x,
-                y=source_desk.y,
-                rotation_degrees=source_desk.rotation_degrees,
-            )
-            session.add(desk)
-            session.flush()
-            source_seats = session.scalars(
-                select(Seat).where(Seat.desk_id == source_desk.id).order_by(Seat.seat_index)
-            ).all()
-            for source_seat in source_seats:
-                session.add(
-                    Seat(
-                        layout_id=updated.id,
-                        desk_id=desk.id,
-                        seat_number=source_seat.seat_number,
-                        seat_index=source_seat.seat_index,
-                        x=source_seat.x,
-                        y=source_seat.y,
-                        is_available=source_seat.is_available,
-                        unavailable_reason=source_seat.unavailable_reason,
-                    )
-                )
-        session.flush()
         response = _layout_detail(session, updated)
     return jsonify(response), 201
 
