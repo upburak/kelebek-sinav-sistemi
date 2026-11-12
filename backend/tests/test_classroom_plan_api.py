@@ -106,6 +106,16 @@ class ClassroomPlanApiTests(PlanTestMixin, unittest.TestCase):
         self.assertEqual(data["affected_draft_exam_count"], 1)
         self.assertEqual([r["layout_id"] for r in self.exam(draft_id)["room_selections"]], [data["layout_id"]])
 
+    def test_in_place_edit_also_reports_the_draft_exams_using_the_plan(self):
+        classroom_id = self.make_classroom()
+        layout = self.make_layout(classroom_id)
+        self.make_exam(layout_ids=[layout["id"]])
+        _desk, seat = self._first_seat(classroom_id, layout["id"])
+        data = self.client.patch(
+            f"/api/classrooms/{classroom_id}/layouts/{layout['id']}/seats/{seat['id']}",
+            json={"is_available": False}).get_json()
+        self.assertEqual((data["copied"], data["affected_draft_exam_count"]), (False, 1))
+
     def test_archive_year_edit_is_refused_without_side_effects(self):
         classroom_id = self.make_classroom()
         archive_id = self.make_archive_layout(classroom_id)

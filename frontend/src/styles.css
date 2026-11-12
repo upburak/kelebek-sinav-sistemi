@@ -1260,3 +1260,12 @@ button:not(.plan-seat):not(.candidate-plan-seat) { min-height: 28px; }
 .notification-action { grid-column: 2; justify-self: start; min-height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: #12695c; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 @media (prefers-reduced-motion: no-preference) { .notification { animation: notification-in .18s ease-out; } }
 @keyframes notification-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Derslikler: doğrudan plan, ileri düzey ayrı bölümde */
+.plan-status { margin: 4px 0 0; color: #4b5d68; font-size: 13px; }
+.plan-empty { display: grid; justify-items: start; gap: 8px; margin: 12px 0; padding: 18px; border: 1px dashed #cfdcd7; border-radius: 12px; background: #fbfdfc; }
+.plan-empty strong { color: #173247; font-size: 14px; }
+.plan-empty span { color: #5e707b; font-size: 13px; }
+.classroom-advanced { margin-top: 16px; }
+.classroom-advanced > summary { color: #5e707b; font-size: 12px; font-weight: 600; cursor: pointer; }
+.classroom-advanced-body { margin-top: 10px; padding: 12px; border: 1px dashed #cfdcd7; border-radius: 12px; background: #fbfdfc; }

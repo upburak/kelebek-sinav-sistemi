@@ -155,6 +155,11 @@ def layout_finalized_exam_count(session: Session, layout_id: str) -> int:
     return len(session.scalars(_exams_using(layout_id).where(_is_frozen_exam())).all())
 
 
+def layout_draft_exam_count(session: Session, layout_id: str) -> int:
+    """Bu planı kullanan taslak sınav sayısı; plan değişince dağıtımları yenilenmelidir."""
+    return len(session.scalars(_exams_using(layout_id).where(~_is_frozen_exam())).all())
+
+
 def is_layout_frozen(session: Session, layout_id: str) -> bool:
     """Plan kesinleşmiş ya da arşivlenmiş bir sınavda kullanılıyor mu?"""
     return session.scalars(_exams_using(layout_id).where(_is_frozen_exam()).limit(1)).first() is not None

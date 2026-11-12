@@ -22,6 +22,7 @@ from kelebek.services.layouts import (
     clone_layout,
     delete_layout,
     ensure_active_layout,
+    layout_draft_exam_count,
     layout_exam_count,
     layout_finalized_exam_count,
     prepare_layout_for_edit,
@@ -357,7 +358,7 @@ def move_layout_desk(classroom_id: str, layout_id: str, desk_id: str):
         if not _is_latest_layout_version(session, layout):
             return jsonify({"error": "Bu, planın eski bir hâli; güncel planı açıp orada düzenleyin."}), 409
         # Kesinleşmiş sınavda kullanılan plan kopyalanır; değişiklik kopyadaki aynı masaya yazılır.
-        target, affected_drafts = prepare_layout_for_edit(session, layout)
+        target, _moved = prepare_layout_for_edit(session, layout)
         copied = target.id != layout.id
         if copied:
             desk = session.scalar(select(Desk).where(Desk.layout_id == target.id, Desk.label == desk.label))
@@ -378,7 +379,8 @@ def move_layout_desk(classroom_id: str, layout_id: str, desk_id: str):
             seat.x += delta_x
             seat.y += delta_y
         session.flush()
-        edit_info = {"layout_id": layout_id, "copied": copied, "affected_draft_exam_count": affected_drafts}
+        edit_info = {"layout_id": layout_id, "copied": copied,
+                     "affected_draft_exam_count": layout_draft_exam_count(session, layout_id)}
         response = {
             "id": desk.id,
             "x": desk.x,
@@ -411,7 +413,7 @@ def set_layout_seat_availability(classroom_id: str, layout_id: str, seat_id: str
             return jsonify({"error": "Arşiv yılı düzenleri salt okunur."}), 403
         if not _is_latest_layout_version(session, layout):
             return jsonify({"error": "Bu, planın eski bir hâli; güncel planı açıp orada düzenleyin."}), 409
-        target, affected_drafts = prepare_layout_for_edit(session, layout)
+        target, _moved = prepare_layout_for_edit(session, layout)
         copied = target.id != layout.id
         if copied:
             seat = session.scalar(
@@ -420,7 +422,8 @@ def set_layout_seat_availability(classroom_id: str, layout_id: str, seat_id: str
         seat.is_available = payload["is_available"]
         seat.unavailable_reason = reason or None if not seat.is_available else None
         session.flush()
-        edit_info = {"layout_id": target.id, "copied": copied, "affected_draft_exam_count": affected_drafts}
+        edit_info = {"layout_id": target.id, "copied": copied,
+                     "affected_draft_exam_count": layout_draft_exam_count(session, target.id)}
         result = {
             "id": seat.id,
             "is_available": seat.is_available,
