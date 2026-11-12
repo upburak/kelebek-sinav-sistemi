@@ -1463,3 +1463,22 @@ Kullanıcı öncelikli olarak Apple Silicon MacBook üzerinde çalışacaktır. 
 ## 82. Sürüm 4.3 değişiklik kaydı
 
 Karar 72 eklendi: Uygulama öncelikli olarak Apple Silicon MacBook üzerinde geliştirilecek; aynı kaynak kod tabanıyla macOS ve Windows'u destekleyecektir. İşletim sistemlerine özgü kurulum paketleri ayrı üretilecek, kullanıcı verileri kurulum dizininden ayrı tutulacak, Git tabanlı sürümleme ve veritabanı migration'ları kullanılacaktır. Tam paket yanında değişen dosyaları ve gerekli migration'ları içeren artımlı güncelleme paketleri hazırlanacaktır. Güncelleme öncesi yedek, bütünlük kontrolü ve başarısızlıkta geri dönüş zorunludur. Önceki sürüm 4.2 korunur.
+
+## 83. Karar 73 – Toplu silme (kullanıcı onayı, 12 Kasım 2026)
+
+Önceki kararlar kayıtların silinmemesini, öğrencilerin pasife alınmasını ve
+kesinleşmiş dağıtımların korunmasını öngörür. Bu kurallar tek tek kayıtlar için
+aynen geçerlidir. Kullanıcı isteği ve açık onayıyla aşağıdaki istisna eklenmiştir;
+mevcut 72 kararın metni değiştirilmemiştir.
+
+- Kullanıcı, **güncel eğitim yılı** için üç bölümde içeriği tümüyle silebilir:
+  sınavlar, öğrenciler, derslikler.
+- Kesinleşmiş ve arşivlenmiş sınavlar da bu toplu silmeye dahildir.
+- Öğrenciler ve derslik planları sınavlara bağlı olduğu için öğrencilerin ya da
+  dersliklerin toplu silinmesi o yılın sınavlarını da siler; onay sorusu silinecek
+  kayıt sayılarını ayrı ayrı gösterir.
+- Silme tek bir onay sorusuyla yapılır.
+- Her toplu silmeden önce uygulama kendiliğinden güvenlik yedeği alır; yanlış
+  silme Yedek ve arşiv bölümünden geri yüklenebilir.
+- Arşiv yılları salt okunur kalır; toplu silme arşiv yılında yapılamaz. Başka
+  yıllara ait kayıtlar etkilenmez.
