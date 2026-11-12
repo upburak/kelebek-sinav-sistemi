@@ -18,6 +18,13 @@ from kelebek.config import get_data_dir
 
 IDLE_SHUTDOWN_SECONDS = 10 * 60
 logger = logging.getLogger("kelebek.launcher")
+MISSING_FRONTEND_PAGE = """<!doctype html><html lang="tr"><meta charset="utf-8">
+<title>Kelebek Sınav Sistemi</title>
+<body style="font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;line-height:1.5">
+<h1>Uygulama dosyaları eksik</h1>
+<p>Kelebek Sınav Sistemi açıldı ama arayüz dosyalarını bulamadı. Verileriniz yerinde duruyor.</p>
+<p>Uygulamayı kapatıp en güncel kurulum paketini yeniden kurun; sorun sürerse paketi yeniden indirin.</p>
+</body></html>"""
 
 
 def _resource_root() -> Path:
@@ -39,16 +46,32 @@ def _instance_file() -> Path:
     return get_data_dir() / "instance.json"
 
 
+def _serves_app(url: str) -> bool:
+    """Adresteki servis bu uygulamanın masaüstü örneği mi ve arayüzü sunuyor mu?"""
+    try:
+        with urllib.request.urlopen(f"{url}/api/health", timeout=1.5) as response:
+            health = json.loads(response.read().decode("utf-8"))
+        if health.get("service") != "kelebek-sinav-sistemi" or not health.get("desktop"):
+            return False
+        with urllib.request.urlopen(f"{url}/", timeout=1.5) as response:
+            return response.status == 200 and b'id="root"' in response.read()
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def _running_instance_url() -> str | None:
+    """Kayıtlı örnek gerçekten çalışan uygulamaysa adresini döndür.
+
+    Kayıt eski kalmış ya da aynı portu arayüzsüz bir geliştirme sunucusu almış
+    olabilir; öyleyse tarayıcı boş bir "Not Found" sayfasına gider. Bu durumda
+    kayıt yok sayılır ve yeni örnek başlatılır.
+    """
     try:
         info = json.loads(_instance_file().read_text(encoding="utf-8"))
         url = f"http://127.0.0.1:{int(info['port'])}"
-        with urllib.request.urlopen(f"{url}/api/health", timeout=1.5) as response:
-            if response.status == 200:
-                return url
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError, KeyError, TypeError):
         return None
-    return None
+    return url if _serves_app(url) else None
 
 
 def _free_port() -> int:
@@ -69,8 +92,15 @@ def main() -> None:
 
     port = int(os.environ.get("KELEBEK_PORT") or _free_port())
     allowed = {f"127.0.0.1:{port}", f"localhost:{port}"}
-    app = create_app(frontend_dist=frontend_dist(), allowed_hosts=allowed)
+    dist = frontend_dist()
+    app = create_app(frontend_dist=dist, allowed_hosts=allowed)
     app.config["KELEBEK_DESKTOP"] = True
+    if not (dist / "index.html").is_file():
+        logger.error("Arayüz dosyaları bulunamadı: %s", dist)
+
+        @app.get("/")
+        def _missing_frontend():
+            return MISSING_FRONTEND_PAGE, 500, {"Content-Type": "text/html; charset=utf-8"}
     state = {"last_request": time.monotonic()}
 
     @app.before_request
