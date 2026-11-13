@@ -14,6 +14,9 @@ PORT = 18765
 
 
 def executable() -> Path:
+    override = os.environ.get("KELEBEK_SMOKE_EXECUTABLE")  # kurulu paketi sınamak için
+    if override:
+        return Path(override)
     if sys.platform == "darwin":
         return ROOT / "dist" / "Kelebek Sınav Sistemi.app" / "Contents" / "MacOS" / "KelebekSinavSistemi"
     name = "KelebekSinavSistemi.exe" if sys.platform == "win32" else "KelebekSinavSistemi"

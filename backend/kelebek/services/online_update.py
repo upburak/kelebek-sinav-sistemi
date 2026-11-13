@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import platform
+import shutil
 import ssl
 import subprocess
 import sys
@@ -83,6 +84,8 @@ def platform_kind() -> str:
         return "windows"
     if sys.platform == "darwin":
         return "macos"
+    if sys.platform.startswith("linux"):
+        return "linux"
     return "other"
 
 
@@ -91,7 +94,9 @@ def pick_asset(assets: list[dict], kind: str | None = None) -> dict | None:
     kind = kind or platform_kind()
     if kind == "macos" and platform.machine().lower() not in ("arm64", "aarch64"):
         return None  # yalnızca Apple Silicon paketi yayımlanıyor
-    suffix = {"windows": "-kurulum.exe", "macos": ".dmg"}.get(kind)
+    if kind == "linux" and platform.machine().lower() not in ("x86_64", "amd64"):
+        return None  # yalnızca x64 .deb paketi yayımlanıyor
+    suffix = {"windows": "-kurulum.exe", "macos": ".dmg", "linux": "-linux-x64.deb"}.get(kind)
     if not suffix:
         return None
     for asset in assets:
@@ -197,6 +202,10 @@ def open_package(path: Path) -> bool:
             return True
         if sys.platform == "darwin":
             subprocess.Popen(["open", str(path)])
+            return True
+        if sys.platform.startswith("linux") and shutil.which("xdg-open"):
+            # Pardus'ta .deb dosyası paket kurucuyla açılır; kurulum yönetici parolası ister.
+            subprocess.Popen(["xdg-open", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return True
     except OSError as error:
         logger.warning("Kurulum paketi açılamadı: %s", error)
