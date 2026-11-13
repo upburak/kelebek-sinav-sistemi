@@ -95,6 +95,26 @@ class LayoutStructureTests(PlanTestMixin, unittest.TestCase):
         archive_id = self.make_archive_layout(classroom_id)
         self.assertEqual(self._op(classroom_id, archive_id, op="add_row").status_code, 403)
 
+    def test_corridor_can_be_added_between_columns_and_removed(self):
+        classroom_id, layout_id = self._room()  # sütunlar x=0 ve x=4: arada koridor var
+        self._op(classroom_id, layout_id, op="add_column")  # x=6, x=4'e bitişik
+        already = self._op(classroom_id, layout_id, op="add_corridor", after=0)
+        self.assertEqual(already.status_code, 409)
+        added = self._op(classroom_id, layout_id, op="add_corridor", after=4)
+        self.assertEqual(added.status_code, 200, added.get_json())
+        data = added.get_json()
+        self.assertEqual(sorted({desk["x"] for desk in data["desks"]}), [0.0, 4.0, 8.0])
+        self.assertEqual({desk["block_label"] for desk in data["desks"]}, {"B1", "B2", "B3"})
+        self.assertEqual(self._numbers(data), list(range(1, 13)))
+        for desk in data["desks"]:
+            self.assertTrue(all(desk["x"] <= seat["x"] < desk["x"] + 2 for seat in desk["seats"]))
+        removed = self._op(classroom_id, layout_id, op="remove_corridor", after=0).get_json()
+        self.assertEqual(sorted({desk["x"] for desk in removed["desks"]}), [0.0, 2.0, 6.0])
+        self.assertEqual({desk["block_label"] for desk in removed["desks"]}, {"B1", "B2"})
+        self.assertEqual(self._op(classroom_id, layout_id, op="remove_corridor", after=0).status_code, 409)
+        self.assertEqual(self._op(classroom_id, layout_id, op="add_corridor", after=6).status_code, 409)
+        self.assertEqual(self._op(classroom_id, layout_id, op="add_corridor", after=3).status_code, 409)
+
     def test_unknown_operation_is_rejected(self):
         classroom_id, layout_id = self._room()
         self.assertEqual(self._op(classroom_id, layout_id, op="explode").status_code, 409)

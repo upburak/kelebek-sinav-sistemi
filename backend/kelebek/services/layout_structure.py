@@ -143,6 +143,42 @@ def move_column(session: Session, layout_id: str, source_x: float, target_x: flo
     _move_line(session, layout_id, "x", source_x, target_x)
 
 
+def _column_gap(desks: list[Desk], after_x: float) -> tuple[list[Desk], float]:
+    """``after_x`` sütununun sağındaki masalar ve bir sonraki sütuna olan uzaklık."""
+    after_x = _snap(after_x)
+    columns = sorted({desk.x for desk in desks})
+    if after_x not in columns:
+        raise StructureError("Sütun bulunamadı.")
+    right = [x for x in columns if x > after_x]
+    if not right:
+        raise StructureError("Koridor iki sütunun arasına eklenir; bu, en sağdaki sütun.")
+    return [desk for desk in desks if desk.x > after_x], right[0] - after_x
+
+
+def add_corridor(session: Session, layout_id: str, after_x: float) -> None:
+    """Sütunun sağına koridor aç: sağdaki bütün sütunlar bir hücre kayar."""
+    moving, gap = _column_gap(_desks(session, layout_id), after_x)
+    if gap > GRID_STEP + 1e-6:
+        raise StructureError("Bu iki sütunun arasında zaten koridor var.")
+    if (max(desk.x for desk in moving) + GRID_STEP) / GRID_STEP > MAX_CELL:
+        raise StructureError("Plan daha fazla genişleyemez.")
+    for desk in moving:
+        desk.x += GRID_STEP
+    session.flush()
+    renumber(session, layout_id)
+
+
+def remove_corridor(session: Session, layout_id: str, after_x: float) -> None:
+    """Sütunun sağındaki koridoru kapat: sağdaki sütunlar bitişene kadar sola kayar."""
+    moving, gap = _column_gap(_desks(session, layout_id), after_x)
+    if gap <= GRID_STEP + 1e-6:
+        raise StructureError("Bu iki sütunun arasında koridor yok.")
+    for desk in moving:
+        desk.x -= gap - GRID_STEP
+    session.flush()
+    renumber(session, layout_id)
+
+
 def _desk_by_label(session: Session, layout_id: str, label: str) -> Desk:
     desk = session.scalar(select(Desk).where(Desk.layout_id == layout_id, Desk.label == label))
     if desk is None:
@@ -210,6 +246,10 @@ def apply(session: Session, layout_id: str, operation: dict) -> None:
         move_row(session, layout_id, number("from"), number("to"))
     elif kind == "move_column":
         move_column(session, layout_id, number("from"), number("to"))
+    elif kind == "add_corridor":
+        add_corridor(session, layout_id, number("after"))
+    elif kind == "remove_corridor":
+        remove_corridor(session, layout_id, number("after"))
     elif kind == "set_desk_seats":
         if not isinstance(operation.get("label"), str) or type(operation.get("count")) is not int:
             raise StructureError("Masa ve koltuk sayısı gerekli.")
