@@ -97,7 +97,8 @@ class OnlineUpdateServiceTests(unittest.TestCase):
                 mock.patch.object(online_update.shutil, "which", return_value="/usr/bin/xdg-open"), \
                 mock.patch.object(online_update.subprocess, "Popen") as popen:
             self.assertTrue(online_update.open_package(Path("/tmp/paket.deb")))
-        self.assertEqual(popen.call_args.args[0], ["xdg-open", "/tmp/paket.deb"])
+        # Yol, testin koştuğu işletim sisteminin ayracıyla yazılır.
+        self.assertEqual(popen.call_args.args[0], ["xdg-open", str(Path("/tmp/paket.deb"))])
         with mock.patch.object(online_update.sys, "platform", "linux"), \
                 mock.patch.object(online_update.shutil, "which", return_value=None):
             self.assertFalse(online_update.open_package(Path("/tmp/paket.deb")))
