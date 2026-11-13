@@ -70,5 +70,28 @@ class RunningInstanceTests(unittest.TestCase):
         self.assertIsNone(launcher._running_instance_url())
 
 
+class WindowedModeTests(unittest.TestCase):
+    """Komut penceresi olmadan (pencereli kip) açılış."""
+
+    def test_missing_streams_are_replaced_so_writes_do_not_crash(self):
+        with mock.patch.object(launcher.sys, "stdout", None), mock.patch.object(launcher.sys, "stderr", None):
+            launcher._ensure_standard_streams()
+            print("çıktı", file=launcher.sys.stdout, flush=True)
+            print("hata", file=launcher.sys.stderr, flush=True)
+            launcher.sys.stdout.close()
+            launcher.sys.stderr.close()
+
+    def test_startup_failure_is_logged_and_exits_with_an_error_code(self):
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(launcher, "get_data_dir", return_value=Path(folder)), \
+                mock.patch.object(launcher, "_run", side_effect=RuntimeError("port alınamadı")), \
+                mock.patch.object(launcher.sys, "platform", "linux"):  # Windows'ta ileti kutusu testi bekletmesin
+            with self.assertRaises(SystemExit) as stopped:
+                launcher.main()
+            self.assertEqual(stopped.exception.code, 1)
+            log = (Path(folder) / "logs" / "launcher-error.log").read_text(encoding="utf-8")
+        self.assertIn("port alınamadı", log)
+
+
 if __name__ == "__main__":
     unittest.main()

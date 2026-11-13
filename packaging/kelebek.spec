@@ -36,7 +36,8 @@ icon = next((str(path) for path in icon_dir.glob("*.icns" if sys.platform == "da
 exe = EXE(
     pyz, a.scripts, [], exclude_binaries=True,
     name="KelebekSinavSistemi",
-    console=sys.platform == "win32",
+    # Pencereli kip: Windows'ta açık kalan siyah komut penceresi gösterilmez.
+    console=False,
     icon=icon,
 )
 coll = COLLECT(exe, a.binaries, a.datas, name="KelebekSinavSistemi")

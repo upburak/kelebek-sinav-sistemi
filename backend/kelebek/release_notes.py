@@ -2,6 +2,14 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.9.3",
+    "date": "2026-11-13",
+    "items": [
+      "Windows'ta uygulama açılırken siyah komut penceresi artık görünmez; kapatmak için sağ üstteki \"Uygulamayı kapat\" düğmesi kullanılır",
+      "Uygulama açılamazsa nedeni bir ileti kutusunda gösterilir"
+    ]
+  },
+  {
     "version": "0.9.2",
     "date": "2026-11-13",
     "items": [

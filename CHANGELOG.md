@@ -1,5 +1,15 @@
 # Değişiklik günlüğü
 
+## 0.9.3 — 13 Kasım 2026
+
+### Komut penceresi gizlendi
+
+- Windows paketi pencereli kipte derlenir (`console=False`); açılışta ekranda kalan siyah komut
+  penceresi görünmez. Uygulama sağ üstteki "Uygulamayı kapat" düğmesiyle kapatılır; tüm sekmeler
+  kapandıktan 10 dakika sonra kendiliğinden de kapanır.
+- Komut penceresi olmadığı için açılış hatası sessiz kalmasın diye hata
+  `logs/launcher-error.log` dosyasına yazılır ve Windows'ta ileti kutusunda gösterilir.
+
 ## 0.9.2 — 13 Kasım 2026
 
 ### Pardus / Linux paketi

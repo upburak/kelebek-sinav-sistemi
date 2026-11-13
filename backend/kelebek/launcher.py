@@ -10,6 +10,7 @@ import socket
 import sys
 import threading
 import time
+import traceback
 import urllib.request
 import webbrowser
 from pathlib import Path
@@ -80,7 +81,43 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
+def _ensure_standard_streams() -> None:
+    """Pencereli kipte (komut penceresi yok) çıktı akışları ``None`` olur; yazan kod çökmesin."""
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))  # noqa: SIM115 - süreç boyunca açık kalır
+
+
+def _report_fatal(error: BaseException) -> None:
+    """Açılış hatasını günlüğe yaz; komut penceresi olmadığı için Windows'ta ileti kutusu göster."""
+    log_path = get_data_dir() / "logs" / "launcher-error.log"
+    with contextlib.suppress(OSError):
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            traceback.print_exception(type(error), error, error.__traceback__, file=handle)
+    if sys.platform == "win32":
+        with contextlib.suppress(Exception):
+            import ctypes
+
+            ctypes.windll.user32.MessageBoxW(
+                None,
+                f"Uygulama açılamadı.\n\n{error}\n\nAyrıntılar şu dosyaya yazıldı:\n{log_path}",
+                "Kelebek Sınav Sistemi", 0x10)
+
+
 def main() -> None:
+    _ensure_standard_streams()
+    try:
+        _run()
+    except Exception as error:
+        # Sessiz kapanma yerine neden gösterilir; ikinci bir sistem hata penceresi açılmasın diye
+        # süreç hata koduyla düzgün sonlandırılır.
+        _report_fatal(error)
+        raise SystemExit(1) from error
+
+
+def _run() -> None:
     existing = _running_instance_url()
     if existing:
         webbrowser.open(existing)
@@ -135,10 +172,9 @@ def main() -> None:
     url = f"http://127.0.0.1:{port}"
     if not os.environ.get("KELEBEK_NO_BROWSER"):
         threading.Timer(0.8, webbrowser.open, args=(url,)).start()
-    if sys.stdout is not None:
-        # Windows konsolunda kod sayfası Türkçe harfleri basamazsa uygulama durmasın.
-        with contextlib.suppress(UnicodeEncodeError, OSError):
-            print(f"Kelebek Sınav Sistemi çalışıyor: {url}  (kapatmak için bu pencereyi kapatın)", flush=True)
+    # Terminalden başlatıldıysa adres yazılır; kod sayfası Türkçe harfleri basamazsa uygulama durmasın.
+    with contextlib.suppress(UnicodeEncodeError, OSError, ValueError):
+        print(f"Kelebek Sınav Sistemi çalışıyor: {url}  (kapatmak için arayüzdeki \"Uygulamayı kapat\" düğmesini kullanın)", flush=True)
     try:
         server.run()
     except (KeyboardInterrupt, OSError):
