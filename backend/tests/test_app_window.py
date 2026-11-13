@@ -198,6 +198,8 @@ class WindowSettingApiTests(unittest.TestCase):
         import os
         from unittest import mock
 
+        from _support import release_app_resources
+
         from kelebek import create_app
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -205,7 +207,8 @@ class WindowSettingApiTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         app = create_app()
-        self.addCleanup(lambda: app.extensions["kelebek_engine"].dispose())
+        # Günlük dosyası ve veritabanı kapanmadan Windows geçici klasörü silemez; temizlik ters sırayla çalışır.
+        self.addCleanup(release_app_resources, app)
         self.client = app.test_client()
 
     def test_setting_is_reported_and_can_be_changed(self):
