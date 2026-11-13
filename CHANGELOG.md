@@ -1,5 +1,14 @@
 # Değişiklik günlüğü
 
+## 0.9.1 — 13 Kasım 2026
+
+### Koridor ekleme ve kaldırma
+
+- Plan düzenlerken sütun numarasına tıklayınca menü açılır: "Sağına koridor ekle" ya da
+  "Sağındaki koridoru kaldır". Sağdaki sütunlar kendiliğinden kayar; elle sürüklemek gerekmez.
+- "Sütun ekle" eskisi gibi koridorsuz ekler; koridor isteniyorsa bu menüden açılır.
+- Sunucu: `structure` ucuna `add_corridor` ve `remove_corridor` işlemleri eklendi.
+
 ## 0.9.0 — 13 Kasım 2026
 
 ### "Tahta" görünümü

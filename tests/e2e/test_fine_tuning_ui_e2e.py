@@ -55,6 +55,27 @@ def test_desk_menu_switches_single_double_and_deletes(page):
     expect(page.get_by_test_id("notification").filter(has_text="Plan kaydedildi")).to_be_visible()
 
 
+def test_corridor_is_added_and_removed_from_the_column_menu(page):
+    # Kullanıcı isteği: sütun eklenince koridor kendiliğinden gelmiyor; elle eklenebilsin.
+    room = make_room("İNCE-KORİDOR", rows=2, columns=2)
+    open_classroom(page, room["name"])
+    page.get_by_test_id("plan-edit-btn").click()
+    page.get_by_test_id("plan-add-column").click()
+    expect(page.get_by_test_id("plan-column-3")).to_be_visible()
+    expect(page.locator(".layout-canvas .plan-corridor-label")).to_have_count(2)  # 2 satır × 1 koridor
+    page.get_by_test_id("plan-column-2").click()
+    page.get_by_test_id("plan-column-menu").get_by_role("menuitem", name="Sağına koridor ekle").click()
+    expect(page.locator(".layout-canvas .plan-corridor-label")).to_have_count(4)
+    expect(page.locator(".layout-canvas .plan-seat")).to_have_count(12)
+    page.get_by_test_id("plan-column-1").click()
+    page.get_by_test_id("plan-column-menu").get_by_role("menuitem", name="Sağındaki koridoru kaldır").click()
+    expect(page.locator(".layout-canvas .plan-corridor-label")).to_have_count(2)
+    # En sağdaki sütunda koridor seçeneği yerine açıklama çıkar.
+    page.get_by_test_id("plan-column-3").click()
+    expect(page.get_by_test_id("plan-column-menu")).to_contain_text("Önce sağına sütun ekle")
+    expect(page.get_by_test_id("plan-column-menu").get_by_role("menuitem")).to_have_count(0)
+
+
 def test_row_handle_drag_moves_the_whole_row(page):
     room = make_room("İNCE-SÜRÜKLE", rows=2, columns=2)
     open_classroom(page, room["name"])

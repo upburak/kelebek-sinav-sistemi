@@ -8,6 +8,7 @@ const CELL = 45
 type StructureOp =
   | { op: 'add_row' | 'add_column' }
   | { op: 'move_row' | 'move_column'; from: number; to: number }
+  | { op: 'add_corridor' | 'remove_corridor'; after: number }
   | { op: 'set_desk_seats'; label: string; count: number }
   | { op: 'delete_desk'; label: string }
 import { notify } from './notify'
@@ -62,6 +63,8 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   // Sürüklenen satır ya da sütun tutamağı; masa sürüklemesinden ayrı tutulur.
   const [draggingLine, setDraggingLine] = useState<{ axis: 'row' | 'column'; value: number } | null>(null)
   const [menuDeskId, setMenuDeskId] = useState<string | null>(null)
+  // Koridor menüsü açık olan sütunun x konumu.
+  const [menuColumnX, setMenuColumnX] = useState<number | null>(null)
   const [isTemplate, setIsTemplate] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -233,6 +236,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     if (editingLayout) {
       setEditingLayout(false)
       setMenuDeskId(null)
+      setMenuColumnX(null)
       if (editChanged.current) notify.success('Plan kaydedildi.')
     } else {
       editAnnounced.current = false
@@ -485,6 +489,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
     if (!selectedClassroomId || !selectedLayout || !editingLayout || editBusy.current) return
     editBusy.current = true
     setMenuDeskId(null)
+    setMenuColumnX(null)
     setError('')
     try {
       const response = await fetch(
@@ -523,15 +528,16 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
   }
 
   useEffect(() => {
-    if (!menuDeskId) return
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuDeskId(null) }
+    if (!menuDeskId && menuColumnX === null) return
+    const close = () => { setMenuDeskId(null); setMenuColumnX(null) }
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
     const onClick = (event: MouseEvent) => {
-      if (!(event.target as HTMLElement).closest('.plan-desk-menu, .plan-desk-menu-btn')) setMenuDeskId(null)
+      if (!(event.target as HTMLElement).closest('.plan-desk-menu, .plan-desk-menu-btn, .plan-line-handle.column')) close()
     }
     window.addEventListener('keydown', onKey)
     window.addEventListener('mousedown', onClick)
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('mousedown', onClick) }
-  }, [menuDeskId])
+  }, [menuDeskId, menuColumnX])
 
   return (
     <section className="classroom-manager" aria-labelledby="classroom-manager-title">
@@ -647,7 +653,7 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
                 <div className="layout-plan" aria-label="Derslik oturma planı">
                   <p className="privacy-note" data-testid="plan-hint">
                     {editingLayout
-                      ? 'Masayı, satır ya da sütun başlığını sürükleyerek taşı. Masanın adına tıklayınca tekli/çiftli yapma ve silme seçenekleri açılır. Koltuğa tıklayınca kullanıma kapanır ya da açılır. Her değişiklik anında kaydedilir.'
+                      ? 'Masayı, satır ya da sütun başlığını sürükleyerek taşı. Sütun numarasına tıklayınca koridor ekleme ya da kaldırma, masanın adına tıklayınca tekli/çiftli yapma ve silme seçenekleri açılır. Koltuğa tıklayınca kullanıma kapanır ya da açılır. Her değişiklik anında kaydedilir.'
                       : 'Sıraları ya da koltukları değiştirmek için “Planı düzenle”ye bas.'}
                   </p>
                   <div
@@ -661,15 +667,26 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
                       const firstDesk = block.desks.reduce((first, desk) => desk.x < first.x ? desk : first)
                       return <span className="plan-block-label" style={{ left: PLAN_LEFT + firstDesk.x * CELL }} key={block.label}>{block.label || 'Blok'}</span>
                     })}
-                    {planColumns.map((columnX, columnIndex) => (
-                      <span
-                        className={`plan-line-handle column ${draggingLine?.axis === 'column' && draggingLine.value === columnX ? 'dragging' : ''}`}
+                    {planColumns.map((columnX, columnIndex) => {
+                      const nextX = planColumns[columnIndex + 1]
+                      const hasCorridor = nextX !== undefined && nextX - columnX > 2.1
+                      const menuOpen = editingLayout && menuColumnX === columnX
+                      return <span
+                        className={`plan-line-handle column ${draggingLine?.axis === 'column' && draggingLine.value === columnX ? 'dragging' : ''} ${menuOpen ? 'menu-open' : ''}`}
                         style={{ left: PLAN_LEFT + columnX * CELL, top: PLAN_TOP - 30 }}
                         key={`c${columnX}`}
                         data-testid={`plan-column-${columnIndex + 1}`}
                         draggable={editingLayout}
-                        title={editingLayout ? 'Sütunu taşımak için sürükle' : undefined}
+                        role={editingLayout ? 'button' : undefined}
+                        tabIndex={editingLayout ? 0 : undefined}
+                        aria-haspopup={editingLayout ? 'menu' : undefined}
+                        aria-expanded={editingLayout ? menuOpen : undefined}
+                        aria-label={editingLayout ? `${columnIndex + 1}. sütun seçenekleri` : undefined}
+                        title={editingLayout ? 'Taşımak için sürükle; koridor için tıkla' : undefined}
+                        onClick={() => { if (editingLayout) { setMenuDeskId(null); setMenuColumnX((open) => open === columnX ? null : columnX) } }}
+                        onKeyDown={(event) => { if (editingLayout && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setMenuColumnX((open) => open === columnX ? null : columnX) } }}
                         onDragStart={(event) => {
+                          setMenuColumnX(null)
                           setDraggingLine({ axis: 'column', value: columnX })
                           const bounds = event.currentTarget.getBoundingClientRect()
                           setDragOffset({ x: event.clientX - bounds.left, y: 0 })
@@ -677,8 +694,16 @@ export default function ClassroomManager({ academicYearId, academicYearLabel, re
                           event.dataTransfer.effectAllowed = 'move'
                         }}
                         onDragEnd={() => setDraggingLine(null)}
-                      >{columnIndex + 1}</span>
-                    ))}
+                      >{columnIndex + 1}
+                        {menuOpen && <span className="plan-desk-menu" role="menu" data-testid="plan-column-menu" onClick={(event) => event.stopPropagation()}>
+                          {nextX === undefined
+                            ? <span className="plan-menu-note">Koridor iki sütunun arasına eklenir. Önce sağına sütun ekle.</span>
+                            : hasCorridor
+                              ? <button type="button" role="menuitem" onClick={() => void structureOp({ op: 'remove_corridor', after: columnX })}>Sağındaki koridoru kaldır</button>
+                              : <button type="button" role="menuitem" onClick={() => void structureOp({ op: 'add_corridor', after: columnX })}>Sağına koridor ekle</button>}
+                        </span>}
+                      </span>
+                    })}
                     {planRows.map((rowY, rowIndex) => (
                       <span
                         className={`plan-line-handle row ${draggingLine?.axis === 'row' && draggingLine.value === rowY ? 'dragging' : ''}`}

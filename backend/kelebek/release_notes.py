@@ -2,6 +2,13 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.9.1",
+    "date": "2026-11-13",
+    "items": [
+      "Oturma planı: sütun numarasına tıklayınca sağına koridor eklenir ya da var olan koridor kaldırılır; diğer sütunlar kendiliğinden kayar"
+    ]
+  },
+  {
     "version": "0.9.0",
     "date": "2026-11-13",
     "items": [

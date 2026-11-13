@@ -1336,3 +1336,6 @@ button.plan-desk-menu-btn:hover, button.plan-desk-menu-btn[aria-expanded=true] {
 .classroom-closed-tag { margin-left: 10px; padding: 2px 8px; border: 1px solid #b23a2e; border-radius: 3px; color: #b23a2e; font-size: 12px; font-weight: 600; vertical-align: middle; }
 .classroom-delete-hint { margin: 0 0 12px; color: #4a5a55; font-size: 13px; }
 .classroom-list-item.closed { opacity: .7; border-style: dashed; }
+.plan-line-handle.column.menu-open { z-index: 6; border-color: #146b68; color: #146b68; }
+.plan-line-handle.column .plan-desk-menu { min-width: 190px; font-weight: 400; cursor: default; }
+.plan-menu-note { display: block; padding: 8px 10px; color: #4a5a55; font-size: 12px; font-weight: 400; white-space: normal; line-height: 1.4; }
