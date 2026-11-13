@@ -1,5 +1,30 @@
 # Değişiklik günlüğü
 
+## 0.10.0 — 13 Kasım 2026
+
+### Uygulama penceresi (Karar 74)
+
+- Arayüz, tarayıcı sekmesi yerine adres çubuğu ve sekmesi olmayan bağımsız bir pencerede açılır.
+  Ek kütüphane ya da gömülü tarayıcı yoktur: bilgisayarda bulunan Chromium tabanlı tarayıcı
+  (Windows'ta sistemle gelen Edge; ayrıca Chrome, Brave, Chromium) uygulama kipinde ve kendi
+  profiliyle başlatılır (`backend/kelebek/app_window.py`). Paket boyutu değişmez.
+- Pencere kapanınca uygulama da kapanır; "Uygulamayı kapat" düğmesi pencereyi de kapatır.
+- Uygun tarayıcı yoksa (örneğin yalnızca Safari ya da Firefox kurulu ise) uygulama eskisi gibi
+  varsayılan tarayıcıda sekme açar.
+- Yedek ve arşiv bölümünde "Uygulamayı kendi penceresinde aç" ayarı; kapatılınca eski davranış
+  geri gelir. `KELEBEK_BROWSER_TAB=1` ortam değişkeni de aynı işi görür.
+- Pencere simgesi için `favicon.svg`; sayfa çeviri önerisine kapatıldı.
+
+### Kapanış düzeltmesi
+
+- "Uygulamayı kapat" düğmesinden sonra servis, tarayıcı bağlantısını açık tuttuğu sürece arka
+  planda çalışmaya devam ediyordu. Artık açık bağlantılar da kapatılır ve uygulama hemen sonlanır.
+
+### Sınama
+
+- Paketleme iş akışına Windows ve macOS için "Pencere Testi" eklendi: paket pencere kipinde
+  açılır, pencerenin başladığı doğrulanır ve kapatma düğmesiyle sonlandığı sınanır.
+
 ## 0.9.3 — 13 Kasım 2026
 
 ### Komut penceresi gizlendi

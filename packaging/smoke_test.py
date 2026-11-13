@@ -60,5 +60,40 @@ def main() -> int:
                 process.kill()
 
 
+def window_check() -> int:
+    """Uygulama penceresi kipi: pencere açılmalı, "Uygulamayı kapat" hem uygulamayı hem pencereyi kapatmalı."""
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as data_dir:
+        env = {**os.environ, "KELEBEK_DATA_DIR": data_dir, "KELEBEK_PORT": str(PORT)}
+        env.pop("KELEBEK_NO_BROWSER", None)
+        env.pop("KELEBEK_BROWSER_TAB", None)
+        process = subprocess.Popen([str(executable())], env=env)
+        try:
+            health = {}
+            for _ in range(90):
+                try:
+                    health = json.loads(get("/api/health")[1])
+                    if health.get("window"):
+                        break
+                except OSError:
+                    pass
+                time.sleep(1)
+            assert health.get("window") is True, f"Uygulama penceresi açılmadı: {health}"
+            # Tarayıcı gerçekten başladıysa birkaç saniye içinde kendi profil klasörünü doldurur.
+            profile = Path(data_dir) / "window-profile"
+            for _ in range(30):
+                if profile.is_dir() and any(profile.iterdir()):
+                    break
+                time.sleep(1)
+            assert profile.is_dir() and any(profile.iterdir()), "Pencere kendi profilini kullanmadı."
+            assert process.poll() is None, "Uygulama, pencere açıkken kendiliğinden kapandı."
+            get("/api/app/shutdown", "POST")
+            process.wait(timeout=30)
+            print("Pencere testi geçti.")
+            return 0
+        finally:
+            if process.poll() is None:
+                process.kill()
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(window_check() if os.environ.get("KELEBEK_SMOKE_WINDOW") else main())

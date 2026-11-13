@@ -9,4 +9,5 @@ health_api = Blueprint("health", __name__)
 def health_check():
     """Return a minimal status response without exposing local data paths."""
     return jsonify({"status": "ok", "service": "kelebek-sinav-sistemi",
-                    "desktop": bool(current_app.config.get("KELEBEK_DESKTOP"))})
+                    "desktop": bool(current_app.config.get("KELEBEK_DESKTOP")),
+                    "window": bool(current_app.config.get("KELEBEK_WINDOW"))})

@@ -70,6 +70,32 @@ class RunningInstanceTests(unittest.TestCase):
         self.assertIsNone(launcher._running_instance_url())
 
 
+class StopServerTests(unittest.TestCase):
+    def test_stop_ends_the_server_even_while_a_browser_keeps_its_connection_open(self):
+        # Gerileme: pencere ya da sekme bağlantısını açık tuttuğu sürece servis döngüsü bitmiyor,
+        # "Uygulamayı kapat" düğmesinden sonra uygulama arka planda çalışmaya devam ediyordu.
+        import socket
+
+        from waitress.server import create_server
+
+        def wsgi(environ, start_response):
+            start_response("200 OK", [("Content-Type", "text/plain"), ("Content-Length", "2")])
+            return [b"ok"]
+
+        server = create_server(wsgi, host="127.0.0.1", port=0, threads=2)
+        port = server.effective_port
+        worker = threading.Thread(target=server.run, daemon=True)
+        worker.start()
+        client = socket.create_connection(("127.0.0.1", port), timeout=5)
+        self.addCleanup(client.close)
+        client.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n")
+        self.assertIn(b"200 OK", client.recv(4096))
+
+        launcher.stop_server(server)
+        worker.join(timeout=5)
+        self.assertFalse(worker.is_alive(), "Servis, açık bağlantı yüzünden durmadı.")
+
+
 class WindowedModeTests(unittest.TestCase):
     """Komut penceresi olmadan (pencereli kip) açılış."""
 

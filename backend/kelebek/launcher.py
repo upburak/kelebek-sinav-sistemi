@@ -15,6 +15,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+from kelebek import app_window
 from kelebek.config import get_data_dir
 
 IDLE_SHUTDOWN_SECONDS = 10 * 60
@@ -106,6 +107,33 @@ def _report_fatal(error: BaseException) -> None:
                 "Kelebek Sınav Sistemi", 0x10)
 
 
+def stop_server(server) -> None:
+    """Yerel servisi durdur: yeni bağlantı alma, açık bağlantıları da kapat.
+
+    Yalnızca dinleme soketini kapatmak yetmez; tarayıcı bağlantısını açık tuttuğu
+    sürece servis döngüsü bitmez ve uygulama arka planda çalışmaya devam eder.
+    """
+    with contextlib.suppress(Exception):
+        server.close()
+    for channel in list(getattr(server, "_map", {}).values()):
+        with contextlib.suppress(Exception):
+            channel.close()
+
+
+def open_interface(url: str, data_dir: Path, env, on_closed):
+    """Arayüzü kendi penceresinde aç; açılamazsa varsayılan tarayıcıda sekme aç.
+
+    Pencere açıldıysa tarayıcı süreci döner ve pencere kapanınca ``on_closed`` çağrılır.
+    """
+    if app_window.window_mode_enabled(data_dir, env):
+        process = app_window.open_app_window(url, data_dir, env=env)
+        if process is not None:
+            app_window.watch_window(process, on_closed)
+            return process
+    webbrowser.open(url)
+    return None
+
+
 def main() -> None:
     _ensure_standard_streams()
     try:
@@ -120,7 +148,8 @@ def main() -> None:
 def _run() -> None:
     existing = _running_instance_url()
     if existing:
-        webbrowser.open(existing)
+        # Uygulama zaten çalışıyor: yalnızca arayüzü yeniden öne getir; kapanışı o örnek yönetir.
+        open_interface(existing, get_data_dir(), os.environ, lambda: None)
         return
 
     from waitress.server import create_server
@@ -145,7 +174,7 @@ def _run() -> None:
         state["last_request"] = time.monotonic()
 
     server = create_server(app, host="127.0.0.1", port=port, threads=4)
-    app.extensions["kelebek_shutdown"] = server.close
+    app.extensions["kelebek_shutdown"] = lambda: stop_server(server)
     verify_file = os.environ.pop("KELEBEK_UPDATE_VERIFY", None)
     if verify_file:
         from kelebek.services.app_update import write_verification
@@ -154,7 +183,7 @@ def _run() -> None:
 
     @app.post("/api/app/shutdown")
     def _shutdown():
-        threading.Timer(0.5, server.close).start()
+        threading.Timer(0.5, stop_server, args=(server,)).start()
         return {"stopping": True}
 
     def _idle_watch():
@@ -162,7 +191,7 @@ def _run() -> None:
             time.sleep(30)
             if time.monotonic() - state["last_request"] > IDLE_SHUTDOWN_SECONDS:
                 logger.info("Uzun süre kullanılmadığı için yerel servis kapatılıyor.")
-                server.close()
+                stop_server(server)
                 return
 
     instance = _instance_file()
@@ -170,8 +199,15 @@ def _run() -> None:
     instance.write_text(json.dumps({"port": port, "pid": os.getpid()}), encoding="utf-8")
     threading.Thread(target=_idle_watch, daemon=True).start()
     url = f"http://127.0.0.1:{port}"
+    window = {"process": None}
+    app.config["KELEBEK_WINDOW"] = False
+
+    def _open() -> None:
+        window["process"] = open_interface(url, get_data_dir(), os.environ, lambda: stop_server(server))
+        app.config["KELEBEK_WINDOW"] = window["process"] is not None
+
     if not os.environ.get("KELEBEK_NO_BROWSER"):
-        threading.Timer(0.8, webbrowser.open, args=(url,)).start()
+        threading.Timer(0.8, _open).start()
     # Terminalden başlatıldıysa adres yazılır; kod sayfası Türkçe harfleri basamazsa uygulama durmasın.
     with contextlib.suppress(UnicodeEncodeError, OSError, ValueError):
         print(f"Kelebek Sınav Sistemi çalışıyor: {url}  (kapatmak için arayüzdeki \"Uygulamayı kapat\" düğmesini kullanın)", flush=True)
@@ -180,6 +216,7 @@ def _run() -> None:
     except (KeyboardInterrupt, OSError):
         pass
     finally:
+        app_window.close_window(window["process"])
         app.extensions["kelebek_engine"].dispose()
         try:
             if json.loads(instance.read_text(encoding="utf-8")).get("pid") == os.getpid():

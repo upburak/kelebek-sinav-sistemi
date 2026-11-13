@@ -10,3 +10,4 @@ Terminal=false
 Categories=Education;Office;
 Keywords=sınav;kelebek;okul;oturma;derslik;
 StartupNotify=true
+StartupWMClass=kelebek-sinav-sistemi

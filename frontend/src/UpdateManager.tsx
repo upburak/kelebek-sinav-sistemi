@@ -33,6 +33,10 @@ export default function UpdateManager() {
   // Kullanıcı kutuya dokunduysa, o sırada süren denetimin yanıtı seçimini ezmemeli.
   const autoTouched = useRef(false)
   const [autoLoaded, setAutoLoaded] = useState(false)
+  // Arayüz kendi penceresinde mi açılsın; null: henüz yüklenmedi.
+  const [windowMode, setWindowMode] = useState<boolean | null>(null)
+  const [windowModeChanged, setWindowModeChanged] = useState(false)
+  const [windowModeError, setWindowModeError] = useState('')
   const [onlineMessage, setOnlineMessage] = useState('')
   const [onlineError, setOnlineError] = useState('')
 
@@ -45,6 +49,23 @@ export default function UpdateManager() {
       if (data.error && !auto) setOnlineError(data.error)
     } catch { if (!auto) setOnlineError('Sürüm denetimi yapılamadı.') } finally { setOnlineBusy('') }
   }
+  async function saveWindowMode(enabled: boolean) {
+    const previous = windowMode
+    setWindowMode(enabled); setWindowModeError('')
+    try {
+      const response = await fetch('/api/app/window-mode', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) })
+      if (!response.ok) throw new Error()
+      setWindowModeChanged(true)
+    } catch {
+      setWindowMode(previous)
+      setWindowModeError('Ayar kaydedilemedi. Yeniden dene.')
+    }
+  }
+  useEffect(() => {
+    fetch('/api/app/window-mode').then((response) => response.json())
+      .then((data) => setWindowMode(data.enabled !== false))
+      .catch(() => setWindowMode(true))
+  }, [])
   async function setAutoCheck(enabled: boolean) {
     autoTouched.current = true
     setAutoCheckState(enabled)
@@ -112,6 +133,12 @@ export default function UpdateManager() {
       <label className="online-update-toggle"><input type="checkbox" data-testid="online-update-auto" disabled={!autoLoaded} checked={autoCheck} onChange={(event) => void setAutoCheck(event.target.checked)} />Uygulama açılırken yeni sürümü kendiliğinden denetle</label>
       {onlineMessage && <p className="backup-feedback success" role="status" data-testid="online-update-message">{onlineMessage}</p>}
       {onlineError && <p className="backup-feedback error" role="alert" data-testid="online-update-error">{onlineError}</p>}
+    </div>
+    <div className="window-mode" data-testid="window-mode">
+      <label className="online-update-toggle"><input type="checkbox" data-testid="window-mode-toggle" disabled={windowMode === null} checked={windowMode !== false} onChange={(event) => void saveWindowMode(event.target.checked)} />Uygulamayı kendi penceresinde aç</label>
+      <p>Açıkken uygulama, tarayıcı sekmesi yerine adres çubuğu olmayan ayrı bir pencerede açılır; pencereyi kapatınca uygulama da kapanır. Bunun için bilgisayarda Edge ya da Chrome gerekir (Windows'ta Edge hazır gelir); yoksa eskisi gibi tarayıcı sekmesinde açılır.</p>
+      {windowModeChanged && <p className="backup-feedback success" role="status" data-testid="window-mode-note">Kaydedildi. Uygulamanın bir sonraki açılışında geçerli olur.</p>}
+      {windowModeError && <p className="backup-feedback error" role="alert">{windowModeError}</p>}
     </div>
     <details className="update-manual"><summary>Elle güncelleme paketi yükle (ileri düzey)</summary>
     <p data-testid="update-trust-status">{status && (status.trusted_key_ids.length ? `Yalnızca yayıncı anahtarınızla imzalanmış paketler kabul edilir (anahtar ${status.trusted_key_ids.join(', ')}).` : 'Bu kurulumda yayıncı anahtarı tanımlı değil; güncelleme paketleri kabul edilmez. Tam kurulum paketiyle güncelleyin.')}</p>

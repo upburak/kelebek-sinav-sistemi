@@ -44,6 +44,11 @@ jobs:
       - name: macOS Duman Testi
         run: .venv/bin/python packaging/smoke_test.py
 
+      - name: macOS Pencere Testi
+        env:
+          KELEBEK_SMOKE_WINDOW: '1'
+        run: .venv/bin/python packaging/smoke_test.py
+
       - name: macOS Artifact Yükle
         uses: actions/upload-artifact@v4
         with:
@@ -83,6 +88,12 @@ jobs:
 
       - name: Windows Duman Testi
         shell: pwsh
+        run: .\.venv\Scripts\python.exe packaging\smoke_test.py
+
+      - name: Windows Pencere Testi
+        shell: pwsh
+        env:
+          KELEBEK_SMOKE_WINDOW: '1'
         run: .\.venv\Scripts\python.exe packaging\smoke_test.py
 
       - name: Windows Artifact Yükle
