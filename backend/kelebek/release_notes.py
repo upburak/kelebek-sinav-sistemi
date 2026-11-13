@@ -2,6 +2,16 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.10.0",
+    "date": "2026-11-13",
+    "items": [
+      "Uygulama artık tarayıcı sekmesinde değil, adres çubuğu olmayan kendi penceresinde açılır; pencereyi kapatınca uygulama da kapanır",
+      "Bunun için Edge ya da Chrome kullanılır (Windows'ta Edge hazır gelir); yoksa eskisi gibi tarayıcı sekmesinde açılır",
+      "Yedek ve arşiv bölümündeki \"Uygulamayı kendi penceresinde aç\" ayarıyla eski davranışa dönülebilir",
+      "\"Uygulamayı kapat\" düğmesi artık uygulamayı hemen kapatır; arka planda açık kalmaz"
+    ]
+  },
+  {
     "version": "0.9.3",
     "date": "2026-11-13",
     "items": [

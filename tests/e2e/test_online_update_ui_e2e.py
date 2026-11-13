@@ -49,3 +49,22 @@ def test_update_section_shows_status_and_remembers_the_startup_setting(page):
         expect(page.get_by_test_id("online-update-auto")).not_to_be_checked()
     finally:
         requests.put(f"{BASE_URL}/api/updates/online/settings", json={"auto_check": True}, timeout=30)
+
+
+def test_window_mode_setting_is_shown_and_saved(page):
+    # Kullanıcı isteği (13 Kasım 2026): uygulama tarayıcı sekmesi yerine kendi penceresinde açılsın;
+    # isteyen eski davranışa (tarayıcı sekmesi) dönebilsin.
+    import requests
+
+    try:
+        _open_backup(page)
+        toggle = page.get_by_test_id("window-mode-toggle")
+        expect(toggle).to_be_checked()
+        toggle.uncheck()
+        expect(page.get_by_test_id("window-mode-note")).to_contain_text("sonraki açılışında")
+        # Bildirim, sunucu ayarı kaydettikten sonra göründüğü için kayıt artık okunabilir.
+        assert requests.get(f"{BASE_URL}/api/app/window-mode", timeout=30).json()["enabled"] is False
+        _open_backup(page)  # sayfa yeniden yüklenince ayar sunucudan okunur
+        expect(page.get_by_test_id("window-mode-toggle")).not_to_be_checked()
+    finally:
+        requests.put(f"{BASE_URL}/api/app/window-mode", json={"enabled": True}, timeout=30)

@@ -6,6 +6,7 @@ import threading
 
 from flask import Blueprint, current_app, jsonify, request
 
+from kelebek import app_window
 from kelebek.config import get_data_dir
 from kelebek.release_notes import RELEASE_NOTES
 from kelebek.services import app_update, online_update
@@ -47,6 +48,22 @@ def get_whats_new():
     notes = [item for item in RELEASE_NOTES
              if _parse_version(last_seen) < _parse_version(item["version"]) <= _parse_version(APP_VERSION)]
     return jsonify({"show": bool(notes), "current_version": APP_VERSION, "previous_version": last_seen, "notes": notes})
+
+
+@updates_api.get("/app/window-mode")
+def get_window_mode():
+    """Arayüz kendi penceresinde mi açılsın? (Kapalıysa varsayılan tarayıcıda sekme açılır.)"""
+    return jsonify({"enabled": app_window.window_mode_enabled(get_data_dir(), {}),
+                    "active": bool(current_app.config.get("KELEBEK_WINDOW"))})
+
+
+@updates_api.put("/app/window-mode")
+def put_window_mode():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or type(payload.get("enabled")) is not bool:
+        return jsonify({"error": "Ayar değeri geçersiz."}), 400
+    app_window.set_window_mode(get_data_dir(), payload["enabled"])
+    return jsonify({"enabled": payload["enabled"]})
 
 
 @updates_api.get("/app/release-notes")

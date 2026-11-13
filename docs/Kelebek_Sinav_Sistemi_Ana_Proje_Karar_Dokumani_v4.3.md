@@ -1482,3 +1482,21 @@ mevcut 72 kararın metni değiştirilmemiştir.
   silme Yedek ve arşiv bölümünden geri yüklenebilir.
 - Arşiv yılları salt okunur kalır; toplu silme arşiv yılında yapılamaz. Başka
   yıllara ait kayıtlar etkilenmez.
+
+## 84. Karar 74 – Uygulama penceresi (kullanıcı onayı, 13 Kasım 2026)
+
+Önceki kararlar uygulamanın varsayılan tarayıcıda açılmasını ve güncel tarayıcıların
+desteklenmesini öngörür. Bu kararlar geçerliliğini korur; kullanıcı isteği ve açık
+onayıyla açılış biçimi için aşağıdaki ek getirilmiştir. Mevcut kararların metni
+değiştirilmemiştir.
+
+- Uygulama, bilgisayarda Chromium tabanlı bir tarayıcı (Edge, Chrome, Brave, Chromium)
+  bulunuyorsa arayüzü tarayıcı sekmesinde değil, adres çubuğu olmayan bağımsız bir
+  uygulama penceresinde açar. Pencere, kullanıcının tarayıcı oturumundan ayrı bir
+  profil kullanır.
+- Bu amaçla pakete tarayıcı gömülmez ve ek çalışma zamanı eklenmez (Electron
+  kullanılmaz); paket boyutu değişmez.
+- Pencere kapatıldığında yerel servis de sonlanır.
+- Uygun tarayıcı bulunamazsa ya da kullanıcı ayardan kapatırsa uygulama eskisi gibi
+  varsayılan tarayıcıda sekme açar; tarayıcı desteği sürer.
+- Arayüz belirli bir tarayıcıya özgü özellik kullanmaz.

@@ -2,7 +2,7 @@
 
 ## Temel kaynaklar
 
-- `docs/Kelebek_Sinav_Sistemi_Ana_Proje_Karar_Dokumani_v4.3.md` içindeki onaylanmış kararları koru. Önceden kesinleşen 71 kararı ve bu sürümde ayrıca yer alan çapraz platform geliştirme kararı 72'yi değiştirme. Karar 73 (toplu silme) kullanıcının açık onayıyla 12 Kasım 2026'da eklenmiştir.
+- `docs/Kelebek_Sinav_Sistemi_Ana_Proje_Karar_Dokumani_v4.3.md` içindeki onaylanmış kararları koru. Önceden kesinleşen 71 kararı ve bu sürümde ayrıca yer alan çapraz platform geliştirme kararı 72'yi değiştirme. Karar 73 (toplu silme) kullanıcının açık onayıyla 12 Kasım 2026'da, Karar 74 (uygulama penceresi) 13 Kasım 2026'da eklenmiştir.
 - `docs/Kelebek_Sinav_Sistemi_Teknik_Mimari_v1.0.md` teknik mimari ve geliştirme planının temelidir.
 - Bu belgelerdeki kararlarla çelişen bir değişiklik yapmadan önce kullanıcıdan açık onay al. Yeni ihtiyaçları mevcut kararlardan ayır ve yalnızca etkilenen konuları gündeme getir.
 - macOS ve Windows desteğini, çevrimdışı yerel çalışma modelini ve kullanıcı verisinin uygulama dosyalarından ayrı tutulmasını gözet.

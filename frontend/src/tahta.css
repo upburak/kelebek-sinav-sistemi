@@ -228,3 +228,6 @@ input[type=text], input:not([type]), select { font-size: 14px !important; border
 .plan-room-tabs button { background: #fff !important; color: var(--t-ink) !important; border: 1px solid var(--t-line) !important; min-height: 36px !important; }
 .plan-room-tabs button.active { background: var(--t-board2) !important; color: #fff !important; border-color: var(--t-board2) !important; }
 .candidate-result-line { background: transparent !important; border: 0 !important; border-left: 3px solid var(--t-ok) !important; border-radius: 0 !important; color: var(--t-ink) !important; }
+
+.window-mode { margin-top: 16px; padding-top: 14px; border-top: 1px solid #dfe5e1; }
+.window-mode p { margin: 6px 0 0; max-width: 72ch; }
