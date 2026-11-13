@@ -6,6 +6,12 @@ on:
   push:
     branches: [main]
     paths-ignore: ['docs/**', '*.md']
+  # Paketleme dosyaları değişince birleştirmeden önce de derlenir (yayımlanmaz).
+  pull_request:
+    paths:
+      - '.github/workflows/build-packages.yml'
+      - 'packaging/**'
+      - 'scripts/build-*'
 
 concurrency:
   group: paketler-${{ github.ref }}
