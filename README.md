@@ -1,6 +1,6 @@
 # Kelebek Sınav Sistemi
 
-macOS ve Windows'ta çevrimdışı çalışacak yerel sınav organizasyonu uygulaması.
+macOS, Windows ve Pardus'ta (Debian tabanlı Linux) çevrimdışı çalışacak yerel sınav organizasyonu uygulaması.
 Proje kapsamı için [ana karar belgesine](docs/Kelebek_Sinav_Sistemi_Ana_Proje_Karar_Dokumani_v4.3.md),
 teknik seçimler için [teknik mimariye](docs/Kelebek_Sinav_Sistemi_Teknik_Mimari_v1.0.md) bakın.
 
@@ -85,11 +85,12 @@ tablo (`.xlsx`/`.csv`) veya gizli anahtar dosyası görürse gönderimi durdurur
 dosyayı bildirir. Böylece yanlışlıkla izlenmeye başlamış bir öğrenci listesi
 sessizce GitHub'a gitmez. `KELEBEK_AUTOPUSH_SKIP_SCAN=1` ile kapatılabilir.
 
-## Kurulum paketleri (macOS ve Windows)
+## Kurulum paketleri (macOS, Windows ve Pardus)
 
 Paketler her işletim sisteminin kendisinde üretilir (Mac'te Windows paketi, Windows'ta Mac paketi üretilmez).
 
 - **macOS (Apple Silicon):** `./scripts/build-macos.sh` → `dist/KelebekSinavSistemi-<sürüm>-macos-arm64.dmg`. DMG'yi açıp uygulamayı *Uygulamalar* klasörüne sürükleyin. Paket ad-hoc imzalanır (Apple Silicon imzasız ikili dosyayı çalıştırmaz); Apple geliştirici kimliğiyle imzalanmadığı için ilk açılışta Finder'da sağ tık → *Aç* ile onaylanır.
+- **Pardus / Debian tabanlı Linux (x64):** `./scripts/build-linux.sh` → `dist/KelebekSinavSistemi-<sürüm>-linux-x64.deb` ve taşınabilir `...-linux-x64.tar.gz`. `.deb` dosyasına çift tıklayıp paket kurucuyla ya da `sudo apt install ./KelebekSinavSistemi-<sürüm>-linux-x64.deb` ile kurulur; uygulama menüsünde *Kelebek Sınav Sistemi* olarak görünür. Paket derlendiği sistemin glibc sürümünü ister; yayımlanan paket Debian 11 tabanında derlendiği için Pardus 21 ve 23'te çalışır. Kaldırmak için `sudo apt remove kelebek-sinav-sistemi`; veriler silinmez.
 - **Windows (x64):** PowerShell'de `./scripts/build-windows.ps1` → `dist\KelebekSinavSistemi-<sürüm>-windows-x64.zip` ve Inno Setup kuruluysa `...-kurulum.exe`. Kurulum yönetici yetkisi istemez, masaüstü kısayolu oluşturur.
 - **Bilgisayar kurmadan:** Depo GitHub'a gönderildiğinde *Actions → Paketleri oluştur → Run workflow* iki platform paketini birlikte üretir; çıktılar iş akışı sonuçlarından indirilir.
 
@@ -122,7 +123,7 @@ Uygulamada **Yedek ve arşiv → Uygulama güncellemesi** bölümünde paket se�
 
 ## Veri güvenliği
 
-Öğrenci verileri ve SQLite veritabanı kaynak kod klasöründe tutulmaz. Uygulama verileri macOS kullanıcı hesabında `~/Library/Application Support/Kelebek Sinav Sistemi`, Windows kullanıcı hesabında `%APPDATA%\Kelebek Sinav Sistemi` altında saklanır. Geliştirme betikleri de bu işletim sistemi veri konumlarını kullanır; uygulama verileri proje klasörünün dışında kalır. `KELEBEK_DATA_DIR` yalnızca özel, yerel denemelerde geçici bir veri dizini seçmek için kullanılabilir.
+Öğrenci verileri ve SQLite veritabanı kaynak kod klasöründe tutulmaz. Uygulama verileri macOS kullanıcı hesabında `~/Library/Application Support/Kelebek Sinav Sistemi`, Windows kullanıcı hesabında `%APPDATA%\Kelebek Sinav Sistemi`, Linux'ta `~/.local/share/kelebek-sinav-sistemi` altında saklanır. Geliştirme betikleri de bu işletim sistemi veri konumlarını kullanır; uygulama verileri proje klasörünün dışında kalır. `KELEBEK_DATA_DIR` yalnızca özel, yerel denemelerde geçici bir veri dizini seçmek için kullanılabilir.
 
 Gerçek öğrenci listeleri, veritabanları, yedekler, dışa aktarımlar ve sırlar Git'e eklenmez.
 Sentetik örnek verileri kullanın. `.gitignore` güvenli varsayılanları içerir.

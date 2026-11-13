@@ -204,6 +204,9 @@ class BackupRestoreTests(unittest.TestCase):
         self.assertTrue(cancelled.get_json()["cancelled"])
         self.assertFalse(staged.exists())
 
+    # Eski şema, sütunlar DROP COLUMN ile düşürülerek benzetilir; bu komut SQLite 3.35 ile geldi.
+    # Debian 11 (Pardus 21 tabanı) 3.34 taşıdığı için test orada kurulamaz, diğer ortamlarda koşar.
+    @unittest.skipIf(sqlite3.sqlite_version_info < (3, 35), "SQLite 3.35 öncesinde DROP COLUMN yok")
     def test_older_supported_schema_is_migrated_in_staging_before_restore(self):
         older_package = io.BytesIO()
         with zipfile.ZipFile(io.BytesIO(self.package_bytes), "r") as source:

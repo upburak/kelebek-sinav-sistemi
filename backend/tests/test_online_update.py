@@ -31,6 +31,12 @@ def _release(version: str, digest: str | None = None) -> dict:
             {"name": f"KelebekSinavSistemi-{version}-macos-arm64.dmg",
              "browser_download_url": f"{PREFIX}v{version}/KelebekSinavSistemi-{version}-macos-arm64.dmg",
              "size": len(PAYLOAD), "digest": f"sha256:{digest}"},
+            {"name": f"KelebekSinavSistemi-{version}-linux-x64.deb",
+             "browser_download_url": f"{PREFIX}v{version}/KelebekSinavSistemi-{version}-linux-x64.deb",
+             "size": len(PAYLOAD), "digest": f"sha256:{digest}"},
+            {"name": f"KelebekSinavSistemi-{version}-linux-x64.tar.gz",
+             "browser_download_url": f"{PREFIX}v{version}/KelebekSinavSistemi-{version}-linux-x64.tar.gz",
+             "size": len(PAYLOAD), "digest": f"sha256:{digest}"},
             {"name": "SHA256SUMS.txt", "browser_download_url": f"{PREFIX}v{version}/SHA256SUMS.txt", "size": 10},
         ],
     }
@@ -77,6 +83,25 @@ class OnlineUpdateServiceTests(unittest.TestCase):
         with self.assertRaises(online_update.OnlineUpdateError) as caught:
             online_update.check_latest(not_found)
         self.assertIn("herkese açık", str(caught.exception))
+
+    def test_linux_gets_the_deb_package_on_x64_only(self):
+        assets = _release("99.0.0")["assets"]
+        with mock.patch.object(online_update.platform, "machine", return_value="x86_64"):
+            asset = online_update.pick_asset(assets, "linux")
+        self.assertTrue(asset["name"].endswith("-linux-x64.deb"))
+        with mock.patch.object(online_update.platform, "machine", return_value="aarch64"):
+            self.assertIsNone(online_update.pick_asset(assets, "linux"))
+
+    def test_linux_package_is_opened_with_the_desktop_handler(self):
+        with mock.patch.object(online_update.sys, "platform", "linux"), \
+                mock.patch.object(online_update.shutil, "which", return_value="/usr/bin/xdg-open"), \
+                mock.patch.object(online_update.subprocess, "Popen") as popen:
+            self.assertTrue(online_update.open_package(Path("/tmp/paket.deb")))
+        # Yol, testin koştuğu işletim sisteminin ayracıyla yazılır.
+        self.assertEqual(popen.call_args.args[0], ["xdg-open", str(Path("/tmp/paket.deb"))])
+        with mock.patch.object(online_update.sys, "platform", "linux"), \
+                mock.patch.object(online_update.shutil, "which", return_value=None):
+            self.assertFalse(online_update.open_package(Path("/tmp/paket.deb")))
 
     def test_package_is_downloaded_and_verified(self):
         asset = online_update.pick_asset(_release("99.0.0")["assets"], "windows")

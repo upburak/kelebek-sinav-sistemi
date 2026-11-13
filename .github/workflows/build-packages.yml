@@ -6,6 +6,12 @@ on:
   push:
     branches: [main]
     paths-ignore: ['docs/**', '*.md']
+  # Paketleme dosyaları değişince birleştirmeden önce de derlenir (yayımlanmaz).
+  pull_request:
+    paths:
+      - '.github/workflows/build-packages.yml'
+      - 'packaging/**'
+      - 'scripts/build-*'
 
 concurrency:
   group: paketler-${{ github.ref }}
@@ -88,9 +94,64 @@ jobs:
             dist/*.exe
             dist/SHA256SUMS.txt
 
+  build-linux:
+    name: Linux (Pardus) Paketini Derle
+    runs-on: ubuntu-latest
+    # Debian 11 (glibc 2.31): paket Pardus 21 ve 23'te çalışsın diye eski tabanda derlenir.
+    container: python:3.12-bullseye
+    steps:
+      - name: Kodları Çek
+        uses: actions/checkout@v4
+
+      - name: Node.js Kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Linux Derleme
+        run: ./scripts/build-linux.sh
+
+      - name: Linux Duman Testi
+        run: .venv/bin/python packaging/smoke_test.py
+
+      - name: Linux Artifact Yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: kelebek-Linux
+          path: |
+            dist/*.deb
+            dist/*.tar.gz
+            dist/SHA256SUMS-linux.txt
+
+  verify-linux:
+    name: Paketi Pardus Tabanında Kur ve Sına
+    needs: build-linux
+    runs-on: ubuntu-latest
+    # Debian 12, Pardus 23'ün tabanıdır: paket burada kurulup çalıştırılır.
+    container: debian:12
+    steps:
+      - name: Kodları Çek
+        uses: actions/checkout@v4
+
+      - name: Paketi İndir
+        uses: actions/download-artifact@v4
+        with:
+          name: kelebek-Linux
+          path: paket
+
+      - name: Kur ve Duman Testi
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq python3 ./paket/*.deb
+          test -x /usr/bin/kelebek-sinav-sistemi
+          test -f /usr/share/applications/kelebek-sinav-sistemi.desktop
+          KELEBEK_SMOKE_EXECUTABLE=/opt/kelebek-sinav-sistemi/KelebekSinavSistemi python3 packaging/smoke_test.py
+          apt-get remove -y -qq kelebek-sinav-sistemi
+          test ! -e /opt/kelebek-sinav-sistemi/KelebekSinavSistemi
+
   release:
     name: GitHub Sürümünü Yayımla
-    needs: [build-macos, build-windows]
+    needs: [build-macos, build-windows, build-linux, verify-linux]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -117,5 +178,5 @@ jobs:
           else
             gh release create "$TAG" paketler/* --target "$GITHUB_SHA" \
               --title "Kelebek Sınav Sistemi $VERSION" \
-              --notes "macOS (Apple Silicon): .dmg dosyasını indirin. Windows: -kurulum.exe dosyasını (yoksa .zip) indirin. Ayrıntılar için CHANGELOG.md."
+              --notes "macOS (Apple Silicon): .dmg dosyasını indirin. Windows: -kurulum.exe dosyasını (yoksa .zip) indirin. Pardus / Debian tabanlı Linux: -linux-x64.deb dosyasını indirin. Ayrıntılar için CHANGELOG.md."
           fi

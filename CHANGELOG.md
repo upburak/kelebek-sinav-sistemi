@@ -1,5 +1,19 @@
 # Değişiklik günlüğü
 
+## 0.9.2 — 13 Kasım 2026
+
+### Pardus / Linux paketi
+
+- `scripts/build-linux.sh` x64 için `.deb` ve taşınabilir `.tar.gz` üretir. Paket `/opt/kelebek-sinav-sistemi`
+  altına kurulur, uygulama menüsüne kısayol ve simge ekler; kullanıcı verisi
+  `~/.local/share/kelebek-sinav-sistemi` altında kalır ve kaldırmada silinmez.
+- GitHub Actions paketi Debian 11 kabında (glibc 2.31) derler; böylece Pardus 21 ve 23'te çalışır.
+  Ardından paket Debian 12 kabında (Pardus 23'ün tabanı) kurulup duman testinden geçirilir.
+- Çevrim içi güncelleme Linux'ta `-linux-x64.deb` paketini seçer ve `xdg-open` ile açar; kurulum
+  yönetici parolası ister.
+- Karar belgesi macOS ve Windows'u sayar; Linux desteği kullanıcı isteğiyle eklenen ek bir
+  dağıtım hedefidir, mevcut kararları değiştirmez.
+
 ## 0.9.1 — 13 Kasım 2026
 
 ### Koridor ekleme ve kaldırma

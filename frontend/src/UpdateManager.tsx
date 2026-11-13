@@ -59,7 +59,7 @@ export default function UpdateManager() {
       if (!response.ok) throw new Error(data.error ?? 'Paket indirilemedi.')
       setOnlineMessage(data.opened
         ? `Sürüm ${data.version} indirildi ve kurulum penceresi açıldı. Kurulum isterse sağ üstteki "Uygulamayı kapat" düğmesiyle uygulamayı kapat, kurulumu tamamla; verilerin korunur.`
-        : `Sürüm ${data.version} indirildi: ${data.path}. Dosyayı açıp kurulumu başlat; verilerin korunur.`)
+        : `Sürüm ${data.version} indirildi: ${data.path}. Dosyayı açıp kurulumu başlat (Pardus'ta dosyaya çift tıklayınca paket kurucu açılır); verilerin korunur.`)
     } catch (reason) { setOnlineError(reason instanceof Error ? reason.message : 'Paket indirilemedi.') } finally { setOnlineBusy('') }
   }
 

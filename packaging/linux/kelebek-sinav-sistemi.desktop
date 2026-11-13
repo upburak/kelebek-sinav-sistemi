@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Kelebek Sınav Sistemi
+GenericName=Sınav oturma düzeni
+Comment=Ortak sınavlar için öğrencileri dersliklere dağıtır, kroki ve liste üretir
+Exec=/opt/kelebek-sinav-sistemi/KelebekSinavSistemi
+Icon=kelebek-sinav-sistemi
+Terminal=false
+Categories=Education;Office;
+Keywords=sınav;kelebek;okul;oturma;derslik;
+StartupNotify=true

@@ -2,6 +2,14 @@
 
 RELEASE_NOTES = [
   {
+    "version": "0.9.2",
+    "date": "2026-11-13",
+    "items": [
+      "Pardus ve Debian tabanlı Linux için kurulum paketi (.deb): uygulama menüsüne kısayol ekler, veriler ev dizininde kalır",
+      "Linux'ta da yeni sürüm denetlenir; indirilen paket sistemin paket kurucusuyla açılır"
+    ]
+  },
+  {
     "version": "0.9.1",
     "date": "2026-11-13",
     "items": [
